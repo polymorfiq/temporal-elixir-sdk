@@ -1,0 +1,14 @@
+<component name="libraryTable">
+  <library name="googleapis" type="mix">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/_build/dev/lib/googleapis/ebin" />
+      <root url="file://$PROJECT_DIR$/_build/test/lib/googleapis/ebin" />
+      <root url="file://$PROJECT_DIR$/_build/dev/lib/googleapis/ebin" />
+      <root url="file://$PROJECT_DIR$/_build/test/lib/googleapis/ebin" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="file://$PROJECT_DIR$/deps/googleapis/lib" />
+    </SOURCES>
+  </library>
+</component>

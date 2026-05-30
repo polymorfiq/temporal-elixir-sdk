@@ -1,0 +1,9 @@
+defmodule Temporal.Protos.Temporal.Api.Enums.V1.SignalExternalWorkflowExecutionFailedCause do
+  @moduledoc false
+  use Protobuf, enum: true, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
+
+  field :SIGNAL_EXTERNAL_WORKFLOW_EXECUTION_FAILED_CAUSE_UNSPECIFIED, 0
+  field :SIGNAL_EXTERNAL_WORKFLOW_EXECUTION_FAILED_CAUSE_EXTERNAL_WORKFLOW_EXECUTION_NOT_FOUND, 1
+  field :SIGNAL_EXTERNAL_WORKFLOW_EXECUTION_FAILED_CAUSE_NAMESPACE_NOT_FOUND, 2
+  field :SIGNAL_EXTERNAL_WORKFLOW_EXECUTION_FAILED_CAUSE_SIGNAL_COUNT_LIMIT_EXCEEDED, 3
+end
