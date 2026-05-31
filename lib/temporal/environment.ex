@@ -76,10 +76,9 @@ defmodule Temporal.Environment do
   @impl true
   @doc false
   def init(_) do
-    try do
-      :ets.new(@info_table_name, [:named_table, :set, :protected])
-    catch
-      _ -> :ok
+    case :ets.whereis(@info_table_name) do
+      :undefined -> :ets.new(@info_table_name, [:named_table, :set, :protected])
+      _table_ref -> :ok
     end
 
     {:ok, %{host_info: record_host_info(host_info_state())}, {:continue, :schedule_host_info}}

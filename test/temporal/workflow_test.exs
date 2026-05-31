@@ -19,7 +19,15 @@ defmodule Temporal.WorkerTest do
   end
 
   test "can be initialized with no options", %{client: c} do
-    {:ok, _} = Worker.new(c, "default")
+    {:ok, w} = Worker.new(c, "default")
+
+    defmodule MyWorkflow do
+      def execute(ctx) do
+        {:ok, "response"}
+      end
+    end
+
+    Worker.register_workflow(w, MyWorkflow)
   end
 
   test "returns error when using reserved task queue", %{client: c} do

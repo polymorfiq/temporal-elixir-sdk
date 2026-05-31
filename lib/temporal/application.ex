@@ -10,6 +10,7 @@ defmodule Temporal.Application do
     children = [
       {Registry, keys: :unique, name: Temporal.ClientRegistry},
       {Registry, keys: :unique, name: Temporal.WorkerRegistry},
+      {Registry, keys: :unique, name: Temporal.WorkflowRegistry},
       GRPC.Client.Supervisor,
       Temporal.Clients,
       Temporal.Environment

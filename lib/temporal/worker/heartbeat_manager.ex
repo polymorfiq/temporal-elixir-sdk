@@ -35,15 +35,15 @@ defmodule Temporal.Worker.HeartbeatManager do
   def start_link(init_args), do: GenServer.start_link(__MODULE__, init_args)
 
   @doc false
-  def init({client, worker_addr}) do
-    hb_interval = Client.worker_heartbeat_interval(client)
+  def init(worker) do
+    hb_interval = Client.worker_heartbeat_interval(worker.client)
 
     {:ok,
      send_heartbeat(
        beat_state(
          heartbeat_interval_ms: Time.ms(hb_interval),
-         client: client,
-         worker_addr: worker_addr,
+         client: worker.client,
+         worker_addr: worker.address,
          first_beat_at: DateTime.utc_now()
        )
      ), {:continue, :schedule_beat}}

@@ -1,22 +1,23 @@
 defmodule Temporal.Worker do
   use Supervisor
 
-  defstruct [:client, :task_queue, :instance_key, :worker]
+  defstruct [:client, :address, :task_queue, :instance_key]
 
   alias Temporal.Client
   alias Temporal.Time
   alias Temporal.Worker.WorkerAddress
   alias Temporal.Worker.DeploymentOptions
   alias Temporal.Worker.HeartbeatManager
+  alias Temporal.Worker.WorkflowActivityManager
   alias Temporal.Constants
 
   @temporal_prefix Constants.temporal_prefix()
 
   @type t() :: %__MODULE__{
           client: Client.t(),
+          address: WorkerAddress.t(),
           task_queue: task_queue(),
-          instance_key: String.t(),
-          worker: pid()
+          instance_key: String.t()
         }
 
   @type task_queue() :: String.t()
@@ -231,6 +232,38 @@ defmodule Temporal.Worker do
     validate_opts!(opts)
     instance_key = UUID.uuid4()
 
+    identity =
+      Keyword.get_lazy(opts, :identity, fn ->
+        host_info = Temporal.Environment.latest_host_info()
+        "#{inspect(self())}@#{host_info.hostname}@#{task_queue}"
+      end)
+
+    deployment_opts =
+      Keyword.get(opts, :deployment_options, %DeploymentOptions{use_versioning: false})
+
+    deployment_version =
+      if deployment_opts.use_versioning do
+        deployment_opts.version
+      else
+        nil
+      end
+
+    address = %WorkerAddress{
+      namespace: Client.namespace(client),
+      instance_key: instance_key,
+      identity: identity,
+      task_queue: task_queue,
+      deployment_version: deployment_version,
+      grouping_key: Client.worker_grouping_key(client)
+    }
+
+    worker = %__MODULE__{
+      address: address,
+      client: client,
+      task_queue: task_queue,
+      instance_key: instance_key
+    }
+
     worker_resp =
       with {:ok, worker_sup} <- Client.worker_supervisor(client) do
         DynamicSupervisor.start_child(
@@ -241,8 +274,7 @@ defmodule Temporal.Worker do
               {__MODULE__, :start_link,
                [
                  {
-                   client,
-                   task_queue,
+                   worker,
                    opts
                  },
                  [
@@ -255,14 +287,25 @@ defmodule Temporal.Worker do
         )
       end
 
-    with {:ok, worker} <- worker_resp do
-      {:ok,
-       %__MODULE__{
-         client: client,
-         task_queue: task_queue,
-         instance_key: instance_key,
-         worker: worker
-       }}
+    with {:ok, _} <- worker_resp do
+      {:ok, worker}
+    end
+  end
+
+  def register_workflow(worker, workflow_mod) do
+    execute_fns = workflow_mod.__info__(:functions) |> Enum.filter(fn
+      {:execute, _} -> true
+      _ -> false
+    end)
+
+    if Enum.count(execute_fns) == 0 do
+      raise "Could not register Workflow (#{inspect(workflow_mod)}) - Could not find an &execute/... function"
+    end
+
+    with {:ok, workflow_sup} <- workflow_supervisor(worker) do
+      execute_fns |> Enum.each(fn {execute_fn, num_args} ->
+        WorkflowActivityManager.add(workflow_sup, workflow_mod, execute_fn, num_args)
+      end)
     end
   end
 
@@ -287,37 +330,30 @@ defmodule Temporal.Worker do
 
   @impl true
   @spec init(init_arg()) :: Supervisor.init_result()
-  def init({client, task_queue, opts}) do
-    identity =
-      Keyword.get_lazy(opts, :identity, fn ->
-        host_info = Temporal.Environment.latest_host_info()
-        "#{inspect(self())}@#{host_info.hostname}@#{task_queue}"
-      end)
-
-    deployment_opts =
-      Keyword.get(opts, :deployment_options, %DeploymentOptions{use_versioning: false})
-
-    deployment_version =
-      if deployment_opts.use_versioning do
-        deployment_opts.version
-      else
-        nil
-      end
-
-    address = %WorkerAddress{
-      namespace: Client.namespace(client),
-      instance_key: UUID.uuid4(),
-      identity: identity,
-      task_queue: task_queue,
-      deployment_version: deployment_version,
-      grouping_key: Client.worker_grouping_key(client)
-    }
-
+  def init({worker, _opts}) do
     children = [
-      {HeartbeatManager, {client, address}}
+      {WorkflowActivityManager, worker},
+      {HeartbeatManager, worker}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
+  end
+
+  defp workflow_supervisor(worker) do
+    case GenServer.whereis({:via, Registry, {Temporal.WorkerRegistry, {worker.instance_key, Client.id(worker.client)}}}) do
+      worker_sup when is_pid(worker_sup) ->
+        Supervisor.which_children(worker_sup)
+        |> Enum.find(fn {_id, _pid, _type, modules} -> modules == [WorkflowActivityManager] end)
+        |> case do
+             {_, pid, _, _} when is_pid(pid) -> {:ok, pid}
+             {_, :undefined, _, _} -> {:error, :client_worker_supervisor_not_started}
+             nil -> {:error, :no_worker_supervisor}
+           end
+
+      nil ->
+        {:error, :no_worker_supervisor}
+
+    end
   end
 
   defp validate_opts!(opts) do

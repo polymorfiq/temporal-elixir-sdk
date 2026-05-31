@@ -1,5 +1,5 @@
 defmodule Temporal.Client.DialClient do
-  use Supervisor
+  use Temporal.Clients
 
   defstruct [
     :id,
@@ -39,19 +39,8 @@ defmodule Temporal.Client.DialClient do
 
     client_id = "#{worker_grouping_key}@#{namespace}"
 
-    client_sup =
-      DynamicSupervisor.start_child(
-        Temporal.Clients,
-        %{
-          id: client_id,
-          start:
-            {__MODULE__, :start_link,
-             [client_id, opts, [name: {:via, Registry, {Temporal.ClientRegistry, client_id}}]]}
-        }
-      )
-
     with {:ok, channel} <- GRPC.Stub.connect(host_port),
-         {:ok, _} <- client_sup do
+         {:ok, _} <- Temporal.Clients.add(__MODULE__, client_id, opts) do
       {:ok,
        %__MODULE__{
          id: client_id,
@@ -70,12 +59,6 @@ defmodule Temporal.Client.DialClient do
       :namespace,
       :worker_heartbeat_interval
     ])
-  end
-
-  @spec start_link(client_id :: String.t(), client_opts :: [client_opt()], sup_opts :: keyword()) ::
-          {:ok, pid()} | {:error, term()}
-  def start_link(client_id, client_opts, sup_opts \\ []) do
-    Supervisor.start_link(__MODULE__, {client_id, client_opts}, sup_opts)
   end
 
   @impl true
