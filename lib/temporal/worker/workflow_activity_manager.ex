@@ -1,7 +1,7 @@
 defmodule Temporal.Worker.WorkflowActivityManager do
   use GenServer
 
-  @workflows_table_name :_temporal_worker_workflows
+  @workflows_table_name :_temporal_sdk_worker_workflows
 
   def start_link(worker, opts \\ []) do
     GenServer.start_link(__MODULE__, worker, opts)
@@ -10,7 +10,7 @@ defmodule Temporal.Worker.WorkflowActivityManager do
   @impl true
   def init(worker) do
     table = case :ets.whereis(@workflows_table_name) do
-      :undefined -> :ets.new(@workflows_table_name, [:named_table, :set, :protected])
+      :undefined -> :ets.new(@workflows_table_name, [:named_table, :set, :public])
       table_ref -> table_ref
     end
 

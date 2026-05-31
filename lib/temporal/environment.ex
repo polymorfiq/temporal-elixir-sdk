@@ -77,7 +77,7 @@ defmodule Temporal.Environment do
   @doc false
   def init(_) do
     case :ets.whereis(@info_table_name) do
-      :undefined -> :ets.new(@info_table_name, [:named_table, :set, :protected])
+      :undefined -> :ets.new(@info_table_name, [:named_table, :set, :public])
       _table_ref -> :ok
     end
 

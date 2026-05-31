@@ -36,6 +36,8 @@ defmodule Temporal.MixProject do
       {:protobuf, "~> 0.16"},
       {:protobuf_generate, "~> 0.2", only: [:dev]},
       {:elixir_uuid, "~> 1.2"},
+      {:broadway, "~> 1.3"},
+      {:rustler, "~> 0.38.0", runtime: false},
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:mock, "~> 0.3.0", only: :test}
       # {:dep_from_hexpm, "~> 0.3.0"},
