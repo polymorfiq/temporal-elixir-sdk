@@ -1,8 +1,8 @@
 defmodule Temporal.Worker.Supervisor do
   use DynamicSupervisor
 
-  def start_link(_init_arg \\ nil) do
-    DynamicSupervisor.start_link(__MODULE__, nil, name: __MODULE__)
+  def start_link(_init_arg \\ nil, sup_opts \\ []) do
+    DynamicSupervisor.start_link(__MODULE__, nil, sup_opts)
   end
 
   @impl true

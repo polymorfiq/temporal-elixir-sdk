@@ -8,7 +8,11 @@ defmodule Temporal.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      Temporal.Client.Supervisor
+      {Registry, keys: :unique, name: Temporal.ClientRegistry},
+      {Registry, keys: :unique, name: Temporal.WorkerRegistry},
+      GRPC.Client.Supervisor,
+      Temporal.Clients,
+      Temporal.Environment
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

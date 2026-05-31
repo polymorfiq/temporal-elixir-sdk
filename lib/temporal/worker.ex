@@ -228,31 +228,61 @@ defmodule Temporal.Worker do
   end
 
   def new(client, task_queue, opts) do
+    validate_opts!(opts)
+    instance_key = UUID.uuid4()
+
     worker_resp =
-      DynamicSupervisor.start_child(
-        Temporal.Worker.Supervisor,
-        {__MODULE__,
-         {
-           client,
-           task_queue,
-           opts
-         }}
-      )
+      with {:ok, worker_sup} <- Client.worker_supervisor(client) do
+        DynamicSupervisor.start_child(
+          worker_sup,
+          %{
+            id: instance_key,
+            start:
+              {__MODULE__, :start_link,
+               [
+                 {
+                   client,
+                   task_queue,
+                   opts
+                 },
+                 [
+                   name:
+                     {:via, Registry,
+                      {Temporal.WorkerRegistry, {instance_key, Client.id(client)}}}
+                 ]
+               ]}
+          }
+        )
+      end
 
     with {:ok, worker} <- worker_resp do
       {:ok,
        %__MODULE__{
          client: client,
          task_queue: task_queue,
-         instance_key: UUID.uuid4(),
+         instance_key: instance_key,
          worker: worker
        }}
     end
   end
 
-  @spec start_link(init_arg()) :: {:ok, pid()} | {:error, term()}
-  def start_link(init_arg) do
-    Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
+  @spec stop(t()) :: :ok | {:error, term()}
+  def stop(worker) do
+    server_name =
+      {:via, Registry, {Temporal.WorkerRegistry, {worker.instance_key, Client.id(worker.client)}}}
+
+    with {:ok, worker_sup} <- Temporal.Client.worker_supervisor(worker.client) do
+      if worker_pid = GenServer.whereis(server_name) do
+        DynamicSupervisor.terminate_child(worker_sup, worker_pid)
+      else
+        :ok
+      end
+    end
+  end
+
+  @spec start_link(init_arg(), sup_opts :: keyword()) :: {:ok, pid()} | {:error, term()}
+  def start_link(init_arg, sup_opts) do
+    Supervisor.start_link(__MODULE__, init_arg, sup_opts)
   end
 
   @impl true
@@ -288,5 +318,35 @@ defmodule Temporal.Worker do
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
+  end
+
+  defp validate_opts!(opts) do
+    opts
+    |> Keyword.validate!([
+      :worker_activities_per_second,
+      :worker_local_activities_per_second,
+      :task_queue_activities_per_second,
+      :max_concurrent_activity_execution_size,
+      :max_concurrent_local_activity_execution_size,
+      :max_concurrent_workflow_task_execution_size,
+      :max_concurrent_nexus_task_execution_size,
+      :max_concurrent_eager_activity_execution_size,
+      :max_concurrent_session_execution_size,
+      :max_concurrent_activity_task_pollers,
+      :max_concurrent_workflow_task_pollers,
+      :max_concurrent_nexus_task_pollers,
+      :enable_logging_in_replay,
+      :sticky_schedule_to_start_timeout,
+      :workflow_panic_policy,
+      :worker_stop_timeout,
+      :enable_session_worker,
+      :disable_workflow_worker,
+      :disable_eager_activities,
+      :local_activity_worker_only,
+      :identity,
+      :max_heartbeat_throttle_interval,
+      :default_heartbeat_throttle_interval,
+      :deployment_options
+    ])
   end
 end
