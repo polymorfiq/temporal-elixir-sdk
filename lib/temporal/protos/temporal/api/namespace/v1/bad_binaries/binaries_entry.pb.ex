@@ -1,17 +1,7 @@
 defmodule Temporal.Protos.Temporal.Api.Namespace.V1.BadBinaries.BinariesEntry do
-  @moduledoc """
-  Automatically generated module for BinariesEntry
-
-  ## Fields
-
-  | # | Name | Type | Notes |
-  |---|------|------|-------|
-  | 1 | **`key`** | `string` |  |
-  | 2 | **`value`** | `Temporal.Protos.Temporal.Api.Namespace.V1.BadBinaryInfo` |  |
-
-  """
+  @moduledoc false
   use Protobuf, map: true, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
 
-  field :key, 1, type: :string
-  field :value, 2, type: Temporal.Protos.Temporal.Api.Namespace.V1.BadBinaryInfo
+  field(:key, 1, type: :string)
+  field(:value, 2, type: Temporal.Protos.Temporal.Api.Namespace.V1.BadBinaryInfo)
 end

@@ -147,6 +147,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/workflows/{workflow_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -155,7 +165,18 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
     :ExecuteMultiOperation,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.ExecuteMultiOperationRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.ExecuteMultiOperationResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
@@ -183,6 +204,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/workflows/{execution.workflow_id}/history"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -214,6 +245,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
             {:get, "/namespaces/{namespace}/workflows/{execution.workflow_id}/history-reverse"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -222,28 +263,72 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
     :PollWorkflowTaskQueue,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.PollWorkflowTaskQueueRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.PollWorkflowTaskQueueResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "poller:{poller_group_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
     :RespondWorkflowTaskCompleted,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondWorkflowTaskCompletedRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondWorkflowTaskCompletedResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
     :RespondWorkflowTaskFailed,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondWorkflowTaskFailedRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondWorkflowTaskFailedResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
     :PollActivityTaskQueue,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.PollActivityTaskQueueRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.PollActivityTaskQueueResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "poller:{poller_group_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
@@ -270,6 +355,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activity-heartbeat"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -319,6 +414,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/heartbeat"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -347,6 +452,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activity-complete"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -396,6 +511,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/complete"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -424,6 +549,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activity-fail"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -472,6 +607,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/fail"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -500,6 +645,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activity-resolve-as-canceled"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -551,6 +706,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
             {:post, "/namespaces/{namespace}/activities/{activity_id}/resolve-as-canceled"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -582,6 +747,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
             {:post, "/namespaces/{namespace}/workflows/{workflow_execution.workflow_id}/cancel"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -614,6 +789,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/workflows/{workflow_execution.workflow_id}/signal/{signal_name}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -646,6 +831,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/workflows/{workflow_id}/signal-with-start/{signal_name}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -677,6 +872,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
             {:post, "/namespaces/{namespace}/workflows/{workflow_execution.workflow_id}/reset"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -709,6 +914,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/workflows/{workflow_execution.workflow_id}/terminate"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -717,7 +932,18 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
     :DeleteWorkflowExecution,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.DeleteWorkflowExecutionRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.DeleteWorkflowExecutionResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
@@ -836,14 +1062,36 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
     :RespondQueryTaskCompleted,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondQueryTaskCompletedRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondQueryTaskCompletedResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "poller:{poller_group_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
     :ResetStickyTaskQueue,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.ResetStickyTaskQueueRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.ResetStickyTaskQueueResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
@@ -881,6 +1129,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/workflows/{execution.workflow_id}/query/{query.query_type}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -909,6 +1167,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/workflows/{execution.workflow_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -937,6 +1205,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/task-queues/{task_queue.name}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "taskqueue:{task_queue.name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1001,7 +1279,18 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
     :ListTaskQueuePartitions,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.ListTaskQueuePartitionsRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.ListTaskQueuePartitionsResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "taskqueue:{task_queue.name}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
@@ -1028,6 +1317,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/schedules/{schedule_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "schedule:{schedule_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1056,6 +1355,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/schedules/{schedule_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "schedule:{schedule_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1084,6 +1393,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/schedules/{schedule_id}/update"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "schedule:{schedule_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1112,6 +1431,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/schedules/{schedule_id}/patch"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "schedule:{schedule_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1141,6 +1470,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/schedules/{schedule_id}/matching-times"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "schedule:{schedule_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1169,6 +1508,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:delete, "/namespaces/{namespace}/schedules/{schedule_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "schedule:{schedule_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1394,6 +1743,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/worker-deployment-versions/{deployment_version.deployment_name}/{deployment_version.build_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "deployment:{deployment_version.deployment_name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1544,6 +1903,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/worker-deployments/{deployment_name}/set-current-version"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "deployment:{deployment_name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1573,6 +1942,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/worker-deployments/{deployment_name}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "deployment:{deployment_name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1602,6 +1981,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:delete, "/namespaces/{namespace}/worker-deployments/{deployment_name}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "deployment:{deployment_name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1634,6 +2023,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/worker-deployment-versions/{deployment_version.deployment_name}/{deployment_version.build_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "deployment:{deployment_version.deployment_name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1666,6 +2065,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/worker-deployments/{deployment_name}/set-ramping-version"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "deployment:{deployment_name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1851,6 +2260,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/worker-deployment-versions/{deployment_version.deployment_name}/{deployment_version.build_id}/update-metadata"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "deployment:{deployment_version.deployment_name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1882,6 +2301,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
             {:post, "/namespaces/{namespace}/worker-deployments/{deployment_name}/set-manager"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "deployment:{deployment_name}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1914,6 +2343,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/workflows/{workflow_execution.workflow_id}/update/{request.input.name}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1922,7 +2361,18 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
     :PollWorkflowExecutionUpdate,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.PollWorkflowExecutionUpdateRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.PollWorkflowExecutionUpdateResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{update_ref.workflow_execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
@@ -1949,6 +2399,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/batch-operations/{job_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "batch:{job_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -1977,6 +2437,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/batch-operations/{job_id}/stop"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "batch:{job_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2005,6 +2475,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/batch-operations/{job_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "batch:{job_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2041,21 +2521,54 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
     :PollNexusTaskQueue,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.PollNexusTaskQueueRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.PollNexusTaskQueueResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "poller:{poller_group_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
     :RespondNexusTaskCompleted,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondNexusTaskCompletedRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondNexusTaskCompletedResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "poller:{poller_group_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
     :RespondNexusTaskFailed,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondNexusTaskFailedRequest,
     Temporal.Protos.Temporal.Api.Workflowservice.V1.RespondNexusTaskFailedResponse,
-    %{}
+    %{
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "poller:{poller_group_id}",
+            __unknown_fields__: []
+          }
+        ]
+      }
+    }
   )
 
   rpc(
@@ -2083,6 +2596,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities-deprecated/update-options"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2115,6 +2638,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
              "/namespaces/{namespace}/workflows/{workflow_execution.workflow_id}/update-options"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2143,6 +2676,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities-deprecated/pause"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2171,6 +2714,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities-deprecated/unpause"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2199,6 +2752,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities-deprecated/reset"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2342,6 +2905,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
             {:post, "/namespaces/{namespace}/workflows/{execution.workflow_id}/trigger-rule"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{execution.workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2370,6 +2943,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/workers/heartbeat"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2427,6 +3010,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/task-queues/{task_queue}/update-config"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "taskqueue:{task_queue}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2455,6 +3048,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/workers/fetch-config"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2483,6 +3086,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/workers/update-config"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2512,6 +3125,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/workers/describe/{worker_instance_key}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "worker:{worker_instance_key}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2540,6 +3163,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/workflows/{workflow_id}/pause"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2568,6 +3201,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/workflows/{workflow_id}/unpause"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "workflow:{workflow_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2596,6 +3239,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "activity:{activity_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2652,6 +3305,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/activities/{activity_id}"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "activity:{activity_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2708,6 +3371,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:get, "/namespaces/{namespace}/activities/{activity_id}/outcome"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "activity:{activity_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2877,6 +3550,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/cancel"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "activity:{activity_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2935,6 +3618,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/terminate"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "activity:{activity_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -2990,6 +3683,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/pause"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -3038,6 +3741,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/reset"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -3086,6 +3799,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/unpause"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )
@@ -3135,6 +3858,16 @@ defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.WorkflowService.Servic
           pattern: {:post, "/namespaces/{namespace}/activities/{activity_id}/update-options"},
           __unknown_fields__: []
         }
+      },
+      request_header: %{
+        type: Temporal.Protos.Temporal.Api.Protometa.V1.PbExtension,
+        value: [
+          %Temporal.Protos.Temporal.Api.Protometa.V1.RequestHeaderAnnotation{
+            header: "temporal-resource-id",
+            value: "{resource_id}",
+            __unknown_fields__: []
+          }
+        ]
       }
     }
   )

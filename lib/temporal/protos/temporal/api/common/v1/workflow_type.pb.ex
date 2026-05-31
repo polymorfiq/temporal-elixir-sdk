@@ -1,16 +1,6 @@
 defmodule Temporal.Protos.Temporal.Api.Common.V1.WorkflowType do
-  @moduledoc """
-  Represents the identifier used by a workflow author to define the workflow. Typically, the
-  name of a function. This is sometimes referred to as the workflow's "name"
-
-  ## Fields
-
-  | # | Name | Type | Notes |
-  |---|------|------|-------|
-  | 1 | **`name`** | `string` |  |
-
-  """
+  @moduledoc false
   use Protobuf, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
 
-  field :name, 1, type: :string
+  field(:name, 1, type: :string)
 end

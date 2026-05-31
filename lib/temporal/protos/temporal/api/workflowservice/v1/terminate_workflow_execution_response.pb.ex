@@ -1,6 +1,4 @@
 defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.TerminateWorkflowExecutionResponse do
-  @moduledoc """
-  Automatically generated module for TerminateWorkflowExecutionResponse
-  """
+  @moduledoc false
   use Protobuf, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
 end

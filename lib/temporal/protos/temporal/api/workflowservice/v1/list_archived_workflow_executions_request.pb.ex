@@ -1,21 +1,9 @@
 defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.ListArchivedWorkflowExecutionsRequest do
-  @moduledoc """
-  Automatically generated module for ListArchivedWorkflowExecutionsRequest
-
-  ## Fields
-
-  | # | Name | Type | Notes |
-  |---|------|------|-------|
-  | 1 | **`namespace`** | `string` |  |
-  | 3 | **`next_page_token`** | `bytes` |  |
-  | 2 | **`page_size`** | `int32` |  |
-  | 4 | **`query`** | `string` |  |
-
-  """
+  @moduledoc false
   use Protobuf, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
 
-  field :namespace, 1, type: :string
-  field :page_size, 2, type: :int32, json_name: "pageSize"
-  field :next_page_token, 3, type: :bytes, json_name: "nextPageToken"
-  field :query, 4, type: :string
+  field(:namespace, 1, type: :string)
+  field(:page_size, 2, type: :int32, json_name: "pageSize")
+  field(:next_page_token, 3, type: :bytes, json_name: "nextPageToken")
+  field(:query, 4, type: :string)
 end

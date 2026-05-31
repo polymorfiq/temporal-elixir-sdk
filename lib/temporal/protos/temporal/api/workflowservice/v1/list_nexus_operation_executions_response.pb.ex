@@ -1,20 +1,11 @@
 defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.ListNexusOperationExecutionsResponse do
-  @moduledoc """
-  Automatically generated module for ListNexusOperationExecutionsResponse
-
-  ## Fields
-
-  | # | Name | Type | Notes |
-  |---|------|------|-------|
-  | 2 | **`next_page_token`** | `bytes` | Token to use to fetch the next page. If empty, there is no next page. |
-  | 1 | **`operations`** | `Temporal.Protos.Temporal.Api.Nexus.V1.NexusOperationExecutionListInfo` |  |
-
-  """
+  @moduledoc false
   use Protobuf, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
 
-  field :operations, 1,
+  field(:operations, 1,
     repeated: true,
     type: Temporal.Protos.Temporal.Api.Nexus.V1.NexusOperationExecutionListInfo
+  )
 
-  field :next_page_token, 2, type: :bytes, json_name: "nextPageToken"
+  field(:next_page_token, 2, type: :bytes, json_name: "nextPageToken")
 end

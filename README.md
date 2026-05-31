@@ -14,7 +14,7 @@ cd priv;
 git clone --depth 1 --branch v1.62.13 https://github.com/temporalio/api.git;
 cd ../;
 
-mix protobuf.generate --package-prefix=temporal.protos --include-docs --include-path=./deps/googleapis --include-path=./priv/api --output-path=./lib --plugin=ProtobufGenerate.Plugins.GRPCWithOptions --one-file-per-module google/api/annotations.proto google/api/http.proto ./priv/api/temporal/api/**/*.proto
+mix protobuf.generate --package-prefix=temporal.protos --include-path=./deps/googleapis --include-path=./priv/api --output-path=./lib --plugin=ProtobufGenerate.Plugins.GRPCWithOptions --one-file-per-module google/api/annotations.proto google/api/http.proto ./priv/api/temporal/api/**/*.proto
 ```
 
 ## Installation
