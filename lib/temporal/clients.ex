@@ -20,7 +20,12 @@ defmodule Temporal.Clients do
       %{
         id: client_id,
         start:
-          {Supervisor, :start_link, [mod, {client_id, client_opts}, [name: {:via, Registry, {Temporal.ClientRegistry, client_id}}]]}
+          {Supervisor, :start_link,
+           [
+             mod,
+             {client_id, client_opts},
+             [name: {:via, Registry, {Temporal.ClientRegistry, client_id}}]
+           ]}
       }
     )
   end

@@ -2,11 +2,8 @@ defmodule Temporal.WorkflowTest do
   use ExUnit.Case
   doctest Temporal.Worker
 
-  import Mock
-
   alias Temporal.Client
   alias Temporal.Worker
-  alias Temporal.Comms.Worker.WorkerHeartbeatComms
 
   setup_all do
     {:ok, client} = Temporal.dial_client("localhost:7233")

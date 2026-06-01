@@ -1851,6 +1851,8 @@ dependencies = [
  "temporalio-client",
  "temporalio-common",
  "temporalio-sdk-core",
+ "tracing",
+ "url",
 ]
 
 [[package]]

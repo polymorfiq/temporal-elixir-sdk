@@ -9,10 +9,11 @@ defmodule Temporal.Worker.WorkflowActivityManager do
 
   @impl true
   def init(worker) do
-    table = case :ets.whereis(@workflows_table_name) do
-      :undefined -> :ets.new(@workflows_table_name, [:named_table, :set, :public])
-      table_ref -> table_ref
-    end
+    table =
+      case :ets.whereis(@workflows_table_name) do
+        :undefined -> :ets.new(@workflows_table_name, [:named_table, :set, :public])
+        table_ref -> table_ref
+      end
 
     {:ok, %{table: table, worker: worker}}
   end
@@ -30,7 +31,11 @@ defmodule Temporal.Worker.WorkflowActivityManager do
 
   @impl true
   def handle_cast({:add, workflow_mod, execute_fn, num_args}, state) do
-    :ets.insert(state.table, {{workflow_mod, num_args, state.worker.instance_key}, Function.capture(workflow_mod, execute_fn, num_args)})
+    :ets.insert(
+      state.table,
+      {{workflow_mod, num_args, state.worker.instance_key},
+       Function.capture(workflow_mod, execute_fn, num_args)}
+    )
 
     {:noreply, state}
   end

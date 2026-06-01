@@ -293,17 +293,20 @@ defmodule Temporal.Worker do
   end
 
   def register_workflow(worker, workflow_mod) do
-    execute_fns = workflow_mod.__info__(:functions) |> Enum.filter(fn
-      {:execute, _} -> true
-      _ -> false
-    end)
+    execute_fns =
+      workflow_mod.__info__(:functions)
+      |> Enum.filter(fn
+        {:execute, _} -> true
+        _ -> false
+      end)
 
     if Enum.count(execute_fns) == 0 do
       raise "Could not register Workflow (#{inspect(workflow_mod)}) - Could not find an &execute/... function"
     end
 
     with {:ok, workflow_sup} <- workflow_supervisor(worker) do
-      execute_fns |> Enum.each(fn {execute_fn, num_args} ->
+      execute_fns
+      |> Enum.each(fn {execute_fn, num_args} ->
         WorkflowActivityManager.add(workflow_sup, workflow_mod, execute_fn, num_args)
       end)
     end
@@ -340,19 +343,21 @@ defmodule Temporal.Worker do
   end
 
   defp workflow_supervisor(worker) do
-    case GenServer.whereis({:via, Registry, {Temporal.WorkerRegistry, {worker.instance_key, Client.id(worker.client)}}}) do
+    case GenServer.whereis(
+           {:via, Registry,
+            {Temporal.WorkerRegistry, {worker.instance_key, Client.id(worker.client)}}}
+         ) do
       worker_sup when is_pid(worker_sup) ->
         Supervisor.which_children(worker_sup)
         |> Enum.find(fn {_id, _pid, _type, modules} -> modules == [WorkflowActivityManager] end)
         |> case do
-             {_, pid, _, _} when is_pid(pid) -> {:ok, pid}
-             {_, :undefined, _, _} -> {:error, :client_worker_supervisor_not_started}
-             nil -> {:error, :no_worker_supervisor}
-           end
+          {_, pid, _, _} when is_pid(pid) -> {:ok, pid}
+          {_, :undefined, _, _} -> {:error, :client_worker_supervisor_not_started}
+          nil -> {:error, :no_worker_supervisor}
+        end
 
       nil ->
         {:error, :no_worker_supervisor}
-
     end
   end
 

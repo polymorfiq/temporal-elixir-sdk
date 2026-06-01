@@ -48,6 +48,9 @@
       <excludeFolder url="file://$MODULE_DIR$/deps" />
       <excludeFolder url="file://$MODULE_DIR$/priv" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/_build/test/lib/broadway" />
+      <excludeFolder url="file://$MODULE_DIR$/_build/test/lib/nimble_options" />
+      <excludeFolder url="file://$MODULE_DIR$/_build/test/lib/rustler" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
