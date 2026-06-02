@@ -1851,6 +1851,7 @@ dependencies = [
  "temporalio-client",
  "temporalio-common",
  "temporalio-sdk-core",
+ "tokio",
  "tracing",
  "url",
 ]

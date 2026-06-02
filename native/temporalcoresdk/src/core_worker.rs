@@ -1,13 +1,16 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use tokio::sync::Mutex;
 use std::time::Duration;
-use rustler::{NifStruct, Resource, ResourceArc};
+use rustler::{Env, LocalPid, NifStruct, OwnedEnv, Resource, ResourceArc};
 use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
 use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
 use temporalio_sdk_common::worker::{WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes};
 use temporalio_sdk_core::{init_worker, PollerBehavior, ResourceBasedSlotsOptions, ResourceSlotOptions, SlotKind, SlotSupplierOptions, TunerHolder, TunerHolderOptions, Worker, WorkerConfig, WorkerVersioningStrategy, WorkflowErrorType};
 use crate::core_client::ElixirClient;
 use crate::core_runtime::ElixirRuntime;
+use tokio::runtime::Runtime;
+use tracing::error;
 
 pub struct ElixirWorker {
     #[allow(dead_code)]
@@ -106,12 +109,43 @@ struct SdkWorkerTunerResourceOpts {
     ramp_throttle: f64
 }
 
+#[derive(NifStruct)]
+#[module = "Temporal.CoreSdk.Data.WorkerWorkflowActivation"]
+struct SdkWorkflowActivation {
+    run_id: String,
+    timestamp: Option<SdkTimestamp>,
+    is_replaying: bool,
+    history_length: u32,
+    jobs: Vec<SdkWorkflowActivationJob>,
+    available_internal_flags: Vec<u32>,
+    history_size_bytes: u64,
+    continue_as_new_suggested: bool,
+    deployment_version_for_current_task: Option<SdkWorkerDeploymentVersion>,
+    last_sdk_version: String,
+    suggest_continue_as_new_reasons: Vec<i32>,
+    target_worker_deployment_version_changed: bool,
+}
+
+#[derive(NifStruct)]
+#[module = "Temporal.CoreSdk.Data.WorkerWorkflowActivationJob"]
+struct SdkWorkflowActivationJob {
+    todo: bool,
+}
+
+#[derive(NifStruct)]
+#[module = "Temporal.CoreSdk.Data.Timestamp"]
+struct SdkTimestamp {
+    seconds: i64,
+    nanos: i32,
+}
+
 #[rustler::nif]
 fn _create_worker(
     runtime: ResourceArc<ElixirRuntime>,
     client: ResourceArc<ElixirClient>,
-    options: SdkWorkerOpts
-) -> Result<ResourceArc<ElixirWorker>, String> {
+    options: SdkWorkerOpts,
+    resp_pid: LocalPid
+) -> Result<bool, String> {
     let config = WorkerConfig::builder()
         .namespace(options.namespace)
         .task_queue(options.task_queue)
@@ -222,19 +256,41 @@ fn _create_worker(
         )
         .build();
 
-    let worker_resp = match config {
+    match config {
         Ok(config) => {
-            init_worker(&runtime.core.lock().unwrap(), config, client.connection.lock().unwrap().clone())
+            let handle = runtime.core.lock().unwrap().tokio_handle();
+            handle.spawn(async move {
+                let initialized = match runtime.core.lock() {
+                    Ok(core) => {
+                        init_worker(&core, config, client.connection.lock().unwrap().clone())
+                    }
+
+                    Err(err) => {
+                        return Err(format!("Error getting runtime handle: {}", err));
+                    }
+                };
+
+                let resp = match initialized {
+                    Ok(worker) => {
+                        Ok(ResourceArc::new(ElixirWorker{worker: Mutex::new(worker)}))
+                    },
+                    Err(err) => Err(format!("Error creating worker: {}", err))
+                };
+
+                let mut owned_env = OwnedEnv::new();
+                owned_env.send_and_clear(&resp_pid, |_curr_env| {
+                    resp
+                }).unwrap_or_else(|err| error!("Error sending worker response message: {:?}", err));
+
+                Ok(true)
+            });
+
+            Ok(true)
         }
 
         Err(err) => {
-            return Err(format!("Error creating worker opts: {}", err));
+            Err(String::from(format!("Error creating worker opts: {}", err)))
         }
-    };
-
-    match worker_resp {
-        Ok(worker) => Ok(ResourceArc::new(ElixirWorker{worker: Mutex::new(worker)})),
-        Err(err) => Err(format!("Error creating worker: {}", err))
     }
 }
 
@@ -275,7 +331,7 @@ fn build_tuner(options: SdkWorkerTunerOpts) -> Result<TunerHolder, String> {
         }
 
         Err(err) => {
-            return Err(String::from(format!("Failed building tuner holder: {}", err)));
+            Err(String::from(format!("Failed building tuner holder: {}", err)))
         }
     }
 }
@@ -322,4 +378,86 @@ fn build_tuner_resource_options<SK: SlotKind>(
         )),
         Some(slots_options),
     ))
+}
+
+#[rustler::nif]
+fn _validate_worker(
+    env: Env,
+    _runtime: ResourceArc<ElixirRuntime>,
+    worker: ResourceArc<ElixirWorker>,
+    resp_pid: LocalPid
+) -> Result<bool, String> {
+    let rt = Runtime::new().unwrap();
+
+    rt.block_on(async {
+        let core_worker = worker.worker.lock().await;
+        let validate_resp = core_worker.validate().await;
+
+        let resp = match validate_resp {
+            Ok(_) => Ok(true),
+            Err(err) => Err(format!("Error validating worker: {}", err))
+        };
+
+        let _ = env.send(&resp_pid, resp);
+    });
+
+    Ok(true)
+}
+
+#[rustler::nif]
+fn _worker_poll_workflow_activation(
+    runtime: ResourceArc<ElixirRuntime>,
+    worker: ResourceArc<ElixirWorker>,
+    resp_pid: LocalPid
+) -> Result<bool, String> {
+    let handle = runtime.core.lock().unwrap().tokio_handle();
+    handle.spawn(async move {
+        println!("poll_workflow_activation...");
+
+        let poll_result = worker.worker.lock().await.poll_workflow_activation().await;
+        println!("poll_workflow_activation!!!");
+
+        let msg = match poll_result {
+            Ok(activation) => Ok(SdkWorkflowActivation{
+                run_id: activation.run_id,
+                timestamp: match activation.timestamp {
+                    Some(ts) => {
+                        Some(SdkTimestamp{
+                            seconds: ts.seconds,
+                            nanos: ts.nanos
+                        })
+                    }
+
+                    None => None
+                },
+                is_replaying: activation.is_replaying,
+                history_length: activation.history_length,
+                jobs: activation.jobs.iter().map(|_job| SdkWorkflowActivationJob{todo: true}).collect(),
+                available_internal_flags: activation.available_internal_flags,
+                history_size_bytes: activation.history_size_bytes,
+                continue_as_new_suggested: activation.continue_as_new_suggested,
+                deployment_version_for_current_task: match activation.deployment_version_for_current_task {
+                    Some(version) => {
+                        Some(SdkWorkerDeploymentVersion{
+                            build_id: version.build_id,
+                            deployment_name: version.deployment_name,
+                        })
+                    }
+
+                    None => None
+                },
+                last_sdk_version: activation.last_sdk_version.clone(),
+                suggest_continue_as_new_reasons: activation.suggest_continue_as_new_reasons,
+                target_worker_deployment_version_changed: activation.target_worker_deployment_version_changed,
+            }),
+            Err(error) => Err(format!("Error polling workflow activation: {}", error)),
+        };
+
+        let mut owned_env = OwnedEnv::new();
+        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| {
+            msg
+        });
+    });
+
+    Ok(true)
 }

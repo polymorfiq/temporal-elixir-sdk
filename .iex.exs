@@ -1,5 +1,6 @@
 alias Temporal.Client
 alias Temporal.Worker
+alias Temporal.CoreSdk.CoreWorker
 alias Temporal.Comms.Worker.TaskQueueComms
 alias Temporal.Protos.Temporal.Api.Workflowservice.V1, as: WorkflowsSvcApi
 alias Temporal.Protos.Temporal.Api.Taskqueue.V1, as: TaskQueueApi
@@ -40,7 +41,7 @@ worker_opts = %Temporal.CoreSdk.Data.WorkerOpts{
       build_id: "0.0.1",
       deployment_name: "iex-repl-deploy"
     },
-    use_worker_versioning: true,
+    use_worker_versioning: false,
     default_versioning_behavior: 0
   },
   max_cached_workflows: 100,
@@ -50,7 +51,7 @@ worker_opts = %Temporal.CoreSdk.Data.WorkerOpts{
   enable_remote_activities: true,
   enable_nexus: true,
   sticky_queue_schedule_to_start_timeout_secs: 300.0,
-  max_heartbeat_throttle_interval_secs: 300.00,
+  max_heartbeat_throttle_interval_secs: 60.00,
   default_heartbeat_throttle_interval_secs: 30.0,
   graceful_shutdown_period_secs: 5.0,
   nondeterminism_as_workflow_fail: true,
@@ -67,8 +68,8 @@ worker_opts = %Temporal.CoreSdk.Data.WorkerOpts{
   },
   nondeterminism_as_workflow_fail_for_types: [],
   plugins: [],
-  max_worker_activities_per_second: nil,
-  max_task_queue_activities_per_second: nil,
+  max_worker_activities_per_second: 60,
+  max_task_queue_activities_per_second: 60,
   identity_override: nil,
   workflow_task_poller_behavior: %Temporal.CoreSdk.Data.WorkerPollerOpts{
     simple_maximum: %Temporal.CoreSdk.Data.WorkerPollerSimpleMaximumOpts{simple_maximum: 5}
