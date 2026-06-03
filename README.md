@@ -109,6 +109,22 @@ worker_opts = %Temporal.CoreSdk.Data.WorkerOpts{
 {:ok, worker} = Temporal.CoreSdk.CoreWorker.new(runtime, client, worker_opts)
 ```
 
+## Polling Workflow Activations
+
+This allows the worker to pull Workflows and changes to their state from the Task Queue of the Temporal Server.
+
+It is worth noting that the Core SDK has internal tracking that **prevents duplicate workflow activations**. This is important to know, if any activations get discarded by the Lang SDK without being properly responded to. Restarting the OS process clears this internal state and allows you to re-process the Workflow from the beginning.
+
+```elixir
+Temporal.CoreSdk.CoreWorker.poll_workflow_activations(worker, runtime)
+```
+
+## Polling Activity Tasks
+
+```elixir
+Temporal.CoreSdk.CoreWorker.poll_activity_tasks(worker, runtime)
+```
+
 # Useful Vocabulary
 
 Some vocabulary (and my understanding of that vocabulary) that I am picking up through the process of building the SDK.
