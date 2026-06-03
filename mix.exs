@@ -4,18 +4,18 @@ defmodule Temporal.MixProject do
   def project do
     [
       app: :temporal,
-      version: "0.1.0",
+      version: "0.0.1",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
 
       # Docs
       name: "Temporal SDK",
-      source_url: "https://github.com/polymorfiq/temporal-sdk",
-      homepage_url: "https://hex.pm/packages/temporal-sdk",
+      source_url: "https://github.com/polymorfiq/temporal-elixir-sdk",
+      homepage_url: "https://hex.pm/packages/temporal-elixir-sdk",
       docs: [
         # The main page in the docs
-        main: "Temporal SDK",
+        main: "Temporal Elixir SDK",
         extras: ["README.md"]
       ]
     ]
@@ -32,10 +32,6 @@ defmodule Temporal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:grpc, "~> 0.11"},
-      {:protobuf, "~> 0.16"},
-      {:protobuf_generate, "~> 0.2", only: [:dev]},
-      {:elixir_uuid, "~> 1.2"},
       {:broadway, "~> 1.3"},
       {:rustler, "~> 0.38.0", runtime: false},
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},

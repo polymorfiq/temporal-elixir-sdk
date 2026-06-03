@@ -1,36 +1,18 @@
-# Temporal
+# Temporal Elixir SDK
 
-**TODO: Add description**
+**This is an (in progress) Temporal Language SDK for the Elixir programming language, that utilizes an NIF of the [Temporal Core SDK](https://github.com/temporalio/sdk-rust#temporal-core-sdk). This is not yet tested or fit for production usage.**
 
-Setup:
-```shell
-brew install protobuf
-mix escript.install hex protobuf 0.16.0
-```
+**Though, it's MIT Licensed so feel free to fork it and go crazy in making it production-ready!**
 
-Generation:
-```shell
-cd priv;
-git clone --depth 1 --branch v1.62.13 https://github.com/temporalio/api.git;
-cd ../;
-
-mix protobuf.generate --package-prefix=temporal.protos --include-path=./deps/googleapis --include-path=./priv/api --output-path=./lib --plugin=ProtobufGenerate.Plugins.GRPCWithOptions --one-file-per-module google/api/annotations.proto google/api/http.proto ./priv/api/temporal/api/**/*.proto
-```
-
-## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `temporal` to your list of dependencies in `mix.exs`:
+# Installation
 
 ```elixir
-def deps do
+defp deps do
   [
-    {:temporal, "~> 0.1.0"}
+    ...
+    {:temporal, "~> 0.0.1", github: "polymorfiq/temporal-elixir-sdk", branch: "main"}
   ]
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/temporal>.
 
