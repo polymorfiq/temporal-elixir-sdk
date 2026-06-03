@@ -17,9 +17,9 @@ end
 
 # Usage
 
-I'm currently learning how the Rust Core works, and so below I'll note what's working and my current understanding of the function it serves.
+I'm currently learning how the Rust Core works, and so below I'll note what's working and my current understanding of the purpose each interaction serves.
 
-I'm currently building a more Supervision-Tree-Friendly layer over the Core SDK for a more Elixir-friendly interaction, but the initialization and basic communication with the Rust Core is currently working and being improved.
+I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more Elixir-friendly interaction, but the initialization and basic communication with the Rust Core is working and being improved.
 
 ## Initializing the runtime
 
