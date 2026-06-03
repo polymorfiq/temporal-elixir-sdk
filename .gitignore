@@ -33,3 +33,4 @@ temporal-*.tar
 .idea
 /priv/native
 /projectFilesBackup
+*.iml
