@@ -1,6 +1,6 @@
 use crate::core_client::ElixirClient;
 use crate::core_runtime::ElixirRuntime;
-use crate::core_workflows::{SdkWorkflowActivation};
+use crate::core_workflows::{SdkWorkflowActivation, SdkWorkflowActivationCompletion};
 use rustler::{Env, LocalPid, NifStruct, OwnedEnv, Resource, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -77,7 +77,7 @@ impl From<WorkerDeploymentOptions> for SdkWorkerDeploymentOpts {
     }
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkerDeploymentVersion"]
 pub struct SdkWorkerDeploymentVersion {
     pub build_id: String,
@@ -475,6 +475,29 @@ fn _worker_poll_nexus_task(
 
         let msg: Result<SdkNexusTask, String> = match poll_result {
             Ok(task) => Ok(task.into()),
+            Err(error) => Err(format!("Error polling workflow activation: {}", error)),
+        };
+
+        let mut owned_env = OwnedEnv::new();
+        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+    });
+
+    Ok(true)
+}
+
+#[rustler::nif]
+fn _worker_complete_workflow_activation(
+    runtime: ResourceArc<ElixirRuntime>,
+    worker: ResourceArc<ElixirWorker>,
+    completion: SdkWorkflowActivationCompletion,
+    resp_pid: LocalPid,
+) -> Result<bool, String> {
+    let handle = runtime.core.lock().unwrap().tokio_handle();
+    handle.spawn(async move {
+        let completion_result = worker.worker.lock().await.complete_workflow_activation(completion.into()).await;
+
+        let msg: Result<bool, String> = match completion_result {
+            Ok(()) => Ok(true),
             Err(error) => Err(format!("Error polling workflow activation: {}", error)),
         };
 

@@ -1,6 +1,7 @@
 use rustler::NifStruct;
+use crate::core_workflows::SdkActivationPayload;
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.Duration"]
 pub struct SdkDuration {
     seconds: i64,
@@ -16,7 +17,16 @@ impl From<prost_wkt_types::Duration> for SdkDuration {
     }
 }
 
-#[derive(NifStruct)]
+impl Into<prost_wkt_types::Duration> for SdkDuration {
+    fn into(self) -> prost_wkt_types::Duration {
+        prost_wkt_types::Duration {
+            seconds: self.seconds,
+            nanos: self.nanos,
+        }
+    }
+}
+
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.Timestamp"]
 pub struct SdkTimestamp {
     seconds: i64,
@@ -28,6 +38,15 @@ impl From<prost_wkt_types::Timestamp> for SdkTimestamp {
         Self {
             seconds: external.seconds,
             nanos: external.nanos,
+        }
+    }
+}
+
+impl Into<prost_wkt_types::Timestamp> for SdkTimestamp {
+    fn into(self) -> prost_wkt_types::Timestamp {
+        prost_wkt_types::Timestamp {
+            seconds: self.seconds,
+            nanos: self.nanos,
         }
     }
 }
