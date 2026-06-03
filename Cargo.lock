@@ -1847,6 +1847,7 @@ dependencies = [
 name = "temporalcoresdk"
 version = "0.1.0"
 dependencies = [
+ "prost-wkt-types",
  "rustler",
  "temporalio-client",
  "temporalio-common",

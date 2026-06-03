@@ -15,3 +15,4 @@ temporalio_sdk_client =  { git = "https://github.com/temporalio/sdk-rust.git", t
 url = "2.5.8"
 tracing = "0.1.44"
 tokio = "1.52.3"
+prost-wkt-types = "0.7.1"

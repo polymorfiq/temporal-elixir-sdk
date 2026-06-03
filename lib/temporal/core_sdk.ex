@@ -17,7 +17,12 @@ defmodule Temporal.CoreSdk do
   def _create_client(_runtime, _opts, _resp_pid), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
-  @spec _create_worker(runtime :: term(), client :: term(), opts :: WorkerOpts.t(), resp_pid :: pid()) ::
+  @spec _create_worker(
+          runtime :: term(),
+          client :: term(),
+          opts :: WorkerOpts.t(),
+          resp_pid :: pid()
+        ) ::
           {:ok, term()} | {:error, term()}
   def _create_worker(_runtime, _client, _opts, _resp_pid), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -26,9 +31,9 @@ defmodule Temporal.CoreSdk do
           {:ok, term()} | {:error, term()}
   def _validate_worker(_runtime, _worker, _resp_pid), do: :erlang.nif_error(:nif_not_loaded)
 
-
   @doc false
   @spec _worker_poll_workflow_activation(runtime :: term(), worker :: term(), resp_pid :: pid()) ::
           {:ok, term()} | {:error, term()}
-  def _worker_poll_workflow_activation(_runtime, _worker, _resp_pid), do: :erlang.nif_error(:nif_not_loaded)
+  def _worker_poll_workflow_activation(_runtime, _worker, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
 end

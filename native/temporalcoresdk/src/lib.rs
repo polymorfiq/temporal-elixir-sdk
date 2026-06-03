@@ -1,6 +1,8 @@
-mod core_runtime;
+mod common;
 mod core_client;
+mod core_runtime;
 mod core_worker;
+mod core_workflows;
 
 mod atoms {
     rustler::atoms! {

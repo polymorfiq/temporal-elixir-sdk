@@ -19,13 +19,14 @@ defmodule Temporal.CoreSdk.CoreWorker do
   def new(runtime, client, opts) do
     create_worker_async(runtime, client, opts)
 
-    worker_resp = receive do
-      {@create_worker_message_prefix, resp} -> resp
-    end
+    worker_resp =
+      receive do
+        {@create_worker_message_prefix, resp} -> resp
+      end
 
     with {:ok, worker_ref} <- worker_resp,
          :ok <- validate(worker_ref, runtime) do
-      {:ok, %__MODULE__{worker: worker_ref}} |> IO.inspect(label: "new_worker")
+      {:ok, %__MODULE__{worker: worker_ref}}
     end
   end
 
@@ -77,7 +78,6 @@ defmodule Temporal.CoreSdk.CoreWorker do
     end)
   end
 
-
   @spec poll_workflow_activations(t(), CoreRuntime.t()) :: :ok | {:error, term()}
   def poll_workflow_activations(worker, runtime) do
     poll_workflow_activations_async(worker, runtime)
@@ -93,9 +93,11 @@ defmodule Temporal.CoreSdk.CoreWorker do
     end
   end
 
-  @spec poll_workflow_activations_async(worker :: t(), runtime :: CoreRuntime.t()) :: :ok | {:error, term()}
+  @spec poll_workflow_activations_async(worker :: t(), runtime :: CoreRuntime.t()) ::
+          :ok | {:error, term()}
   def poll_workflow_activations_async(worker, runtime) do
     parent = self()
+
     spawn_link(fn ->
       CoreSdk._worker_poll_workflow_activation(runtime.runtime, worker.worker, self())
 

@@ -1,15 +1,22 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc};
-use tokio::sync::Mutex;
-use std::time::Duration;
-use rustler::{Env, LocalPid, NifStruct, OwnedEnv, Resource, ResourceArc};
-use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
-use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
-use temporalio_sdk_common::worker::{WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes};
-use temporalio_sdk_core::{init_worker, PollerBehavior, ResourceBasedSlotsOptions, ResourceSlotOptions, SlotKind, SlotSupplierOptions, TunerHolder, TunerHolderOptions, Worker, WorkerConfig, WorkerVersioningStrategy, WorkflowErrorType};
 use crate::core_client::ElixirClient;
 use crate::core_runtime::ElixirRuntime;
+use crate::core_workflows::SdkWorkflowActivationJob;
+use rustler::{Env, LocalPid, NifStruct, OwnedEnv, Resource, ResourceArc};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::time::Duration;
+use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
+use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
+use temporalio_sdk_common::worker::{
+    WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes,
+};
+use temporalio_sdk_core::{
+    init_worker, PollerBehavior, ResourceBasedSlotsOptions, ResourceSlotOptions, SlotKind,
+    SlotSupplierOptions, TunerHolder, TunerHolderOptions, Worker, WorkerConfig,
+    WorkerVersioningStrategy, WorkflowErrorType,
+};
 use tokio::runtime::Runtime;
+use tokio::sync::Mutex;
 use tracing::error;
 
 pub struct ElixirWorker {
@@ -19,7 +26,6 @@ pub struct ElixirWorker {
 
 #[rustler::resource_impl]
 impl Resource for ElixirWorker {}
-
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.WorkerOpts"]
@@ -53,21 +59,21 @@ struct SdkWorkerOpts {
 struct SdkWorkerDeploymentOpts {
     version: SdkWorkerDeploymentVersion,
     use_worker_versioning: bool,
-    default_versioning_behavior: Option<u32>
+    default_versioning_behavior: Option<u32>,
 }
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.WorkerDeploymentVersion"]
 struct SdkWorkerDeploymentVersion {
     build_id: String,
-    deployment_name: String
+    deployment_name: String,
 }
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.WorkerPollerOpts"]
 struct SdkWorkerPollerOpts {
     autoscaling: Option<SdkWorkerPollerAutoscalingOpts>,
-    simple_maximum: Option<SdkWorkerPollerSimpleMaximumOpts>
+    simple_maximum: Option<SdkWorkerPollerSimpleMaximumOpts>,
 }
 
 #[derive(NifStruct)]
@@ -75,13 +81,13 @@ struct SdkWorkerPollerOpts {
 struct SdkWorkerPollerAutoscalingOpts {
     minimum: u32,
     maximum: u32,
-    initial: u32
+    initial: u32,
 }
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.WorkerPollerSimpleMaximumOpts"]
 struct SdkWorkerPollerSimpleMaximumOpts {
-    simple_maximum: u32
+    simple_maximum: u32,
 }
 
 #[derive(NifStruct)]
@@ -89,7 +95,7 @@ struct SdkWorkerPollerSimpleMaximumOpts {
 struct SdkWorkerTunerOpts {
     workflow_slot_supplier: SdkWorkerSlotSupplierOpts,
     activity_slot_supplier: SdkWorkerSlotSupplierOpts,
-    local_activity_slot_supplier: SdkWorkerSlotSupplierOpts
+    local_activity_slot_supplier: SdkWorkerSlotSupplierOpts,
 }
 
 #[derive(NifStruct)]
@@ -106,7 +112,7 @@ struct SdkWorkerTunerResourceOpts {
     target_cpu_usage: f64,
     min_slots: u32,
     max_slots: u32,
-    ramp_throttle: f64
+    ramp_throttle: f64,
 }
 
 #[derive(NifStruct)]
@@ -127,12 +133,6 @@ struct SdkWorkflowActivation {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.WorkerWorkflowActivationJob"]
-struct SdkWorkflowActivationJob {
-    todo: bool,
-}
-
-#[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.Timestamp"]
 struct SdkTimestamp {
     seconds: i64,
@@ -144,7 +144,7 @@ fn _create_worker(
     runtime: ResourceArc<ElixirRuntime>,
     client: ResourceArc<ElixirClient>,
     options: SdkWorkerOpts,
-    resp_pid: LocalPid
+    resp_pid: LocalPid,
 ) -> Result<bool, String> {
     let config = WorkerConfig::builder()
         .namespace(options.namespace)
@@ -164,7 +164,10 @@ fn _create_worker(
                         Some(1) => Some(VersioningBehavior::Pinned),
                         Some(2) => Some(VersioningBehavior::AutoUpgrade),
                         Some(behavior) => {
-                            return Err(format!("Unknown default versioning behavior: {}", behavior))
+                            return Err(format!(
+                                "Unknown default versioning behavior: {}",
+                                behavior
+                            ))
                         }
                     }
                 },
@@ -174,41 +177,41 @@ fn _create_worker(
         .max_cached_workflows(options.max_cached_workflows as usize)
         .workflow_task_poller_behavior({
             match options.workflow_task_poller_behavior {
-                Some(SdkWorkerPollerOpts{autoscaling: Some(autoscaling), ..}) => {
-                    PollerBehavior::Autoscaling {
-                        minimum: autoscaling.minimum as usize,
-                        maximum: autoscaling.maximum as usize,
-                        initial: autoscaling.initial as usize
-                    }
-                }
+                Some(SdkWorkerPollerOpts {
+                    autoscaling: Some(autoscaling),
+                    ..
+                }) => PollerBehavior::Autoscaling {
+                    minimum: autoscaling.minimum as usize,
+                    maximum: autoscaling.maximum as usize,
+                    initial: autoscaling.initial as usize,
+                },
 
-                Some(SdkWorkerPollerOpts{simple_maximum: Some(simple_max), ..}) => {
-                    PollerBehavior::SimpleMaximum(simple_max.simple_maximum as usize)
-                }
+                Some(SdkWorkerPollerOpts {
+                    simple_maximum: Some(simple_max),
+                    ..
+                }) => PollerBehavior::SimpleMaximum(simple_max.simple_maximum as usize),
 
-                _ => {
-                    return Err(String::from("workflow_task_poller_behavior not configured"))
-                }
+                _ => return Err(String::from("workflow_task_poller_behavior not configured")),
             }
         })
-        .nonsticky_to_sticky_poll_ratio(options.nonsticky_to_sticky_poll_ratio, )
+        .nonsticky_to_sticky_poll_ratio(options.nonsticky_to_sticky_poll_ratio)
         .activity_task_poller_behavior({
             match options.activity_task_poller_behavior {
-                Some(SdkWorkerPollerOpts{autoscaling: Some(autoscaling), ..}) => {
-                    PollerBehavior::Autoscaling {
-                        minimum: autoscaling.minimum as usize,
-                        maximum: autoscaling.maximum as usize,
-                        initial: autoscaling.initial as usize
-                    }
-                }
+                Some(SdkWorkerPollerOpts {
+                    autoscaling: Some(autoscaling),
+                    ..
+                }) => PollerBehavior::Autoscaling {
+                    minimum: autoscaling.minimum as usize,
+                    maximum: autoscaling.maximum as usize,
+                    initial: autoscaling.initial as usize,
+                },
 
-                Some(SdkWorkerPollerOpts{simple_maximum: Some(simple_max), ..}) => {
-                    PollerBehavior::SimpleMaximum(simple_max.simple_maximum as usize)
-                }
+                Some(SdkWorkerPollerOpts {
+                    simple_maximum: Some(simple_max),
+                    ..
+                }) => PollerBehavior::SimpleMaximum(simple_max.simple_maximum as usize),
 
-                _ => {
-                    return Err(String::from("activity_task_poller_behavior not configured"))
-                }
+                _ => return Err(String::from("activity_task_poller_behavior not configured")),
             }
         })
         .task_types(WorkerTaskTypes {
@@ -228,15 +231,15 @@ fn _create_worker(
         ))
         .maybe_max_worker_activities_per_second(options.max_worker_activities_per_second)
         .maybe_max_task_queue_activities_per_second(options.max_task_queue_activities_per_second)
-        .graceful_shutdown_period(Duration::from_secs_f64(options.graceful_shutdown_period_secs))
+        .graceful_shutdown_period(Duration::from_secs_f64(
+            options.graceful_shutdown_period_secs,
+        ))
         .tuner(Arc::new(build_tuner(options.tuner)?))
-        .workflow_failure_errors(
-            if options.nondeterminism_as_workflow_fail {
-                HashSet::from([WorkflowErrorType::Nondeterminism])
-            } else {
-                HashSet::new()
-            },
-        )
+        .workflow_failure_errors(if options.nondeterminism_as_workflow_fail {
+            HashSet::from([WorkflowErrorType::Nondeterminism])
+        } else {
+            HashSet::new()
+        })
         .workflow_types_to_failure_errors(
             options
                 .nondeterminism_as_workflow_fail_for_types
@@ -271,16 +274,18 @@ fn _create_worker(
                 };
 
                 let resp = match initialized {
-                    Ok(worker) => {
-                        Ok(ResourceArc::new(ElixirWorker{worker: Mutex::new(worker)}))
-                    },
-                    Err(err) => Err(format!("Error creating worker: {}", err))
+                    Ok(worker) => Ok(ResourceArc::new(ElixirWorker {
+                        worker: Mutex::new(worker),
+                    })),
+                    Err(err) => Err(format!("Error creating worker: {}", err)),
                 };
 
                 let mut owned_env = OwnedEnv::new();
-                owned_env.send_and_clear(&resp_pid, |_curr_env| {
-                    resp
-                }).unwrap_or_else(|err| error!("Error sending worker response message: {:?}", err));
+                owned_env
+                    .send_and_clear(&resp_pid, |_curr_env| resp)
+                    .unwrap_or_else(|err| {
+                        error!("Error sending worker response message: {:?}", err)
+                    });
 
                 Ok(true)
             });
@@ -288,25 +293,17 @@ fn _create_worker(
             Ok(true)
         }
 
-        Err(err) => {
-            Err(String::from(format!("Error creating worker opts: {}", err)))
-        }
+        Err(err) => Err(String::from(format!("Error creating worker opts: {}", err))),
     }
 }
 
 fn build_tuner(options: SdkWorkerTunerOpts) -> Result<TunerHolder, String> {
-    let (workflow_slot_options, resource_slot_options) = build_tuner_slot_options(
-        options.workflow_slot_supplier,
-        None
-    )?;
-    let (activity_slot_options, resource_slot_options) = build_tuner_slot_options(
-        options.activity_slot_supplier,
-        resource_slot_options
-    )?;
-    let (local_activity_slot_options, resource_slot_options) = build_tuner_slot_options(
-        options.local_activity_slot_supplier,
-        resource_slot_options
-    )?;
+    let (workflow_slot_options, resource_slot_options) =
+        build_tuner_slot_options(options.workflow_slot_supplier, None)?;
+    let (activity_slot_options, resource_slot_options) =
+        build_tuner_slot_options(options.activity_slot_supplier, resource_slot_options)?;
+    let (local_activity_slot_options, resource_slot_options) =
+        build_tuner_slot_options(options.local_activity_slot_supplier, resource_slot_options)?;
 
     let tuner_holder_opts = TunerHolderOptions::builder()
         .maybe_resource_based_options(resource_slot_options)
@@ -316,23 +313,23 @@ fn build_tuner(options: SdkWorkerTunerOpts) -> Result<TunerHolder, String> {
         .build();
 
     let tuner_holder_results = match tuner_holder_opts {
-        Ok(tuner_holder_opts) => {
-            tuner_holder_opts.build_tuner_holder()
-        }
+        Ok(tuner_holder_opts) => tuner_holder_opts.build_tuner_holder(),
 
         Err(err) => {
-            return Err(String::from(format!("Failed building tuner holder opts: {}", err)));
+            return Err(String::from(format!(
+                "Failed building tuner holder opts: {}",
+                err
+            )));
         }
     };
 
     match tuner_holder_results {
-        Ok(tuner_holder) => {
-            Ok(tuner_holder)
-        }
+        Ok(tuner_holder) => Ok(tuner_holder),
 
-        Err(err) => {
-            Err(String::from(format!("Failed building tuner holder: {}", err)))
-        }
+        Err(err) => Err(String::from(format!(
+            "Failed building tuner holder: {}",
+            err
+        ))),
     }
 }
 
@@ -341,11 +338,18 @@ fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
     prev_slots_options: Option<ResourceBasedSlotsOptions>,
 ) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), String> {
     if let Some(slots) = options.fixed_size {
-        Ok((SlotSupplierOptions::FixedSize { slots: slots as usize }, prev_slots_options))
+        Ok((
+            SlotSupplierOptions::FixedSize {
+                slots: slots as usize,
+            },
+            prev_slots_options,
+        ))
     } else if let Some(resource) = options.resource_based {
         build_tuner_resource_options(resource, prev_slots_options)
     } else {
-        Err(String::from("Slot supplier must be fixed size or resource based"))
+        Err(String::from(
+            "Slot supplier must be fixed size or resource based",
+        ))
     }
 }
 
@@ -360,7 +364,9 @@ fn build_tuner_resource_options<SK: SlotKind>(
 
     match prev_slots_options {
         Some(prev_slots_opts) => {
-            if slots_options.target_cpu_usage != prev_slots_opts.target_cpu_usage || slots_options.target_mem_usage != prev_slots_opts.target_mem_usage {
+            if slots_options.target_cpu_usage != prev_slots_opts.target_cpu_usage
+                || slots_options.target_mem_usage != prev_slots_opts.target_mem_usage
+            {
                 return Err(String::from(
                     "All resource-based slot suppliers must have the same resource-based tuner options"
                 ));
@@ -385,7 +391,7 @@ fn _validate_worker(
     env: Env,
     _runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
-    resp_pid: LocalPid
+    resp_pid: LocalPid,
 ) -> Result<bool, String> {
     let rt = Runtime::new().unwrap();
 
@@ -395,7 +401,7 @@ fn _validate_worker(
 
         let resp = match validate_resp {
             Ok(_) => Ok(true),
-            Err(err) => Err(format!("Error validating worker: {}", err))
+            Err(err) => Err(format!("Error validating worker: {}", err)),
         };
 
         let _ = env.send(&resp_pid, resp);
@@ -408,7 +414,7 @@ fn _validate_worker(
 fn _worker_poll_workflow_activation(
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
-    resp_pid: LocalPid
+    resp_pid: LocalPid,
 ) -> Result<bool, String> {
     let handle = runtime.core.lock().unwrap().tokio_handle();
     handle.spawn(async move {
@@ -418,45 +424,46 @@ fn _worker_poll_workflow_activation(
         println!("poll_workflow_activation!!!");
 
         let msg = match poll_result {
-            Ok(activation) => Ok(SdkWorkflowActivation{
+            Ok(activation) => Ok(SdkWorkflowActivation {
                 run_id: activation.run_id,
                 timestamp: match activation.timestamp {
-                    Some(ts) => {
-                        Some(SdkTimestamp{
-                            seconds: ts.seconds,
-                            nanos: ts.nanos
-                        })
-                    }
+                    Some(ts) => Some(SdkTimestamp {
+                        seconds: ts.seconds,
+                        nanos: ts.nanos,
+                    }),
 
-                    None => None
+                    None => None,
                 },
                 is_replaying: activation.is_replaying,
                 history_length: activation.history_length,
-                jobs: activation.jobs.iter().map(|_job| SdkWorkflowActivationJob{todo: true}).collect(),
+                jobs: activation
+                    .jobs
+                    .iter()
+                    .map(|job| job.clone().into())
+                    .collect(),
                 available_internal_flags: activation.available_internal_flags,
                 history_size_bytes: activation.history_size_bytes,
                 continue_as_new_suggested: activation.continue_as_new_suggested,
-                deployment_version_for_current_task: match activation.deployment_version_for_current_task {
-                    Some(version) => {
-                        Some(SdkWorkerDeploymentVersion{
-                            build_id: version.build_id,
-                            deployment_name: version.deployment_name,
-                        })
-                    }
+                deployment_version_for_current_task: match activation
+                    .deployment_version_for_current_task
+                {
+                    Some(version) => Some(SdkWorkerDeploymentVersion {
+                        build_id: version.build_id,
+                        deployment_name: version.deployment_name,
+                    }),
 
-                    None => None
+                    None => None,
                 },
                 last_sdk_version: activation.last_sdk_version.clone(),
                 suggest_continue_as_new_reasons: activation.suggest_continue_as_new_reasons,
-                target_worker_deployment_version_changed: activation.target_worker_deployment_version_changed,
+                target_worker_deployment_version_changed: activation
+                    .target_worker_deployment_version_changed,
             }),
             Err(error) => Err(format!("Error polling workflow activation: {}", error)),
         };
 
         let mut owned_env = OwnedEnv::new();
-        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| {
-            msg
-        });
+        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
     });
 
     Ok(true)

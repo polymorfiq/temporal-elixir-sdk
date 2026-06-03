@@ -1,11 +1,14 @@
+use crate::core_runtime::ElixirRuntime;
+use rustler::{LocalPid, NifStruct, OwnedEnv, Resource, ResourceArc};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
-use rustler::{LocalPid, NifStruct, OwnedEnv, Resource, ResourceArc};
-use temporalio_sdk_client::{ClientKeepAliveOptions, ClientTlsOptions, Connection, ConnectionOptions, DnsLoadBalancingOptions, HttpConnectProxyOptions, RetryOptions, TlsOptions};
-use url::Url;
+use temporalio_sdk_client::{
+    ClientKeepAliveOptions, ClientTlsOptions, Connection, ConnectionOptions,
+    DnsLoadBalancingOptions, HttpConnectProxyOptions, RetryOptions, TlsOptions,
+};
 use tracing::{error, warn};
-use crate::core_runtime::ElixirRuntime;
+use url::Url;
 
 pub struct ElixirClient {
     #[allow(dead_code)]
@@ -49,7 +52,7 @@ struct SdkClientRetryOpts {
     multiplier: f64,
     max_interval_secs: f64,
     max_elapsed_time_secs: f64,
-    max_retries: u32
+    max_retries: u32,
 }
 
 #[derive(NifStruct)]
@@ -70,27 +73,31 @@ struct SdkClientHttpConnectProxyOpts {
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.ClientDnsLoadBalancingOpts"]
 struct SdkClientDnsLoadBalancingOpts {
-    resolution_interval_secs: f64
+    resolution_interval_secs: f64,
 }
 
 #[rustler::nif]
-fn _create_client(runtime: ResourceArc<ElixirRuntime>, options: SdkClientOpts, resp_pid: LocalPid) -> Result<bool, String> {
+fn _create_client(
+    runtime: ResourceArc<ElixirRuntime>,
+    options: SdkClientOpts,
+    resp_pid: LocalPid,
+) -> Result<bool, String> {
     let parsed_host = Url::parse(
         format!(
             "{}://{}",
-            if options.tls.is_some() { "https" } else { "http" },
+            if options.tls.is_some() {
+                "https"
+            } else {
+                "http"
+            },
             options.target_host
         )
-            .as_str(),
+        .as_str(),
     );
 
     let host_url = match parsed_host {
-        Ok(host) => {
-            host
-        }
-        Err(err) => {
-            return Err(format!("Failed parsing host: {}", err))
-        }
+        Ok(host) => host,
+        Err(err) => return Err(format!("Failed parsing host: {}", err)),
     };
 
     let has_http_connect_settings = options.http_connect_proxy.is_some();
@@ -104,10 +111,7 @@ fn _create_client(runtime: ResourceArc<ElixirRuntime>, options: SdkClientOpts, r
         .identity(options.identity)
         .maybe_tls_options(if let Some(tls) = options.tls {
             Some(TlsOptions {
-                client_tls_options: match (
-                    tls.client_cert,
-                    tls.client_private_key,
-                ) {
+                client_tls_options: match (tls.client_cert, tls.client_private_key) {
                     (None, None) => None,
                     (Some(client_cert), Some(client_private_key)) => Some(ClientTlsOptions {
                         // These are unsafe because of lifetime issues, but we copy right away
@@ -115,11 +119,12 @@ fn _create_client(runtime: ResourceArc<ElixirRuntime>, options: SdkClientOpts, r
                         client_private_key: client_private_key.into_bytes(),
                     }),
                     _ => {
-                        return Err(String::from("Must have both client cert and private key or neither"));
+                        return Err(String::from(
+                            "Must have both client cert and private key or neither",
+                        ));
                     }
                 },
-                server_root_ca_cert: tls.server_root_ca_cert
-                    .map(|rstr| rstr.into_bytes()),
+                server_root_ca_cert: tls.server_root_ca_cert.map(|rstr| rstr.into_bytes()),
                 domain: tls.domain,
             })
         } else {
@@ -137,42 +142,36 @@ fn _create_client(runtime: ResourceArc<ElixirRuntime>, options: SdkClientOpts, r
             },
             max_retries: options.rpc_retry.max_retries as usize,
         })
-        .keep_alive(
-            if let Some(keep_alive) = options.keep_alive {
-                Some(ClientKeepAliveOptions {
-                    interval: Duration::from_secs_f64(keep_alive.interval_secs),
-                    timeout: Duration::from_secs_f64(keep_alive.timeout_secs),
-                })
-            } else {
-                None
-            },
-        )
-        .maybe_http_connect_proxy(
-            if let Some(proxy) = options.http_connect_proxy {
-                Some(HttpConnectProxyOptions {
-                    target_addr: proxy.target_host,
-                    basic_auth: match (
-                        proxy.basic_auth_user,
-                        proxy.basic_auth_pass,
-                    ) {
-                        (None, None) => None,
-                        (Some(user), Some(pass)) => Some((user, pass)),
-                        _ => {
-                            return Err(String::from("Must have both basic auth and pass or neither"));
-                        }
-                    },
-                })
-            } else {
-                None
-            },
-        )
+        .keep_alive(if let Some(keep_alive) = options.keep_alive {
+            Some(ClientKeepAliveOptions {
+                interval: Duration::from_secs_f64(keep_alive.interval_secs),
+                timeout: Duration::from_secs_f64(keep_alive.timeout_secs),
+            })
+        } else {
+            None
+        })
+        .maybe_http_connect_proxy(if let Some(proxy) = options.http_connect_proxy {
+            Some(HttpConnectProxyOptions {
+                target_addr: proxy.target_host,
+                basic_auth: match (proxy.basic_auth_user, proxy.basic_auth_pass) {
+                    (None, None) => None,
+                    (Some(user), Some(pass)) => Some((user, pass)),
+                    _ => {
+                        return Err(String::from(
+                            "Must have both basic auth and pass or neither",
+                        ));
+                    }
+                },
+            })
+        } else {
+            None
+        })
         .dns_load_balancing(if has_http_connect_settings {
             warn!("Disabling DNS load balancing because http_connect_proxy is set");
             None
         } else if let Some(dns) = options.dns_load_balancing {
             let mut opts = DnsLoadBalancingOptions::default();
-            opts.resolution_interval =
-                Duration::from_secs_f64(dns.resolution_interval_secs);
+            opts.resolution_interval = Duration::from_secs_f64(dns.resolution_interval_secs);
             Some(opts)
         } else {
             None
@@ -184,17 +183,29 @@ fn _create_client(runtime: ResourceArc<ElixirRuntime>, options: SdkClientOpts, r
         let mut owned_env = OwnedEnv::new();
         match Connection::connect(opts).await {
             Ok(conn) => {
-                owned_env.send_and_clear(&resp_pid, |_curr_env| {
-                    let resp: Result<ResourceArc<ElixirClient>, String> = Ok(ResourceArc::new(ElixirClient{connection: Mutex::new(conn)}));
-                    resp
-                }).unwrap_or_else(|err| error!("Error sending client response message: {:?}", err));
+                owned_env
+                    .send_and_clear(&resp_pid, |_curr_env| {
+                        let resp: Result<ResourceArc<ElixirClient>, String> =
+                            Ok(ResourceArc::new(ElixirClient {
+                                connection: Mutex::new(conn),
+                            }));
+                        resp
+                    })
+                    .unwrap_or_else(|err| {
+                        error!("Error sending client response message: {:?}", err)
+                    });
             }
 
             Err(err) => {
-                owned_env.send_and_clear(&resp_pid, |_curr_env| {
-                    let resp: Result<ResourceArc<ElixirClient>, String> = Err(format!("Error creating Elixir client: {}", err));
-                    resp
-                }).unwrap_or_else(|err| error!("Error sending client response message: {:?}", err));
+                owned_env
+                    .send_and_clear(&resp_pid, |_curr_env| {
+                        let resp: Result<ResourceArc<ElixirClient>, String> =
+                            Err(format!("Error creating Elixir client: {}", err));
+                        resp
+                    })
+                    .unwrap_or_else(|err| {
+                        error!("Error sending client response message: {:?}", err)
+                    });
             }
         };
     });
