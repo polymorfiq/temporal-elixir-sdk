@@ -111,7 +111,7 @@ worker_opts = %Temporal.CoreSdk.Data.WorkerOpts{
 
 # Useful Vocabulary
 
-Some vocabulary (and my understanding of that vocabulary) I'm picking up through the process of building the SDK that doesn't necessarily come up when using the product through an existing SDK.
+Some vocabulary (and my understanding of that vocabulary) that I am picking up through the process of building the SDK.
 
 **Workflow Activations**: Work for the worker to do in progressing forward the state of a Workflow. The worker retrieves Activations from its polling of the Temporal Server and responds with Activation Completions to tell the server how it has handled those Activations.
 
