@@ -19,7 +19,7 @@ end
 
 # Usage
 
-I'm currently learning how the Rust Core works, and so below I'll note what's working and my current understanding of the purpose each interaction serves.
+I'm still learning how the Core SDK works, and so below I'll note what's working and my current understanding of the purpose each interaction serves.
 
 I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more Elixir-friendly interaction, but the initialization and basic communication with the Rust Core is working and being improved.
 
@@ -141,11 +141,11 @@ Some vocabulary (and my understanding of that vocabulary) that I am picking up t
 
 **A collection of useful references I've found so far, for building Temporal Lang SDKs**
 
-The [Core SDK Architecture Document](https://github.com/temporalio/sdk-rust/blob/main/ARCHITECTURE.md) is the best resource for understanding the relationship between your Lang SDK, the Rust Core, and the Temporal Server.
+The [Core SDK Architecture Document](https://github.com/temporalio/sdk-rust/blob/main/ARCHITECTURE.md) is the best resource for understanding the relationship between your Lang SDK, the Core SDK, and the Temporal Server.
 
-Once you know the vocabulary around working with the Temporal Server, the [Temporal SDK Core](https://docs.rs/temporalio-sdk-core/0.4.0/temporalio_sdk_core/index.html) docs are by far the most helpful resource for understanding the internal workings of the Rust Core.
+Once you know the vocabulary around working with the Temporal Server, the [Temporal SDK Core](https://docs.rs/temporalio-sdk-core/0.4.0/temporalio_sdk_core/index.html) docs are by far the most helpful resource for understanding the internal workings of the Core SDK.
 
-The [Temporal Ruby SDK](https://github.com/temporalio/sdk-ruby/tree/main/temporalio/ext/src) utilizes the Rust Core and so is a good example of how to utilize it in a production environment.
+The [Temporal Ruby SDK](https://github.com/temporalio/sdk-ruby/tree/main/temporalio/ext/src) utilizes the Core SDK and so is a good example of how to utilize it in a production environment.
 
 
 
