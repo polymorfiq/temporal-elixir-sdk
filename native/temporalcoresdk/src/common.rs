@@ -1,5 +1,4 @@
 use rustler::NifStruct;
-use crate::core_workflows::SdkActivationPayload;
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.Duration"]

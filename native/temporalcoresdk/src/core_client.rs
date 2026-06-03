@@ -18,7 +18,7 @@ pub struct ElixirClient {
 #[rustler::resource_impl]
 impl Resource for ElixirClient {}
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ClientOpts"]
 struct SdkClientOpts {
     target_host: String,
@@ -35,7 +35,7 @@ struct SdkClientOpts {
     dns_load_balancing: Option<SdkClientDnsLoadBalancingOpts>,
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ClientTlsOpts"]
 struct SdkClientTlsOpts {
     client_cert: Option<String>,
@@ -44,7 +44,7 @@ struct SdkClientTlsOpts {
     domain: Option<String>,
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ClientRetryOpts"]
 struct SdkClientRetryOpts {
     initial_interval_secs: f64,
@@ -55,14 +55,14 @@ struct SdkClientRetryOpts {
     max_retries: u32,
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ClientKeepAliveOpts"]
 struct SdkClientKeepAliveOpts {
     interval_secs: f64,
     timeout_secs: f64,
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ClientHttpConnectProxyOpts"]
 struct SdkClientHttpConnectProxyOpts {
     target_host: String,
@@ -70,7 +70,7 @@ struct SdkClientHttpConnectProxyOpts {
     basic_auth_pass: Option<String>,
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ClientDnsLoadBalancingOpts"]
 struct SdkClientDnsLoadBalancingOpts {
     resolution_interval_secs: f64,

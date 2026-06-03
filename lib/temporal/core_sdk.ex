@@ -51,4 +51,26 @@ defmodule Temporal.CoreSdk do
           {:ok, NexusTask.t() | nil} | {:error, term()}
   def _worker_poll_nexus_task(_runtime, _worker, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _worker_complete_workflow_activation(
+          runtime :: term(),
+          worker :: term(),
+          completion :: Temporal.CoreSdk.Data.WorkflowActivationCompletion.t(),
+          resp_pid :: pid()
+        ) ::
+          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
+  def _worker_complete_workflow_activation(_runtime, _worker, _completion, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _worker_complete_activity_task(
+          runtime :: term(),
+          worker :: term(),
+          completion :: Temporal.CoreSdk.Data.ActivityTaskCompletion.t(),
+          resp_pid :: pid()
+        ) ::
+          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
+  def _worker_complete_activity_task(_runtime, _worker, _completion, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
