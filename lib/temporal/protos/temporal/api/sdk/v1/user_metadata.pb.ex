@@ -1,7 +1,0 @@
-defmodule Temporal.Protos.Temporal.Api.Sdk.V1.UserMetadata do
-  @moduledoc false
-  use Protobuf, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
-
-  field(:summary, 1, type: Temporal.Protos.Temporal.Api.Common.V1.Payload)
-  field(:details, 2, type: Temporal.Protos.Temporal.Api.Common.V1.Payload)
-end

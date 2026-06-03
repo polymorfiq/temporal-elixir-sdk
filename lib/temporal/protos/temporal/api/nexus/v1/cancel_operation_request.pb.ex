@@ -1,9 +1,0 @@
-defmodule Temporal.Protos.Temporal.Api.Nexus.V1.CancelOperationRequest do
-  @moduledoc false
-  use Protobuf, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
-
-  field(:service, 1, type: :string)
-  field(:operation, 2, type: :string)
-  field(:operation_id, 3, type: :string, json_name: "operationId", deprecated: true)
-  field(:operation_token, 4, type: :string, json_name: "operationToken")
-end

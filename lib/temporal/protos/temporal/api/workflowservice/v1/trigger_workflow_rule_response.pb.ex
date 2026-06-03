@@ -1,6 +1,0 @@
-defmodule Temporal.Protos.Temporal.Api.Workflowservice.V1.TriggerWorkflowRuleResponse do
-  @moduledoc false
-  use Protobuf, protoc_gen_elixir_version: "0.16.0", syntax: :proto3
-
-  field(:applied, 1, type: :bool)
-end
