@@ -47,6 +47,8 @@ defmodule Temporal.CoreSdk do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
-  @spec _worker_poll_nexus_task(runtime :: term(), worker :: term(), resp_pid :: pid()) :: {:ok, NexusTask.t() | nil} | {:error, term()}
-  def _worker_poll_nexus_task(_runtime, _worker, _resp_pid), do: :erlang.nif_error(:nif_not_loaded)
+  @spec _worker_poll_nexus_task(runtime :: term(), worker :: term(), resp_pid :: pid()) ::
+          {:ok, NexusTask.t() | nil} | {:error, term()}
+  def _worker_poll_nexus_task(_runtime, _worker, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
