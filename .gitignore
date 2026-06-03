@@ -31,3 +31,4 @@ temporal-*.tar
 
 # IDEA files
 .idea
+/priv/native
