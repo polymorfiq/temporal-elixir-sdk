@@ -8,7 +8,9 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   @create_worker_message_prefix :worker_creation
   @validate_message_prefix :worker_validation
-  @workflow_act_poll_message_prefix :worker_workflow_act_poll
+  @workflow_activations_poll_message_prefix :worker_workflow_activations_poll
+  @activity_tasks_poll_message_prefix :worker_activity_tasks_poll
+  @nexus_tasks_poll_message_prefix :worker_nexus_tasks_poll
 
   @type t :: %__MODULE__{
           worker: term()
@@ -84,7 +86,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
     validate_resp =
       receive do
-        {@workflow_act_poll_message_prefix, resp} -> resp
+        {@workflow_activations_poll_message_prefix, resp} -> resp
       end
 
     case validate_resp do
@@ -103,10 +105,78 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
       receive do
         {:ok, activation} ->
-          send(parent, {@workflow_act_poll_message_prefix, {:ok, activation}})
+          send(parent, {@workflow_activations_poll_message_prefix, {:ok, activation}})
 
         {:error, err} ->
-          send(parent, {@workflow_act_poll_message_prefix, {:error, err}})
+          send(parent, {@workflow_activations_poll_message_prefix, {:error, err}})
+      end
+    end)
+  end
+
+
+  @spec poll_activity_tasks(t(), CoreRuntime.t()) :: :ok | {:error, term()}
+  def poll_activity_tasks(worker, runtime) do
+    poll_activity_tasks_async(worker, runtime)
+
+    validate_resp =
+      receive do
+        {@activity_tasks_poll_message_prefix, resp} -> resp
+      end
+
+    case validate_resp do
+      {:ok, task} -> {:ok, task}
+      {:error, err} -> {:error, "Activity task poll error: #{inspect(err)}"}
+    end
+  end
+
+  @spec poll_activity_tasks_async(worker :: t(), runtime :: CoreRuntime.t()) ::
+          :ok | {:error, term()}
+  def poll_activity_tasks_async(worker, runtime) do
+    parent = self()
+
+    spawn_link(fn ->
+      CoreSdk._worker_poll_activity_task(runtime.runtime, worker.worker, self())
+
+      receive do
+        {:ok, task} ->
+          send(parent, {@activity_tasks_poll_message_prefix, {:ok, task}})
+
+        {:error, err} ->
+          send(parent, {@activity_tasks_poll_message_prefix, {:error, err}})
+      end
+    end)
+  end
+
+
+  @spec poll_nexus_tasks(t(), CoreRuntime.t()) :: :ok | {:error, term()}
+  def poll_nexus_tasks(worker, runtime) do
+    poll_nexus_tasks_async(worker, runtime)
+
+    validate_resp =
+      receive do
+        {@nexus_tasks_poll_message_prefix, resp} -> resp
+      end
+
+    case validate_resp do
+      {:ok, task} -> {:ok, task}
+      {:error, err} -> {:error, "Nexus task poll error: #{inspect(err)}"}
+    end
+  end
+
+  @spec poll_nexus_tasks_async(worker :: t(), runtime :: CoreRuntime.t()) ::
+          :ok | {:error, term()}
+  def poll_nexus_tasks_async(worker, runtime) do
+    parent = self()
+
+    spawn_link(fn ->
+      CoreSdk._worker_poll_nexus_task(runtime.runtime, worker.worker, self())
+
+      receive do
+        {:ok, task} ->
+          send(parent, {@nexus_tasks_poll_message_prefix, {:ok, task}})
+
+        {:error, err} ->
+          send(parent, {@nexus_tasks_poll_message_prefix, {:error, err}})
       end
     end)
   end

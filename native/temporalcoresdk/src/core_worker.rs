@@ -1,6 +1,6 @@
 use crate::core_client::ElixirClient;
 use crate::core_runtime::ElixirRuntime;
-use crate::core_workflows::SdkWorkflowActivationJob;
+use crate::core_workflows::{SdkWorkflowActivation};
 use rustler::{Env, LocalPid, NifStruct, OwnedEnv, Resource, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -18,6 +18,8 @@ use temporalio_sdk_core::{
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use tracing::error;
+use crate::core_activites::SdkActivityTask;
+use crate::core_nexus::SdkNexusTask;
 
 pub struct ElixirWorker {
     #[allow(dead_code)]
@@ -56,17 +58,48 @@ struct SdkWorkerOpts {
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.WorkerDeploymentOpts"]
-struct SdkWorkerDeploymentOpts {
-    version: SdkWorkerDeploymentVersion,
-    use_worker_versioning: bool,
-    default_versioning_behavior: Option<u32>,
+pub struct SdkWorkerDeploymentOpts {
+    pub version: SdkWorkerDeploymentVersion,
+    pub use_worker_versioning: bool,
+    pub default_versioning_behavior: Option<u32>,
+}
+
+impl From<WorkerDeploymentOptions> for SdkWorkerDeploymentOpts {
+    fn from(external: WorkerDeploymentOptions) -> Self {
+        Self {
+            version: external.version.into(),
+            use_worker_versioning: external.use_worker_versioning,
+            default_versioning_behavior: match external.default_versioning_behavior {
+                Some(behavior) => Some(behavior as u32),
+                None => None
+            }
+        }
+    }
 }
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.WorkerDeploymentVersion"]
-struct SdkWorkerDeploymentVersion {
-    build_id: String,
-    deployment_name: String,
+pub struct SdkWorkerDeploymentVersion {
+    pub build_id: String,
+    pub deployment_name: String,
+}
+
+impl From<temporalio_sdk_common::protos::coresdk::common::WorkerDeploymentVersion> for SdkWorkerDeploymentVersion {
+    fn from(external: temporalio_sdk_common::protos::coresdk::common::WorkerDeploymentVersion) -> Self {
+        Self {
+            build_id: external.build_id,
+            deployment_name: external.deployment_name,
+        }
+    }
+}
+
+impl From<WorkerDeploymentVersion> for SdkWorkerDeploymentVersion {
+    fn from(external: WorkerDeploymentVersion) -> Self {
+        Self {
+            build_id: external.build_id,
+            deployment_name: external.deployment_name,
+        }
+    }
 }
 
 #[derive(NifStruct)]
@@ -113,30 +146,6 @@ struct SdkWorkerTunerResourceOpts {
     min_slots: u32,
     max_slots: u32,
     ramp_throttle: f64,
-}
-
-#[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.WorkerWorkflowActivation"]
-struct SdkWorkflowActivation {
-    run_id: String,
-    timestamp: Option<SdkTimestamp>,
-    is_replaying: bool,
-    history_length: u32,
-    jobs: Vec<SdkWorkflowActivationJob>,
-    available_internal_flags: Vec<u32>,
-    history_size_bytes: u64,
-    continue_as_new_suggested: bool,
-    deployment_version_for_current_task: Option<SdkWorkerDeploymentVersion>,
-    last_sdk_version: String,
-    suggest_continue_as_new_reasons: Vec<i32>,
-    target_worker_deployment_version_changed: bool,
-}
-
-#[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.Timestamp"]
-struct SdkTimestamp {
-    seconds: i64,
-    nanos: i32,
 }
 
 #[rustler::nif]
@@ -418,47 +427,54 @@ fn _worker_poll_workflow_activation(
 ) -> Result<bool, String> {
     let handle = runtime.core.lock().unwrap().tokio_handle();
     handle.spawn(async move {
-        println!("poll_workflow_activation...");
-
         let poll_result = worker.worker.lock().await.poll_workflow_activation().await;
-        println!("poll_workflow_activation!!!");
 
-        let msg = match poll_result {
-            Ok(activation) => Ok(SdkWorkflowActivation {
-                run_id: activation.run_id,
-                timestamp: match activation.timestamp {
-                    Some(ts) => Some(SdkTimestamp {
-                        seconds: ts.seconds,
-                        nanos: ts.nanos,
-                    }),
+        let msg: Result<SdkWorkflowActivation, String> = match poll_result {
+            Ok(activation) => Ok(activation.into()),
+            Err(error) => Err(format!("Error polling workflow activation: {}", error)),
+        };
 
-                    None => None,
-                },
-                is_replaying: activation.is_replaying,
-                history_length: activation.history_length,
-                jobs: activation
-                    .jobs
-                    .iter()
-                    .map(|job| job.clone().into())
-                    .collect(),
-                available_internal_flags: activation.available_internal_flags,
-                history_size_bytes: activation.history_size_bytes,
-                continue_as_new_suggested: activation.continue_as_new_suggested,
-                deployment_version_for_current_task: match activation
-                    .deployment_version_for_current_task
-                {
-                    Some(version) => Some(SdkWorkerDeploymentVersion {
-                        build_id: version.build_id,
-                        deployment_name: version.deployment_name,
-                    }),
+        let mut owned_env = OwnedEnv::new();
+        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+    });
 
-                    None => None,
-                },
-                last_sdk_version: activation.last_sdk_version.clone(),
-                suggest_continue_as_new_reasons: activation.suggest_continue_as_new_reasons,
-                target_worker_deployment_version_changed: activation
-                    .target_worker_deployment_version_changed,
-            }),
+    Ok(true)
+}
+
+#[rustler::nif]
+fn _worker_poll_activity_task(
+    runtime: ResourceArc<ElixirRuntime>,
+    worker: ResourceArc<ElixirWorker>,
+    resp_pid: LocalPid,
+) -> Result<bool, String> {
+    let handle = runtime.core.lock().unwrap().tokio_handle();
+    handle.spawn(async move {
+        let poll_result = worker.worker.lock().await.poll_activity_task().await;
+
+        let msg: Result<SdkActivityTask, String> = match poll_result {
+            Ok(activity_task) => Ok(activity_task.into()),
+            Err(error) => Err(format!("Error polling workflow activation: {}", error)),
+        };
+
+        let mut owned_env = OwnedEnv::new();
+        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+    });
+
+    Ok(true)
+}
+
+#[rustler::nif]
+fn _worker_poll_nexus_task(
+    runtime: ResourceArc<ElixirRuntime>,
+    worker: ResourceArc<ElixirWorker>,
+    resp_pid: LocalPid,
+) -> Result<bool, String> {
+    let handle = runtime.core.lock().unwrap().tokio_handle();
+    handle.spawn(async move {
+        let poll_result = worker.worker.lock().await.poll_nexus_task().await;
+
+        let msg: Result<SdkNexusTask, String> = match poll_result {
+            Ok(task) => Ok(task.into()),
             Err(error) => Err(format!("Error polling workflow activation: {}", error)),
         };
 

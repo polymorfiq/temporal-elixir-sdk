@@ -6,6 +6,9 @@ defmodule Temporal.CoreSdk do
   alias Temporal.CoreSdk.Data.ClientOpts
   alias Temporal.CoreSdk.Data.RuntimeOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
+  alias Temporal.CoreSdk.Data.WorkflowActivation
+  alias Temporal.CoreSdk.Data.ActivityTask
+  alias Temporal.CoreSdk.Data.NexusTask
 
   @doc false
   @spec _create_runtime(opts :: RuntimeOpts.t()) :: {:ok, term()} | {:error, term()}
@@ -33,7 +36,17 @@ defmodule Temporal.CoreSdk do
 
   @doc false
   @spec _worker_poll_workflow_activation(runtime :: term(), worker :: term(), resp_pid :: pid()) ::
-          {:ok, term()} | {:error, term()}
+          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
   def _worker_poll_workflow_activation(_runtime, _worker, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _worker_poll_activity_task(runtime :: term(), worker :: term(), resp_pid :: pid()) ::
+          {:ok, ActivityTask.t() | nil} | {:error, term()}
+  def _worker_poll_activity_task(_runtime, _worker, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _worker_poll_nexus_task(runtime :: term(), worker :: term(), resp_pid :: pid()) :: {:ok, NexusTask.t() | nil} | {:error, term()}
+  def _worker_poll_nexus_task(_runtime, _worker, _resp_pid), do: :erlang.nif_error(:nif_not_loaded)
 end
