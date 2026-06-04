@@ -29,7 +29,6 @@ I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more
 I am still working on input/output encodings.
 
 ```elixir
-{:ok, runtime} = Temporal.CoreSdk.CoreRuntime.new()
 {:ok, client} = Temporal.Client.new("localhost:7233")
 {:ok, worker} = Temporal.Worker.new(client, "default")
 
