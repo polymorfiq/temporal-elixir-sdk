@@ -26,23 +26,21 @@ I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more
 
 ## Starting a workflow
 
-I am still working on input/output encodings.
-
 ```elixir
 {:ok, client} = Temporal.Client.new("localhost:7233")
 {:ok, worker} = Temporal.Worker.new(client, "default")
 
 Temporal.Client.start_workflow(
   client,
-  "my-task-queue",
-  "my-workflow-id",
+  "default",
+  "my-workflow-id-v3",
   "MySpecialWorkflow",
   [
-    %WorkflowInput{
-      metadata: %{"encoding" => "json/plain"},
-      data: :binary.bin_to_list("123"),
-      external_payloads: []
-      }
+    WorkflowInput.new(123),
+    WorkflowInput.new("456"),
+    WorkflowInput.new(789.10),
+    WorkflowInput.new(%{arbitrary: "map"}),
+    WorkflowInput.bytes(<<1, 2, 3>>)
   ]
 )
 ```

@@ -4,8 +4,9 @@ use crate::common::{
 };
 use crate::core_worker::SdkWorkerDeploymentVersion;
 use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
+use serde::ser::Error;
 use temporalio_sdk_client::{Client, WorkflowHandle, WorkflowStartOptions, WorkflowStartSignal};
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_resolution::Status as ActivityResolutionStatus;
 use temporalio_sdk_common::protos::coresdk::child_workflow::child_workflow_result::Status as ChildWorkflowStatus;
@@ -3329,10 +3330,33 @@ impl HasWorkflowDefinition for SdkWorkflowDefinition {
     type Run = Self;
 }
 
-#[derive(NifStruct, Deserialize, Serialize)]
+#[derive(NifStruct, Deserialize)]
 #[module = "Temporal.CoreSdk.Data.WorkflowInput"]
 pub struct SdkWorkflowInput {
-    metadata: HashMap<String, String>,
-    data: Vec<u8>,
-    external_payloads: Vec<()>,
+    pub integer: Option<i64>,
+    pub float: Option<f64>,
+    pub string: Option<String>,
+    pub json: Option<String>,
+    pub bytes: Option<Vec<u8>>,
+}
+
+impl Serialize for SdkWorkflowInput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if self.string.is_some() {
+            serializer.serialize_str(self.string.clone().unwrap().as_str())
+        } else if self.json.is_some() {
+            serializer.serialize_str(self.json.clone().unwrap().as_str())
+        } else if self.integer.is_some() {
+            serializer.serialize_i64(self.integer.unwrap())
+        } else if self.float.is_some() {
+            serializer.serialize_f64(self.float.unwrap())
+        } else if self.bytes.is_some() {
+            serializer.serialize_bytes(self.bytes.clone().unwrap().as_slice())
+        } else {
+            Err(S::Error::custom("Cannot serialize SdkWorkflowInput - no value given"))
+        }
+    }
 }
