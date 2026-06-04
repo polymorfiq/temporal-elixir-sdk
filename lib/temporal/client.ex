@@ -95,7 +95,7 @@ defmodule Temporal.Client do
 
     with {:ok, runtime} <- Temporal.CoreSdk.CoreRuntime.new(),
          {:ok, core} <- Temporal.CoreSdk.CoreClient.new(runtime, client_opts) do
-      {:ok, %__MODULE__{core: core, namespace: namespace}}
+      {:ok, %__MODULE__{core: core, runtime: runtime, namespace: namespace}}
     end
   end
 

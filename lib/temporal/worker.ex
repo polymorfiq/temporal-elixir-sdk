@@ -1,5 +1,5 @@
 defmodule Temporal.Worker do
-  defstruct [:client, :core]
+  defstruct [:runtime, :client, :core]
 
   alias Temporal.Client
   alias Temporal.CoreSdk.CoreWorker
@@ -10,6 +10,7 @@ defmodule Temporal.Worker do
   alias Temporal.CoreSdk.Data.WorkerSlotSupplierOpts
   alias Temporal.CoreSdk.Data.WorkerPollerOpts
   alias Temporal.CoreSdk.Data.WorkerPollerSimpleMaximumOpts
+  alias Temporal.CoreSdk.Data.WorkflowActivation
 
   @type t :: %__MODULE__{client: Client.t()}
   @type worker_opts :: []
@@ -22,6 +23,11 @@ defmodule Temporal.Worker do
     with :ok <- validate_opts(opts) do
       initialize_worker(client, opts)
     end
+  end
+
+  @spec poll_workflow_activations(t()) :: {:ok, WorkflowActivation.t()} | {:error, term()}
+  def poll_workflow_activations(worker) do
+    CoreWorker.poll_workflow_activations(worker.core, worker.runtime)
   end
 
   @spec validate_opts(worker_opts()) :: :ok | {:error, term()}
@@ -80,8 +86,8 @@ defmodule Temporal.Worker do
       }
     }
 
-    with {:ok, core} <- CoreWorker.new(client.core.runtime, client, worker_opts) do
-      %__MODULE__{client: client, core: core}
+    with {:ok, core} <- CoreWorker.new(client.core.runtime, client.core, worker_opts) do
+      {:ok, %__MODULE__{client: client, runtime: client.runtime, core: core}}
     end
   end
 end

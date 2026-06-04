@@ -609,8 +609,6 @@ fn _worker_poll_workflow_activation(
     Ok(true)
 }
 
-
-
 // #[rustler::nif]
 // fn _client_start_workflow(
 //     runtime: ResourceArc<ElixirRuntime>,
