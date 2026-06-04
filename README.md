@@ -27,19 +27,21 @@ I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more
 ## Starting a workflow
 
 ```elixir
+alias Temporal.CoreSdk.Data.WorkflowInput
+
 {:ok, client} = Temporal.Client.new("localhost:7233")
 {:ok, worker} = Temporal.Worker.new(client, "default")
 
 Temporal.Client.start_workflow(
   client,
   "default",
-  "my-workflow-id-v3",
+  "my-workflow-id-v5",
   "MySpecialWorkflow",
   [
-    WorkflowInput.new(123),
-    WorkflowInput.new("456"),
-    WorkflowInput.new(789.10),
-    WorkflowInput.new(%{arbitrary: "map"}),
+    123,
+    "456",
+    789.10,
+    %{arbitrary: "map"},
     WorkflowInput.bytes(<<1, 2, 3>>)
   ]
 )

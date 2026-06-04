@@ -4,9 +4,8 @@ use crate::common::{
 };
 use crate::core_worker::SdkWorkerDeploymentVersion;
 use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize};
 use std::collections::HashMap;
-use serde::ser::Error;
 use temporalio_sdk_client::{Client, WorkflowHandle, WorkflowStartOptions, WorkflowStartSignal};
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_resolution::Status as ActivityResolutionStatus;
 use temporalio_sdk_common::protos::coresdk::child_workflow::child_workflow_result::Status as ChildWorkflowStatus;
@@ -26,6 +25,8 @@ use temporalio_sdk_common::protos::temporal::api::failure::v1::failure::FailureI
 use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::{HasWorkflowDefinition, WorkflowDefinition};
+use temporalio_sdk_common::data_converters::{GenericPayloadConverter, PayloadConversionError, SerializationContext, TemporalSerializable};
+use temporalio_sdk_common::protos::temporal::api::common::v1::Payload;
 use tokio::sync::Mutex;
 
 pub struct ElixirWorkflowHandle<W> {
@@ -3319,8 +3320,8 @@ pub struct SdkWorkflowDefinition {
 }
 
 impl WorkflowDefinition for SdkWorkflowDefinition {
-    type Input = Vec<SdkWorkflowInput>;
-    type Output = Vec<SdkWorkflowInput>;
+    type Input = SdkWorkflowArguments;
+    type Output = SdkWorkflowArguments;
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -3331,32 +3332,55 @@ impl HasWorkflowDefinition for SdkWorkflowDefinition {
 }
 
 #[derive(NifStruct, Deserialize)]
-#[module = "Temporal.CoreSdk.Data.WorkflowInput"]
-pub struct SdkWorkflowInput {
-    pub integer: Option<i64>,
-    pub float: Option<f64>,
-    pub string: Option<String>,
-    pub json: Option<String>,
-    pub bytes: Option<Vec<u8>>,
+#[module = "Temporal.CoreSdk.Data.WorkflowArguments"]
+pub struct SdkWorkflowArguments {
+    pub args: Vec<SdkWorkflowInput>
 }
 
-impl Serialize for SdkWorkflowInput {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        if self.string.is_some() {
-            serializer.serialize_str(self.string.clone().unwrap().as_str())
-        } else if self.json.is_some() {
-            serializer.serialize_str(self.json.clone().unwrap().as_str())
-        } else if self.integer.is_some() {
-            serializer.serialize_i64(self.integer.unwrap())
-        } else if self.float.is_some() {
-            serializer.serialize_f64(self.float.unwrap())
-        } else if self.bytes.is_some() {
-            serializer.serialize_bytes(self.bytes.clone().unwrap().as_slice())
-        } else {
-            Err(S::Error::custom("Cannot serialize SdkWorkflowInput - no value given"))
+impl TemporalSerializable for SdkWorkflowArguments {
+    fn to_payloads(&self, ctx: &SerializationContext<'_>) -> Result<Vec<Payload>, PayloadConversionError> {
+        let mut payloads = vec![Payload::default(); self.args.len()];
+        for (idx, arg) in self.args.iter().enumerate() {
+            match ctx.converter.to_payload(ctx, arg) {
+                Ok(payload) => {
+                    payloads[idx] = payload
+                },
+                Err(err) => {
+                    return Err(err)
+                },
+            };
+        }
+
+        Ok(payloads)
+    }
+}
+
+#[derive(NifTaggedEnum, Deserialize, Clone)]
+pub enum SdkWorkflowInput {
+    Integer(i64),
+    Float(f64),
+    String(String),
+    JSON(String),
+    Bytes(Vec<u8>),
+}
+
+impl TemporalSerializable for SdkWorkflowInput {
+    fn to_payload(&self, ctx: &SerializationContext<'_>) -> Result<Payload, PayloadConversionError> {
+        match self {
+            SdkWorkflowInput::Integer(val) => ctx.converter.to_payload(ctx, val),
+            SdkWorkflowInput::Float(val) => ctx.converter.to_payload(ctx, val),
+            SdkWorkflowInput::String(val) => ctx.converter.to_payload(ctx, val),
+            SdkWorkflowInput::JSON(val) => {
+                let mut metadata = HashMap::new();
+                metadata.insert("encoding".to_owned(), "json/plain".as_bytes().to_vec());
+
+                Ok(SdkPayload{
+                    metadata: metadata,
+                    data: val.as_bytes().to_vec(),
+                    external_payloads: Vec::new(),
+                }.into())
+            },
+            SdkWorkflowInput::Bytes(val) => ctx.converter.to_payload(ctx, val),
         }
     }
 }

@@ -5,7 +5,7 @@ defmodule Temporal.Client do
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.CoreClient
-  alias Temporal.CoreSdk.Data.{ClientOpts, ClientRetryOpts, WorkflowDefinition, WorkflowStartOptions, ClientPriority}
+  alias Temporal.CoreSdk.Data.{ClientOpts, ClientRetryOpts, WorkflowDefinition, WorkflowStartOptions, WorkflowArguments, WorkflowInput, ClientPriority}
   alias Temporal.Workflows.WorkflowHandle
 
   @type t :: %__MODULE__{runtime: CoreRuntime.t(), core: CoreClient.t()}
@@ -123,13 +123,18 @@ defmodule Temporal.Client do
   end
 
   def start_workflow(client, task_queue, workflow_id, workflow_name, inputs) do
+    args = Enum.map(inputs, fn
+      {:bytes, val} -> {:bytes, val}
+      input -> WorkflowInput.new(input)
+    end)
+
     parent = self()
     spawn_link(fn ->
       CoreSdk._client_start_workflow(
         client.runtime.runtime,
         client.core.client,
         %WorkflowDefinition{name: workflow_name},
-        inputs,
+        %WorkflowArguments{args: args},
         %WorkflowStartOptions{
           task_queue: task_queue,
           workflow_id: workflow_id,
