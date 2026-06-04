@@ -5,7 +5,19 @@ defmodule Temporal.Client do
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.CoreClient
-  alias Temporal.CoreSdk.Data.{ClientOpts, ClientRetryOpts, WorkflowDefinition, WorkflowStartOptions, WorkflowArguments, WorkflowInput, ClientPriority}
+
+  alias Temporal.Workflows.WorkflowExecHandle
+
+  alias Temporal.CoreSdk.Data.{
+    ClientOpts,
+    ClientRetryOpts,
+    WorkflowDefinition,
+    WorkflowStartOptions,
+    WorkflowArguments,
+    WorkflowInput,
+    ClientPriority
+  }
+
   alias Temporal.Workflows.WorkflowHandle
 
   @type t :: %__MODULE__{runtime: CoreRuntime.t(), core: CoreClient.t()}
@@ -23,6 +35,15 @@ defmodule Temporal.Client do
           {:namespace, String.t()}
           | {:identity, String.t()}
           | {:rpc, rpc_opts()}
+        ]
+
+  @type workflow_opts :: [
+          {:id_reuse_policy, WorkflowStartOptions.id_reuse_policy()}
+          | {:id_conflict_policy, WorkflowStartOptions.id_conflict_policy()}
+          | {:enable_eager_workflow_start, bool()}
+          | {:links, [CoreSdk.Data.Link.t()]}
+          | {:completion_callbacks, [CoreSdk.Data.Callback.t()]}
+          | {:priority, ClientPriority.t()}
         ]
 
   @default_namespace "default"
@@ -122,13 +143,23 @@ defmodule Temporal.Client do
     WorkflowHandle.new(client, handle_opts ++ opts)
   end
 
-  def start_workflow(client, task_queue, workflow_id, workflow_name, inputs) do
-    args = Enum.map(inputs, fn
-      {:bytes, val} -> {:bytes, val}
-      input -> WorkflowInput.new(input)
-    end)
+  @spec start_workflow(
+          t(),
+          task_queue :: String.t(),
+          workflow_id :: String.t(),
+          workflow_name :: String.t(),
+          inputs :: [term()],
+          opts :: workflow_opts()
+        ) :: {:ok, WorkflowHandle.t()} | {:error, term()}
+  def start_workflow(client, task_queue, workflow_id, workflow_name, inputs, opts \\ []) do
+    args =
+      Enum.map(inputs, fn
+        {:bytes, val} -> {:bytes, val}
+        input -> WorkflowInput.new(input)
+      end)
 
     parent = self()
+
     spawn_link(fn ->
       CoreSdk._client_start_workflow(
         client.runtime.runtime,
@@ -138,19 +169,35 @@ defmodule Temporal.Client do
         %WorkflowStartOptions{
           task_queue: task_queue,
           workflow_id: workflow_id,
-          id_reuse_policy: :allow_duplicate,
-          id_conflict_policy: :fail,
-          enable_eager_workflow_start: false,
-          links: [],
-          completion_callbacks: [],
-          priority: %ClientPriority{priority_key: 1, fairness_key: "Fair", fairness_weight: 1}
+          id_reuse_policy: Keyword.get(opts, :id_reuse_policy, :reject_duplicate),
+          id_conflict_policy: Keyword.get(opts, :id_conflict_policy, :fail),
+          enable_eager_workflow_start: Keyword.get(opts, :enable_eager_workflow_start, false),
+          links: Keyword.get(opts, :links, []),
+          completion_callbacks: Keyword.get(opts, :completion_callbacks, []),
+          priority:
+            Keyword.get(opts, :priority, %ClientPriority{
+              priority_key: 0,
+              fairness_key: "",
+              fairness_weight: 1.0
+            })
         },
         self()
       )
 
       receive do
         {:ok, workflow_handle} ->
-          send(parent, {@start_workflow_msg_prefix, {:ok, workflow_handle}})
+          send(
+            parent,
+            {@start_workflow_msg_prefix,
+             {:ok,
+              WorkflowExecHandle.new(
+                client,
+                workflow_handle,
+                workflow_name: workflow_name,
+                workflow_id: workflow_id,
+                task_queue: task_queue
+              )}}
+          )
 
         {:error, err} ->
           send(parent, {@start_workflow_msg_prefix, {:error, err}})

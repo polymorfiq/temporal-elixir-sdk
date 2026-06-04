@@ -3,7 +3,10 @@ use crate::core_client::ElixirClient;
 use crate::core_nexus::SdkNexusTask;
 use crate::core_runtime::ElixirRuntime;
 use crate::core_worker::ElixirWorker;
-use crate::core_workflows::{ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion, SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowStartOptions};
+use crate::core_workflows::{
+    ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion,
+    SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowStartOptions,
+};
 use rustler::{Env, LocalPid, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

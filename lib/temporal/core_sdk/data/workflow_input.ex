@@ -1,6 +1,11 @@
 defmodule Temporal.CoreSdk.Data.WorkflowInput do
   @type value :: integer() | float() | String.t() | term()
-  @type t :: {:integer, integer()} | {:float, float()} | {:string, String.t()} | {:json, String.t()} | {:bytes, String.t()}
+  @type t ::
+          {:integer, integer()}
+          | {:float, float()}
+          | {:string, String.t()}
+          | {:json, String.t()}
+          | {:bytes, String.t()}
 
   @spec new(value()) :: t()
   def new(value) when is_integer(value), do: {:integer, value}

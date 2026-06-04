@@ -4,9 +4,12 @@ use crate::common::{
 };
 use crate::core_worker::SdkWorkerDeploymentVersion;
 use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
-use serde::{Deserialize};
+use serde::Deserialize;
 use std::collections::HashMap;
 use temporalio_sdk_client::{Client, WorkflowHandle, WorkflowStartOptions, WorkflowStartSignal};
+use temporalio_sdk_common::data_converters::{
+    GenericPayloadConverter, PayloadConversionError, SerializationContext, TemporalSerializable,
+};
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_resolution::Status as ActivityResolutionStatus;
 use temporalio_sdk_common::protos::coresdk::child_workflow::child_workflow_result::Status as ChildWorkflowStatus;
 use temporalio_sdk_common::protos::coresdk::nexus::nexus_operation_result::Status as NexusOperationResultStatus;
@@ -18,6 +21,7 @@ use temporalio_sdk_common::protos::coresdk::workflow_commands::WorkflowCommand;
 use temporalio_sdk_common::protos::coresdk::workflow_completion;
 use temporalio_sdk_common::protos::coresdk::workflow_completion::workflow_activation_completion::Status as WorkflowActivationCompletionStatus;
 use temporalio_sdk_common::protos::temporal::api as temporal_api;
+use temporalio_sdk_common::protos::temporal::api::common::v1::Payload;
 use temporalio_sdk_common::protos::temporal::api::enums::v1::{
     WorkflowIdConflictPolicy, WorkflowIdReusePolicy,
 };
@@ -25,8 +29,6 @@ use temporalio_sdk_common::protos::temporal::api::failure::v1::failure::FailureI
 use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::{HasWorkflowDefinition, WorkflowDefinition};
-use temporalio_sdk_common::data_converters::{GenericPayloadConverter, PayloadConversionError, SerializationContext, TemporalSerializable};
-use temporalio_sdk_common::protos::temporal::api::common::v1::Payload;
 use tokio::sync::Mutex;
 
 pub struct ElixirWorkflowHandle<W> {
@@ -3334,20 +3336,19 @@ impl HasWorkflowDefinition for SdkWorkflowDefinition {
 #[derive(NifStruct, Deserialize)]
 #[module = "Temporal.CoreSdk.Data.WorkflowArguments"]
 pub struct SdkWorkflowArguments {
-    pub args: Vec<SdkWorkflowInput>
+    pub args: Vec<SdkWorkflowInput>,
 }
 
 impl TemporalSerializable for SdkWorkflowArguments {
-    fn to_payloads(&self, ctx: &SerializationContext<'_>) -> Result<Vec<Payload>, PayloadConversionError> {
+    fn to_payloads(
+        &self,
+        ctx: &SerializationContext<'_>,
+    ) -> Result<Vec<Payload>, PayloadConversionError> {
         let mut payloads = vec![Payload::default(); self.args.len()];
         for (idx, arg) in self.args.iter().enumerate() {
             match ctx.converter.to_payload(ctx, arg) {
-                Ok(payload) => {
-                    payloads[idx] = payload
-                },
-                Err(err) => {
-                    return Err(err)
-                },
+                Ok(payload) => payloads[idx] = payload,
+                Err(err) => return Err(err),
             };
         }
 
@@ -3365,7 +3366,10 @@ pub enum SdkWorkflowInput {
 }
 
 impl TemporalSerializable for SdkWorkflowInput {
-    fn to_payload(&self, ctx: &SerializationContext<'_>) -> Result<Payload, PayloadConversionError> {
+    fn to_payload(
+        &self,
+        ctx: &SerializationContext<'_>,
+    ) -> Result<Payload, PayloadConversionError> {
         match self {
             SdkWorkflowInput::Integer(val) => ctx.converter.to_payload(ctx, val),
             SdkWorkflowInput::Float(val) => ctx.converter.to_payload(ctx, val),
@@ -3374,12 +3378,13 @@ impl TemporalSerializable for SdkWorkflowInput {
                 let mut metadata = HashMap::new();
                 metadata.insert("encoding".to_owned(), "json/plain".as_bytes().to_vec());
 
-                Ok(SdkPayload{
+                Ok(SdkPayload {
                     metadata: metadata,
                     data: val.as_bytes().to_vec(),
                     external_payloads: Vec::new(),
-                }.into())
-            },
+                }
+                .into())
+            }
             SdkWorkflowInput::Bytes(val) => ctx.converter.to_payload(ctx, val),
         }
     }
