@@ -45,7 +45,7 @@ defmodule Temporal.CoreSdk.Data.ActivationInitializeWorkflow do
           continued_failure: Data.WorkflowFailure.t() | nil,
           last_completion_result: Data.ActivationPayloads.t() | nil,
           first_execution_run_id: String.t(),
-          retry_policy: Data.WorkflowRetryPolicy.t() | nil,
+          retry_policy: Data.RetryPolicy.t() | nil,
           attempt: integer(),
           cron_schedule: String.t(),
           workflow_execution_expiration_time: Data.Timestamp.t() | nil,
@@ -54,6 +54,6 @@ defmodule Temporal.CoreSdk.Data.ActivationInitializeWorkflow do
           search_attributes: Data.WorkflowSearchAttributes.t() | nil,
           start_time: Data.Timestamp.t() | nil,
           root_workflow: Data.WorkflowExecution.t() | nil,
-          priority: Data.WorkflowPriority.t() | nil
+          priority: Data.Priority.t() | nil
         }
 end

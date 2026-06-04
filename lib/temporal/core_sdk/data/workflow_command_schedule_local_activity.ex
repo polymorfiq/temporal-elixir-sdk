@@ -28,7 +28,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandScheduleLocalActivity do
           schedule_to_close_timeout: Data.Duration.t() | nil,
           schedule_to_start_timeout: Data.Duration.t() | nil,
           start_to_close_timeout: Data.Duration.t() | nil,
-          retry_policy: Data.WorkflowRetryPolicy.t() | nil,
+          retry_policy: Data.RetryPolicy.t() | nil,
           local_retry_threshold: Data.Duration.t() | nil,
           cancellation_type: integer()
         }

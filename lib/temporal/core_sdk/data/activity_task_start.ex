@@ -39,8 +39,8 @@ defmodule Temporal.CoreSdk.Data.ActivityTaskStart do
           schedule_to_close_timeout: Data.Duration.t() | nil,
           start_to_close_timeout: Data.Duration.t() | nil,
           heartbeat_timeout: Data.Duration.t() | nil,
-          retry_policy: Data.WorkflowRetryPolicy.t() | nil,
-          priority: Data.WorkflowPriority.t(),
+          retry_policy: Data.RetryPolicy.t() | nil,
+          priority: Data.Priority.t(),
           is_local: bool(),
           run_id: String.t()
         }

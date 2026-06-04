@@ -82,6 +82,6 @@ worker_opts = %Temporal.CoreSdk.Data.WorkerOpts{
 {:ok, worker} = Temporal.CoreSdk.CoreWorker.new(runtime, client, worker_opts)
 
 #{:ok, client} = Temporal.dial_client("localhost:7233")
-#{:ok, worker} = Temporal.Worker.new(client, "default")
+#{:ok, worker.ex} = Temporal.Worker.new(client, "default")
 
-#Worker.register_workflow(worker, SampleWorkflow)
+#Worker.register_workflow(worker.ex, SampleWorkflow)

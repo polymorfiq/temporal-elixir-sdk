@@ -24,7 +24,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandContinueAsNewWorkflowExecution do
           memo: map(),
           headers: map(),
           search_attributes: Data.WorkflowSearchAttributes.t() | nil,
-          retry_policy: Data.WorkflowRetryPolicy.t() | nil,
+          retry_policy: Data.RetryPolicy.t() | nil,
           versioning_intent: integer(),
           initial_versioning_behavior: integer()
         }

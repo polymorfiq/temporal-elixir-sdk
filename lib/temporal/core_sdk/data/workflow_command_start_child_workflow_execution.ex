@@ -35,13 +35,13 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandStartChildWorkflowExecution do
           workflow_task_timeout: Data.Duration.t() | nil,
           parent_close_policy: integer(),
           workflow_id_reuse_policy: integer(),
-          retry_policy: Data.WorkflowRetryPolicy.t() | nil,
+          retry_policy: Data.RetryPolicy.t() | nil,
           cron_schedule: String.t(),
           headers: map(),
           memo: map(),
           search_attributes: Data.WorkflowSearchAttributes.t() | nil,
           cancellation_type: integer(),
           versioning_intent: integer(),
-          priority: Data.WorkflowPriority.t() | nil
+          priority: Data.Priority.t() | nil
         }
 end

@@ -30,10 +30,10 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandScheduleActivity do
           schedule_to_start_timeout: Data.Duration.t() | nil,
           start_to_close_timeout: Data.Duration.t() | nil,
           heartbeat_timeout: Data.Duration.t() | nil,
-          retry_policy: Data.WorkflowRetryPolicy.t() | nil,
+          retry_policy: Data.RetryPolicy.t() | nil,
           cancellation_type: integer(),
           do_not_eagerly_execute: bool(),
           versioning_intent: integer(),
-          priority: Data.WorkflowPriority.t() | nil
+          priority: Data.Priority.t() | nil
         }
 end

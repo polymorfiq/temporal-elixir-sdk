@@ -1,4 +1,6 @@
+use crate::core_activities::{SdkActivityTask, SdkActivityTaskCompletion};
 use crate::core_client::ElixirClient;
+use crate::core_nexus::SdkNexusTask;
 use crate::core_runtime::ElixirRuntime;
 use crate::core_workflows::{SdkWorkflowActivation, SdkWorkflowActivationCompletion};
 use rustler::{Env, LocalPid, NifStruct, OwnedEnv, Resource, ResourceArc};
@@ -18,8 +20,6 @@ use temporalio_sdk_core::{
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use tracing::error;
-use crate::core_activities::{SdkActivityTask, SdkActivityTaskCompletion};
-use crate::core_nexus::SdkNexusTask;
 
 pub struct ElixirWorker {
     #[allow(dead_code)]
@@ -71,8 +71,8 @@ impl From<WorkerDeploymentOptions> for SdkWorkerDeploymentOpts {
             use_worker_versioning: external.use_worker_versioning,
             default_versioning_behavior: match external.default_versioning_behavior {
                 Some(behavior) => Some(behavior as u32),
-                None => None
-            }
+                None => None,
+            },
         }
     }
 }
@@ -84,8 +84,12 @@ pub struct SdkWorkerDeploymentVersion {
     pub deployment_name: String,
 }
 
-impl From<temporalio_sdk_common::protos::coresdk::common::WorkerDeploymentVersion> for SdkWorkerDeploymentVersion {
-    fn from(external: temporalio_sdk_common::protos::coresdk::common::WorkerDeploymentVersion) -> Self {
+impl From<temporalio_sdk_common::protos::coresdk::common::WorkerDeploymentVersion>
+    for SdkWorkerDeploymentVersion
+{
+    fn from(
+        external: temporalio_sdk_common::protos::coresdk::common::WorkerDeploymentVersion,
+    ) -> Self {
         Self {
             build_id: external.build_id,
             deployment_name: external.deployment_name,
@@ -286,14 +290,14 @@ fn _create_worker(
                     Ok(worker) => Ok(ResourceArc::new(ElixirWorker {
                         worker: Mutex::new(worker),
                     })),
-                    Err(err) => Err(format!("Error creating worker: {}", err)),
+                    Err(err) => Err(format!("Error creating worker.ex: {}", err)),
                 };
 
                 let mut owned_env = OwnedEnv::new();
                 owned_env
                     .send_and_clear(&resp_pid, |_curr_env| resp)
                     .unwrap_or_else(|err| {
-                        error!("Error sending worker response message: {:?}", err)
+                        error!("Error sending worker.ex response message: {:?}", err)
                     });
 
                 Ok(true)
@@ -302,7 +306,10 @@ fn _create_worker(
             Ok(true)
         }
 
-        Err(err) => Err(String::from(format!("Error creating worker opts: {}", err))),
+        Err(err) => Err(String::from(format!(
+            "Error creating worker.ex opts: {}",
+            err
+        ))),
     }
 }
 
@@ -410,7 +417,7 @@ fn _validate_worker(
 
         let resp = match validate_resp {
             Ok(_) => Ok(true),
-            Err(err) => Err(format!("Error validating worker: {}", err)),
+            Err(err) => Err(format!("Error validating worker.ex: {}", err)),
         };
 
         let _ = env.send(&resp_pid, resp);
@@ -431,7 +438,7 @@ fn _worker_poll_workflow_activation(
 
         let msg: Result<SdkWorkflowActivation, String> = match poll_result {
             Ok(activation) => Ok(activation.into()),
-            Err(error) => Err(format!("Error polling workflow activation: {}", error)),
+            Err(error) => Err(format!("Error polling workflows activation: {}", error)),
         };
 
         let mut owned_env = OwnedEnv::new();
@@ -453,7 +460,7 @@ fn _worker_poll_activity_task(
 
         let msg: Result<SdkActivityTask, String> = match poll_result {
             Ok(activity_task) => Ok(activity_task.into()),
-            Err(error) => Err(format!("Error polling workflow activation: {}", error)),
+            Err(error) => Err(format!("Error polling workflows activation: {}", error)),
         };
 
         let mut owned_env = OwnedEnv::new();
@@ -475,7 +482,7 @@ fn _worker_poll_nexus_task(
 
         let msg: Result<SdkNexusTask, String> = match poll_result {
             Ok(task) => Ok(task.into()),
-            Err(error) => Err(format!("Error polling workflow activation: {}", error)),
+            Err(error) => Err(format!("Error polling workflows activation: {}", error)),
         };
 
         let mut owned_env = OwnedEnv::new();
@@ -494,11 +501,16 @@ fn _worker_complete_workflow_activation(
 ) -> Result<bool, String> {
     let handle = runtime.core.lock().unwrap().tokio_handle();
     handle.spawn(async move {
-        let completion_result = worker.worker.lock().await.complete_workflow_activation(completion.into()).await;
+        let completion_result = worker
+            .worker
+            .lock()
+            .await
+            .complete_workflow_activation(completion.into())
+            .await;
 
         let msg: Result<bool, String> = match completion_result {
             Ok(()) => Ok(true),
-            Err(error) => Err(format!("Error completing workflow activation: {}", error)),
+            Err(error) => Err(format!("Error completing workflows activation: {}", error)),
         };
 
         let mut owned_env = OwnedEnv::new();
@@ -517,11 +529,16 @@ fn _worker_complete_activity_task(
 ) -> Result<bool, String> {
     let handle = runtime.core.lock().unwrap().tokio_handle();
     handle.spawn(async move {
-        let completion_result = worker.worker.lock().await.complete_activity_task(completion.into()).await;
+        let completion_result = worker
+            .worker
+            .lock()
+            .await
+            .complete_activity_task(completion.into())
+            .await;
 
         let msg: Result<bool, String> = match completion_result {
             Ok(()) => Ok(true),
-            Err(error) => Err(format!("Error completing workflow activation: {}", error)),
+            Err(error) => Err(format!("Error completing workflows activation: {}", error)),
         };
 
         let mut owned_env = OwnedEnv::new();
