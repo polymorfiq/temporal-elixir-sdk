@@ -6,6 +6,6 @@ defmodule Temporal.CoreSdk.Data.Link do
   alias Temporal.CoreSdk.Data
 
   @type t :: %__MODULE__{
-               fields: %{String.t() => Data.ActivationPayload.t()}
-             }
+          fields: %{String.t() => Data.ActivationPayload.t()}
+        }
 end

@@ -1849,6 +1849,7 @@ version = "0.1.0"
 dependencies = [
  "prost-wkt-types",
  "rustler",
+ "serde",
  "temporalio-client",
  "temporalio-common",
  "temporalio-sdk-core",

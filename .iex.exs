@@ -1,7 +1,13 @@
 alias Temporal.Client
 alias Temporal.Worker
+alias Temporal.CoreSdk
 alias Temporal.CoreSdk.CoreWorker
 alias Temporal.Comms.Worker.TaskQueueComms
+alias Temporal.CoreSdk.Data.WorkflowDefinition
+alias Temporal.CoreSdk.Data.WorkflowInput
+alias Temporal.CoreSdk.Data.WorkflowStartOptions
+alias Temporal.CoreSdk.Data.Priority
+alias Temporal.CoreSdk.Data.ClientPriority
 alias Temporal.Protos.Temporal.Api.Workflowservice.V1, as: WorkflowsSvcApi
 alias Temporal.Protos.Temporal.Api.Taskqueue.V1, as: TaskQueueApi
 alias Temporal.Protos.Temporal.Api.Enums.V1, as: EnumsApi

@@ -3,6 +3,7 @@ defmodule Temporal.CoreSdk do
     otp_app: :temporal,
     crate: :temporalcoresdk
 
+  alias Temporal.CoreSdk.Data
   alias Temporal.CoreSdk.Data.ClientOpts
   alias Temporal.CoreSdk.Data.RuntimeOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
@@ -72,5 +73,18 @@ defmodule Temporal.CoreSdk do
         ) ::
           {:ok, WorkflowActivation.t() | nil} | {:error, term()}
   def _worker_complete_activity_task(_runtime, _worker, _completion, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _client_start_workflow(
+          runtime :: term(),
+          client :: term(),
+          workflow :: Data.WorkflowDefinition.t(),
+          input :: [Data.WorkflowInput.t()],
+          opts :: Data.WorkflowStartOptions.t(),
+          resp_pid :: pid()
+        ) ::
+          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
+  def _client_start_workflow(_runtime, _client, _workflow, _input, _opts, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
 end

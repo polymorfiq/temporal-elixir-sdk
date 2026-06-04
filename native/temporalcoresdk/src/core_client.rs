@@ -1,11 +1,9 @@
 use rustler::{NifStruct, Resource};
 use std::collections::HashMap;
-use std::sync::Mutex;
-use temporalio_sdk_client::Connection;
+use temporalio_sdk_client::Client;
 
 pub struct ElixirClient {
-    #[allow(dead_code)]
-    pub connection: Mutex<Connection>,
+    pub client: Client,
 }
 
 #[rustler::resource_impl]
@@ -15,6 +13,7 @@ impl Resource for ElixirClient {}
 #[module = "Temporal.CoreSdk.Data.ClientOpts"]
 pub struct SdkClientOpts {
     pub target_host: String,
+    pub namespace: String,
     pub client_name: String,
     pub client_version: String,
     pub identity: String,

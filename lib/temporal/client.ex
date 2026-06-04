@@ -2,9 +2,10 @@ defmodule Temporal.Client do
   defstruct [:namespace, :runtime, :core]
 
   alias Temporal.Constants
+  alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.CoreClient
-  alias Temporal.CoreSdk.Data.{ClientOpts, ClientRetryOpts}
+  alias Temporal.CoreSdk.Data.{ClientOpts, ClientRetryOpts, WorkflowDefinition, WorkflowStartOptions, ClientPriority}
   alias Temporal.Workflows.WorkflowHandle
 
   @type t :: %__MODULE__{runtime: CoreRuntime.t(), core: CoreClient.t()}
@@ -33,6 +34,7 @@ defmodule Temporal.Client do
     max_elapsed_time_secs: 60.0,
     max_retries: 30
   ]
+  @start_workflow_msg_prefix :start_workflow
 
   @spec new(target_host(), client_opts()) :: {:ok, t()} | {:error, term()}
   def new(target_host, opts \\ []) do
@@ -80,6 +82,7 @@ defmodule Temporal.Client do
 
     client_opts = %ClientOpts{
       target_host: target_host,
+      namespace: namespace,
       client_name: Constants.sdk_name(),
       client_version: Constants.sdk_version(),
       identity: Keyword.fetch!(opts, :identity),
@@ -117,5 +120,40 @@ defmodule Temporal.Client do
     handle_opts = if is_module?, do: [{:module, workflow} | handle_opts], else: handle_opts
 
     WorkflowHandle.new(client, handle_opts ++ opts)
+  end
+
+  def start_workflow(client, task_queue, workflow_id, workflow_name, inputs) do
+    parent = self()
+    spawn_link(fn ->
+      CoreSdk._client_start_workflow(
+        client.runtime.runtime,
+        client.core.client,
+        %WorkflowDefinition{name: workflow_name},
+        inputs,
+        %WorkflowStartOptions{
+          task_queue: task_queue,
+          workflow_id: workflow_id,
+          id_reuse_policy: :allow_duplicate,
+          id_conflict_policy: :fail,
+          enable_eager_workflow_start: false,
+          links: [],
+          completion_callbacks: [],
+          priority: %ClientPriority{priority_key: 1, fairness_key: "Fair", fairness_weight: 1}
+        },
+        self()
+      )
+
+      receive do
+        {:ok, workflow_handle} ->
+          send(parent, {@start_workflow_msg_prefix, {:ok, workflow_handle}})
+
+        {:error, err} ->
+          send(parent, {@start_workflow_msg_prefix, {:error, err}})
+      end
+    end)
+
+    receive do
+      {@start_workflow_msg_prefix, resp} -> resp
+    end
   end
 end

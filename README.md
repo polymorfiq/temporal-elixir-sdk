@@ -23,6 +23,31 @@ I'm still learning how the Core SDK works, and so below I'll note what's working
 
 I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more Elixir-friendly interaction, but the initialization and basic communication with the Rust Core is working and being improved.
 
+
+## Starting a workflow
+
+I am still working on input/output encodings.
+
+```elixir
+{:ok, runtime} = Temporal.CoreSdk.CoreRuntime.new()
+{:ok, client} = Temporal.Client.new("localhost:7233")
+{:ok, worker} = Temporal.Worker.new(client, "default")
+
+Temporal.Client.start_workflow(
+  client,
+  "my-task-queue",
+  "my-workflow-id",
+  "MySpecialWorkflow",
+  [
+    %WorkflowInput{
+      metadata: %{"encoding" => "json/plain"},
+      data: :binary.bin_to_list("123"),
+      external_payloads: []
+      }
+  ]
+)
+```
+
 ## Initializing the runtime
 
 From my current understanding, this orchestrates the asynchronous threads/fibers used within the Temporal Client.
@@ -31,7 +56,6 @@ From my current understanding, this orchestrates the asynchronous threads/fibers
 {:ok, runtime} = Temporal.CoreSdk.CoreRuntime.new()
 ```
 
-
 ## Initializing the Client
 
 The client is in charge of the overall connection with, messages passed back and forth, between the process and the gRPC Temporal Server.
@@ -39,6 +63,7 @@ The client is in charge of the overall connection with, messages passed back and
 ```elixir
 client_opts = %Temporal.CoreSdk.Data.ClientOpts{
   target_host: "localhost:7233",
+  namespace: "default",
   client_name: "temporal-elixir",
   client_version: "0.0.1",
   identity: "iex-repl",

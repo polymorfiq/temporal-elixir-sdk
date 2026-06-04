@@ -1,8 +1,12 @@
-use crate::common::{SdkCallback, SdkClientPriority, SdkDuration, SdkHeader, SdkLink, SdkPayload, SdkPayloads, SdkPriority, SdkRetryPolicy, SdkTimestamp};
+use crate::common::{
+    SdkCallback, SdkClientPriority, SdkDuration, SdkHeader, SdkLink, SdkPayload, SdkPayloads,
+    SdkPriority, SdkRetryPolicy, SdkTimestamp,
+};
 use crate::core_worker::SdkWorkerDeploymentVersion;
-use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum};
+use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use temporalio_sdk_client::{WorkflowStartOptions, WorkflowStartSignal};
+use temporalio_sdk_client::{Client, WorkflowHandle, WorkflowStartOptions, WorkflowStartSignal};
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_resolution::Status as ActivityResolutionStatus;
 use temporalio_sdk_common::protos::coresdk::child_workflow::child_workflow_result::Status as ChildWorkflowStatus;
 use temporalio_sdk_common::protos::coresdk::nexus::nexus_operation_result::Status as NexusOperationResultStatus;
@@ -14,10 +18,22 @@ use temporalio_sdk_common::protos::coresdk::workflow_commands::WorkflowCommand;
 use temporalio_sdk_common::protos::coresdk::workflow_completion;
 use temporalio_sdk_common::protos::coresdk::workflow_completion::workflow_activation_completion::Status as WorkflowActivationCompletionStatus;
 use temporalio_sdk_common::protos::temporal::api as temporal_api;
-use temporalio_sdk_common::protos::temporal::api::enums::v1::{WorkflowIdConflictPolicy, WorkflowIdReusePolicy};
+use temporalio_sdk_common::protos::temporal::api::enums::v1::{
+    WorkflowIdConflictPolicy, WorkflowIdReusePolicy,
+};
 use temporalio_sdk_common::protos::temporal::api::failure::v1::failure::FailureInfo;
 use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
+use temporalio_sdk_common::{HasWorkflowDefinition, WorkflowDefinition};
+use tokio::sync::Mutex;
+
+pub struct ElixirWorkflowHandle<W> {
+    #[allow(unused)]
+    pub handle: Mutex<WorkflowHandle<Client, W>>,
+}
+
+#[rustler::resource_impl]
+impl Resource for ElixirWorkflowHandle<SdkWorkflowDefinition> {}
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowActivation"]
@@ -3123,7 +3139,7 @@ pub struct SdkWorkflowStartOptions {
     pub priority: SdkClientPriority,
     pub header: Option<SdkHeader>,
     pub static_summary: Option<String>,
-    pub static_details: Option<String>
+    pub static_details: Option<String>,
 }
 
 impl From<WorkflowStartOptions> for SdkWorkflowStartOptions {
@@ -3138,20 +3154,31 @@ impl From<WorkflowStartOptions> for SdkWorkflowStartOptions {
             task_timeout: external.task_timeout.try_into_or_none(),
             cron_schedule: external.cron_schedule.try_into_or_none(),
             search_attributes: match external.search_attributes {
-                Some(attribs) => {
-                    Some(attribs.iter().map(|(k, v)| (k.to_string(), v.into())).collect())
-                },
-                None => None
+                Some(attribs) => Some(
+                    attribs
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.into()))
+                        .collect(),
+                ),
+                None => None,
             },
             enable_eager_workflow_start: external.enable_eager_workflow_start,
             retry_policy: external.retry_policy.try_into_or_none(),
             start_signal: external.start_signal.try_into_or_none(),
-            links: external.links.iter().map(|val| val.clone().into()).collect(),
-            completion_callbacks: external.completion_callbacks.iter().map(|val| val.clone().into()).collect(),
+            links: external
+                .links
+                .iter()
+                .map(|val| val.clone().into())
+                .collect(),
+            completion_callbacks: external
+                .completion_callbacks
+                .iter()
+                .map(|val| val.clone().into())
+                .collect(),
             priority: external.priority.into(),
             header: external.header.try_into_or_none(),
             static_summary: external.static_summary,
-            static_details: external.static_details
+            static_details: external.static_details,
         }
     }
 }
@@ -3166,16 +3193,24 @@ impl Into<WorkflowStartOptions> for SdkWorkflowStartOptions {
             .maybe_task_timeout(self.task_timeout.try_into_or_none())
             .maybe_cron_schedule(self.cron_schedule)
             .maybe_search_attributes(match self.search_attributes {
-                Some(attribs) => {
-                    Some(attribs.iter().map(|(k, v)| (k.to_string(), v.into())).collect())
-                },
-                None => None
+                Some(attribs) => Some(
+                    attribs
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.into()))
+                        .collect(),
+                ),
+                None => None,
             })
             .enable_eager_workflow_start(self.enable_eager_workflow_start)
             .maybe_retry_policy(self.retry_policy.try_into_or_none())
             .maybe_start_signal(self.start_signal.try_into_or_none())
             .links(self.links.into_iter().map(|val| val.into()).collect())
-            .completion_callbacks(self.completion_callbacks.into_iter().map(|val| val.into()).collect())
+            .completion_callbacks(
+                self.completion_callbacks
+                    .into_iter()
+                    .map(|val| val.into())
+                    .collect(),
+            )
             .priority(self.priority.into())
             .maybe_header(self.header.try_into_or_none())
             .maybe_static_summary(self.static_summary.clone())
@@ -3190,7 +3225,7 @@ pub enum SdkWorkflowIdReusePolicy {
     AllowDuplicate,
     AllowDuplicateFailedOnly,
     RejectDuplicate,
-    TerminateIfRunning
+    TerminateIfRunning,
 }
 
 impl From<WorkflowIdReusePolicy> for SdkWorkflowIdReusePolicy {
@@ -3224,7 +3259,7 @@ pub enum SdkWorkflowIdConflictPolicy {
     Unspecified,
     Fail,
     UseExisting,
-    TerminateExisting
+    TerminateExisting,
 }
 
 impl From<WorkflowIdConflictPolicy> for SdkWorkflowIdConflictPolicy {
@@ -3254,7 +3289,7 @@ impl Into<WorkflowIdConflictPolicy> for SdkWorkflowIdConflictPolicy {
 pub struct SdkWorkflowStartSignal {
     pub signal_name: String,
     pub input: Option<SdkPayloads>,
-    pub header: Option<SdkHeader>
+    pub header: Option<SdkHeader>,
 }
 
 impl From<WorkflowStartSignal> for SdkWorkflowStartSignal {
@@ -3262,7 +3297,7 @@ impl From<WorkflowStartSignal> for SdkWorkflowStartSignal {
         Self {
             signal_name: external.signal_name,
             input: external.input.try_into_or_none(),
-            header: external.header.try_into_or_none()
+            header: external.header.try_into_or_none(),
         }
     }
 }
@@ -3274,4 +3309,30 @@ impl Into<WorkflowStartSignal> for SdkWorkflowStartSignal {
             .maybe_header(self.header.try_into_or_none())
             .build()
     }
+}
+
+#[derive(NifStruct, Clone)]
+#[module = "Temporal.CoreSdk.Data.WorkflowDefinition"]
+pub struct SdkWorkflowDefinition {
+    pub name: String,
+}
+
+impl WorkflowDefinition for SdkWorkflowDefinition {
+    type Input = Vec<SdkWorkflowInput>;
+    type Output = Vec<SdkWorkflowInput>;
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
+impl HasWorkflowDefinition for SdkWorkflowDefinition {
+    type Run = Self;
+}
+
+#[derive(NifStruct, Deserialize, Serialize)]
+#[module = "Temporal.CoreSdk.Data.WorkflowInput"]
+pub struct SdkWorkflowInput {
+    metadata: HashMap<String, String>,
+    data: Vec<u8>,
+    external_payloads: Vec<()>,
 }

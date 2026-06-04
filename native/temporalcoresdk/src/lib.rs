@@ -3,13 +3,16 @@ use crate::core_client::ElixirClient;
 use crate::core_nexus::SdkNexusTask;
 use crate::core_runtime::ElixirRuntime;
 use crate::core_worker::ElixirWorker;
-use crate::core_workflows::{SdkWorkflowActivation, SdkWorkflowActivationCompletion, SdkWorkflowStartOptions};
+use crate::core_workflows::{
+    ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion,
+    SdkWorkflowDefinition, SdkWorkflowInput, SdkWorkflowStartOptions,
+};
 use rustler::{Env, LocalPid, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use temporalio_sdk_client::{
-    ClientKeepAliveOptions, ClientTlsOptions, Connection, ConnectionOptions,
+    Client, ClientKeepAliveOptions, ClientOptions, ClientTlsOptions, Connection, ConnectionOptions,
     DnsLoadBalancingOptions, HttpConnectProxyOptions, RetryOptions, TlsOptions,
 };
 use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
@@ -26,7 +29,6 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use tracing::{error, warn};
 use url::Url;
-use crate::common::SdkPayload;
 
 mod common;
 mod core_activities;
@@ -183,12 +185,13 @@ fn _create_client(
         let mut owned_env = OwnedEnv::new();
         match Connection::connect(opts).await {
             Ok(conn) => {
+                let client =
+                    Client::new(conn, ClientOptions::new(options.namespace).build()).unwrap();
+
                 owned_env
                     .send_and_clear(&resp_pid, |_curr_env| {
                         let resp: Result<ResourceArc<ElixirClient>, String> =
-                            Ok(ResourceArc::new(ElixirClient {
-                                connection: std::sync::Mutex::new(conn),
-                            }));
+                            Ok(ResourceArc::new(ElixirClient { client }));
                         resp
                     })
                     .unwrap_or_else(|err| {
@@ -338,9 +341,7 @@ fn _create_worker(
             let handle = runtime.core.lock().unwrap().tokio_handle();
             handle.spawn(async move {
                 let initialized = match runtime.core.lock() {
-                    Ok(core) => {
-                        init_worker(&core, config, client.connection.lock().unwrap().clone())
-                    }
+                    Ok(core) => init_worker(&core, config, client.client.connection().clone()),
 
                     Err(err) => {
                         return Err(format!("Error getting runtime handle: {}", err));
@@ -609,29 +610,35 @@ fn _worker_poll_workflow_activation(
     Ok(true)
 }
 
-// #[rustler::nif]
-// fn _client_start_workflow(
-//     runtime: ResourceArc<ElixirRuntime>,
-//     client: ResourceArc<ElixirClient>,
-//     workflow: SdkWorkflowDefinition,
-//     input: Vec<SdkPayload>,
-//     options: SdkWorkflowStartOptions,
-//     resp_pid: LocalPid,
-// ) -> Result<bool, String> {
-//     let handle = runtime.core.lock().unwrap().tokio_handle();
-//     handle.spawn(async move {
-//         let poll_result = worker.worker.lock().await.poll_workflow_activation().await;
-//
-//         let msg: Result<SdkWorkflowActivation, String> = match poll_result {
-//             Ok(activation) => Ok(activation.into()),
-//             Err(error) => Err(format!("Error polling workflows activation: {}", error)),
-//         };
-//
-//         let mut owned_env = OwnedEnv::new();
-//         let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
-//     });
-//
-//     Ok(true)
-// }
+#[rustler::nif]
+fn _client_start_workflow(
+    runtime: ResourceArc<ElixirRuntime>,
+    client: ResourceArc<ElixirClient>,
+    workflow: SdkWorkflowDefinition,
+    input: Vec<SdkWorkflowInput>,
+    options: SdkWorkflowStartOptions,
+    resp_pid: LocalPid,
+) -> Result<bool, String> {
+    let handle = runtime.core.lock().unwrap().tokio_handle();
+    handle.spawn(async move {
+        // let poll_result = worker.worker.lock().await.poll_workflow_activation().await;
+        let started = client
+            .client
+            .start_workflow(workflow, input, options.into())
+            .await;
+
+        let msg = match started {
+            Ok(handle) => Ok(ResourceArc::new(ElixirWorkflowHandle {
+                handle: Mutex::new(handle),
+            })),
+            Err(error) => Err(format!("Error starting workflow: {}", error)),
+        };
+
+        let mut owned_env = OwnedEnv::new();
+        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+    });
+
+    Ok(true)
+}
 
 rustler::init!("Elixir.Temporal.CoreSdk");

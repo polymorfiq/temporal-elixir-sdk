@@ -1,6 +1,7 @@
 defmodule Temporal.CoreSdk.Data.ClientOpts do
   defstruct [
     :target_host,
+    :namespace,
     :client_name,
     :client_version,
     :identity,
@@ -22,6 +23,7 @@ defmodule Temporal.CoreSdk.Data.ClientOpts do
 
   @type t :: %__MODULE__{
           target_host: String.t(),
+          namespace: String.t(),
           client_name: String.t(),
           client_version: String.t(),
           identity: String.t(),

@@ -544,14 +544,18 @@ impl Into<api_common::v1::link::workflow_event::RequestIdReference>
 #[module = "Temporal.CoreSdk.Data.Callback"]
 pub struct SdkCallback {
     pub links: Vec<SdkLink>,
-    pub variant: Option<SdkCallbackVariant>
+    pub variant: Option<SdkCallbackVariant>,
 }
 
 impl From<Callback> for SdkCallback {
     fn from(external: Callback) -> Self {
         Self {
-            links: external.links.iter().map(|val| val.clone().into()).collect(),
-            variant: external.variant.try_into_or_none()
+            links: external
+                .links
+                .iter()
+                .map(|val| val.clone().into())
+                .collect(),
+            variant: external.variant.try_into_or_none(),
         }
     }
 }
@@ -560,7 +564,7 @@ impl Into<Callback> for SdkCallback {
     fn into(self) -> Callback {
         Callback {
             links: self.links.iter().map(|val| val.clone().into()).collect(),
-            variant: self.variant.try_into_or_none()
+            variant: self.variant.try_into_or_none(),
         }
     }
 }
@@ -568,7 +572,7 @@ impl Into<Callback> for SdkCallback {
 #[derive(NifTaggedEnum, Clone)]
 pub enum SdkCallbackVariant {
     Nexus(SdkCallbackNexus),
-    Internal(SdkCallbackInternal)
+    Internal(SdkCallbackInternal),
 }
 
 impl From<api_common::v1::callback::Variant> for SdkCallbackVariant {
@@ -593,14 +597,14 @@ impl Into<api_common::v1::callback::Variant> for SdkCallbackVariant {
 #[module = "Temporal.CoreSdk.Data.CallbackNexus"]
 pub struct SdkCallbackNexus {
     pub url: String,
-    pub header: HashMap<String, String>
+    pub header: HashMap<String, String>,
 }
 
 impl From<api_common::v1::callback::Nexus> for SdkCallbackNexus {
     fn from(external: api_common::v1::callback::Nexus) -> Self {
         Self {
             url: external.url,
-            header: external.header
+            header: external.header,
         }
     }
 }
@@ -609,7 +613,7 @@ impl Into<api_common::v1::callback::Nexus> for SdkCallbackNexus {
     fn into(self) -> api_common::v1::callback::Nexus {
         api_common::v1::callback::Nexus {
             url: self.url,
-            header: self.header
+            header: self.header,
         }
     }
 }
@@ -617,21 +621,19 @@ impl Into<api_common::v1::callback::Nexus> for SdkCallbackNexus {
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.CallbackInternal"]
 pub struct SdkCallbackInternal {
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl From<api_common::v1::callback::Internal> for SdkCallbackInternal {
     fn from(external: api_common::v1::callback::Internal) -> Self {
         Self {
-            data: external.data
+            data: external.data,
         }
     }
 }
 
 impl Into<api_common::v1::callback::Internal> for SdkCallbackInternal {
     fn into(self) -> api_common::v1::callback::Internal {
-        api_common::v1::callback::Internal {
-            data: self.data
-        }
+        api_common::v1::callback::Internal { data: self.data }
     }
 }
