@@ -1,7 +1,8 @@
-use crate::common::{SdkDuration, SdkTimestamp, SdkPayload, SdkPayloads, SdkPriority, SdkRetryPolicy};
+use crate::common::{SdkCallback, SdkClientPriority, SdkDuration, SdkHeader, SdkLink, SdkPayload, SdkPayloads, SdkPriority, SdkRetryPolicy, SdkTimestamp};
 use crate::core_worker::SdkWorkerDeploymentVersion;
-use rustler::{NifStruct, NifTaggedEnum};
+use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum};
 use std::collections::HashMap;
+use temporalio_sdk_client::{WorkflowStartOptions, WorkflowStartSignal};
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_resolution::Status as ActivityResolutionStatus;
 use temporalio_sdk_common::protos::coresdk::child_workflow::child_workflow_result::Status as ChildWorkflowStatus;
 use temporalio_sdk_common::protos::coresdk::nexus::nexus_operation_result::Status as NexusOperationResultStatus;
@@ -13,6 +14,7 @@ use temporalio_sdk_common::protos::coresdk::workflow_commands::WorkflowCommand;
 use temporalio_sdk_common::protos::coresdk::workflow_completion;
 use temporalio_sdk_common::protos::coresdk::workflow_completion::workflow_activation_completion::Status as WorkflowActivationCompletionStatus;
 use temporalio_sdk_common::protos::temporal::api as temporal_api;
+use temporalio_sdk_common::protos::temporal::api::enums::v1::{WorkflowIdConflictPolicy, WorkflowIdReusePolicy};
 use temporalio_sdk_common::protos::temporal::api::failure::v1::failure::FailureInfo;
 use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
@@ -93,7 +95,9 @@ pub enum SdkWorkflowActivationJobVariant {
 impl From<ActivationVariant> for SdkWorkflowActivationJobVariant {
     fn from(external: ActivationVariant) -> Self {
         match external {
-            ActivationVariant::InitializeWorkflow(variant) => Self::InitializeWorkflow(variant.into()),
+            ActivationVariant::InitializeWorkflow(variant) => {
+                Self::InitializeWorkflow(variant.into())
+            }
             ActivationVariant::FireTimer(variant) => Self::FireTimer(variant.into()),
             ActivationVariant::UpdateRandomSeed(variant) => Self::UpdateRandomSeed(variant.into()),
             ActivationVariant::QueryWorkflow(variant) => Self::QueryWorkflow(variant.into()),
@@ -101,14 +105,26 @@ impl From<ActivationVariant> for SdkWorkflowActivationJobVariant {
             ActivationVariant::SignalWorkflow(variant) => Self::SignalWorkflow(variant.into()),
             ActivationVariant::ResolveActivity(variant) => Self::ResolveActivity(variant.into()),
             ActivationVariant::NotifyHasPatch(variant) => Self::NotifyHasPatch(variant.into()),
-            ActivationVariant::ResolveChildWorkflowExecutionStart(variant) => Self::ResolveChildWorkflowExecutionStart(variant.into()),
-            ActivationVariant::ResolveChildWorkflowExecution(variant) => Self::ResolveChildWorkflowExecution(variant.into()),
-            ActivationVariant::ResolveSignalExternalWorkflow(variant) => Self::ResolveSignalExternalWorkflow(variant.into()),
-            ActivationVariant::ResolveRequestCancelExternalWorkflow(variant) => Self::ResolveRequestCancelExternalWorkflow(variant.into()),
+            ActivationVariant::ResolveChildWorkflowExecutionStart(variant) => {
+                Self::ResolveChildWorkflowExecutionStart(variant.into())
+            }
+            ActivationVariant::ResolveChildWorkflowExecution(variant) => {
+                Self::ResolveChildWorkflowExecution(variant.into())
+            }
+            ActivationVariant::ResolveSignalExternalWorkflow(variant) => {
+                Self::ResolveSignalExternalWorkflow(variant.into())
+            }
+            ActivationVariant::ResolveRequestCancelExternalWorkflow(variant) => {
+                Self::ResolveRequestCancelExternalWorkflow(variant.into())
+            }
             ActivationVariant::DoUpdate(variant) => Self::DoUpdate(variant.into()),
-            ActivationVariant::ResolveNexusOperationStart(variant) => Self::ResolveNexusOperationStart(variant.into()),
-            ActivationVariant::ResolveNexusOperation(variant) => Self::ResolveNexusOperation(variant.into()),
-            ActivationVariant::RemoveFromCache(variant) => Self::RemoveFromCache(variant.into())
+            ActivationVariant::ResolveNexusOperationStart(variant) => {
+                Self::ResolveNexusOperationStart(variant.into())
+            }
+            ActivationVariant::ResolveNexusOperation(variant) => {
+                Self::ResolveNexusOperation(variant.into())
+            }
+            ActivationVariant::RemoveFromCache(variant) => Self::RemoveFromCache(variant.into()),
         }
     }
 }
@@ -116,7 +132,9 @@ impl From<ActivationVariant> for SdkWorkflowActivationJobVariant {
 impl Into<ActivationVariant> for SdkWorkflowActivationJobVariant {
     fn into(self) -> ActivationVariant {
         match self {
-            Self::InitializeWorkflow(variant) => ActivationVariant::InitializeWorkflow(variant.into()),
+            Self::InitializeWorkflow(variant) => {
+                ActivationVariant::InitializeWorkflow(variant.into())
+            }
             Self::FireTimer(variant) => ActivationVariant::FireTimer(variant.into()),
             Self::UpdateRandomSeed(variant) => ActivationVariant::UpdateRandomSeed(variant.into()),
             Self::QueryWorkflow(variant) => ActivationVariant::QueryWorkflow(variant.into()),
@@ -124,14 +142,26 @@ impl Into<ActivationVariant> for SdkWorkflowActivationJobVariant {
             Self::SignalWorkflow(variant) => ActivationVariant::SignalWorkflow(variant.into()),
             Self::ResolveActivity(variant) => ActivationVariant::ResolveActivity(variant.into()),
             Self::NotifyHasPatch(variant) => ActivationVariant::NotifyHasPatch(variant.into()),
-            Self::ResolveChildWorkflowExecutionStart(variant) => ActivationVariant::ResolveChildWorkflowExecutionStart(variant.into()),
-            Self::ResolveChildWorkflowExecution(variant) => ActivationVariant::ResolveChildWorkflowExecution(variant.into()),
-            Self::ResolveSignalExternalWorkflow(variant) => ActivationVariant::ResolveSignalExternalWorkflow(variant.into()),
-            Self::ResolveRequestCancelExternalWorkflow(variant) => ActivationVariant::ResolveRequestCancelExternalWorkflow(variant.into()),
+            Self::ResolveChildWorkflowExecutionStart(variant) => {
+                ActivationVariant::ResolveChildWorkflowExecutionStart(variant.into())
+            }
+            Self::ResolveChildWorkflowExecution(variant) => {
+                ActivationVariant::ResolveChildWorkflowExecution(variant.into())
+            }
+            Self::ResolveSignalExternalWorkflow(variant) => {
+                ActivationVariant::ResolveSignalExternalWorkflow(variant.into())
+            }
+            Self::ResolveRequestCancelExternalWorkflow(variant) => {
+                ActivationVariant::ResolveRequestCancelExternalWorkflow(variant.into())
+            }
             Self::DoUpdate(variant) => ActivationVariant::DoUpdate(variant.into()),
-            Self::ResolveNexusOperationStart(variant) => ActivationVariant::ResolveNexusOperationStart(variant.into()),
-            Self::ResolveNexusOperation(variant) => ActivationVariant::ResolveNexusOperation(variant.into()),
-            Self::RemoveFromCache(variant) => ActivationVariant::RemoveFromCache(variant.into())
+            Self::ResolveNexusOperationStart(variant) => {
+                ActivationVariant::ResolveNexusOperationStart(variant.into())
+            }
+            Self::ResolveNexusOperation(variant) => {
+                ActivationVariant::ResolveNexusOperation(variant.into())
+            }
+            Self::RemoveFromCache(variant) => ActivationVariant::RemoveFromCache(variant.into()),
         }
     }
 }
@@ -260,9 +290,7 @@ impl From<workflow_activation::FireTimer> for SdkActivationFireTimer {
 
 impl Into<workflow_activation::FireTimer> for SdkActivationFireTimer {
     fn into(self) -> workflow_activation::FireTimer {
-        workflow_activation::FireTimer {
-            seq: self.seq,
-        }
+        workflow_activation::FireTimer { seq: self.seq }
     }
 }
 
@@ -456,7 +484,9 @@ impl From<workflow_activation::ResolveChildWorkflowExecutionStart>
     }
 }
 
-impl Into<workflow_activation::ResolveChildWorkflowExecutionStart> for SdkActivationResolveChildWorkflowExecutionStart {
+impl Into<workflow_activation::ResolveChildWorkflowExecutionStart>
+    for SdkActivationResolveChildWorkflowExecutionStart
+{
     fn into(self) -> workflow_activation::ResolveChildWorkflowExecutionStart {
         workflow_activation::ResolveChildWorkflowExecutionStart {
             seq: self.seq,
@@ -483,7 +513,9 @@ impl From<workflow_activation::ResolveChildWorkflowExecution>
     }
 }
 
-impl Into<workflow_activation::ResolveChildWorkflowExecution> for SdkActivationResolveChildWorkflowExecution {
+impl Into<workflow_activation::ResolveChildWorkflowExecution>
+    for SdkActivationResolveChildWorkflowExecution
+{
     fn into(self) -> workflow_activation::ResolveChildWorkflowExecution {
         workflow_activation::ResolveChildWorkflowExecution {
             seq: self.seq,
@@ -510,7 +542,9 @@ impl From<workflow_activation::ResolveSignalExternalWorkflow>
     }
 }
 
-impl Into<workflow_activation::ResolveSignalExternalWorkflow> for SdkActivationResolveSignalExternalWorkflow {
+impl Into<workflow_activation::ResolveSignalExternalWorkflow>
+    for SdkActivationResolveSignalExternalWorkflow
+{
     fn into(self) -> workflow_activation::ResolveSignalExternalWorkflow {
         workflow_activation::ResolveSignalExternalWorkflow {
             seq: self.seq,
@@ -537,7 +571,9 @@ impl From<workflow_activation::ResolveRequestCancelExternalWorkflow>
     }
 }
 
-impl Into<workflow_activation::ResolveRequestCancelExternalWorkflow> for SdkActivationResolveRequestCancelExternalWorkflow {
+impl Into<workflow_activation::ResolveRequestCancelExternalWorkflow>
+    for SdkActivationResolveRequestCancelExternalWorkflow
+{
     fn into(self) -> workflow_activation::ResolveRequestCancelExternalWorkflow {
         workflow_activation::ResolveRequestCancelExternalWorkflow {
             seq: self.seq,
@@ -612,7 +648,9 @@ impl From<workflow_activation::ResolveNexusOperationStart>
     }
 }
 
-impl Into<workflow_activation::ResolveNexusOperationStart> for SdkActivationResolveNexusOperationStart {
+impl Into<workflow_activation::ResolveNexusOperationStart>
+    for SdkActivationResolveNexusOperationStart
+{
     fn into(self) -> workflow_activation::ResolveNexusOperationStart {
         workflow_activation::ResolveNexusOperationStart {
             seq: self.seq,
@@ -687,7 +725,9 @@ impl From<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult>
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult> for SdkWorkflowNexusOperationResult {
+impl Into<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult>
+    for SdkWorkflowNexusOperationResult
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult {
         temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult {
             status: self.status.try_into_or_none(),
@@ -732,22 +772,38 @@ pub enum SdkWorkflowResolveNexusOperationStartStatus {
     Failed(SdkWorkflowFailure),
 }
 
-impl From<workflow_activation::resolve_nexus_operation_start::Status> for SdkWorkflowResolveNexusOperationStartStatus {
+impl From<workflow_activation::resolve_nexus_operation_start::Status>
+    for SdkWorkflowResolveNexusOperationStartStatus
+{
     fn from(external: workflow_activation::resolve_nexus_operation_start::Status) -> Self {
         match external {
-            workflow_activation::resolve_nexus_operation_start::Status::OperationToken(token) => Self::OperationToken(token),
-            workflow_activation::resolve_nexus_operation_start::Status::StartedSync(started) => Self::StartedSync(started),
-            workflow_activation::resolve_nexus_operation_start::Status::Failed(failure) => Self::Failed(failure.into()),
+            workflow_activation::resolve_nexus_operation_start::Status::OperationToken(token) => {
+                Self::OperationToken(token)
+            }
+            workflow_activation::resolve_nexus_operation_start::Status::StartedSync(started) => {
+                Self::StartedSync(started)
+            }
+            workflow_activation::resolve_nexus_operation_start::Status::Failed(failure) => {
+                Self::Failed(failure.into())
+            }
         }
     }
 }
 
-impl Into<workflow_activation::resolve_nexus_operation_start::Status> for SdkWorkflowResolveNexusOperationStartStatus {
+impl Into<workflow_activation::resolve_nexus_operation_start::Status>
+    for SdkWorkflowResolveNexusOperationStartStatus
+{
     fn into(self) -> workflow_activation::resolve_nexus_operation_start::Status {
         match self {
-            Self::OperationToken(token) => workflow_activation::resolve_nexus_operation_start::Status::OperationToken(token),
-            Self::StartedSync(started) => workflow_activation::resolve_nexus_operation_start::Status::StartedSync(started),
-            Self::Failed(failure) => workflow_activation::resolve_nexus_operation_start::Status::Failed(failure.into()),
+            Self::OperationToken(token) => {
+                workflow_activation::resolve_nexus_operation_start::Status::OperationToken(token)
+            }
+            Self::StartedSync(started) => {
+                workflow_activation::resolve_nexus_operation_start::Status::StartedSync(started)
+            }
+            Self::Failed(failure) => {
+                workflow_activation::resolve_nexus_operation_start::Status::Failed(failure.into())
+            }
         }
     }
 }
@@ -795,10 +851,12 @@ impl From<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowR
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult> for SdkWorkflowChildResult {
+impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult>
+    for SdkWorkflowChildResult
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult {
         temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult {
-            status: self.status.try_into_or_none()
+            status: self.status.try_into_or_none(),
         }
     }
 }
@@ -809,7 +867,6 @@ pub enum SdkWorkflowChildExecutionStatus {
     Failed(SdkWorkflowChildExecutionFailedStatus),
     Cancelled(SdkWorkflowChildExecutionCancelledStatus),
 }
-
 
 impl From<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus {
     fn from(external: ChildWorkflowStatus) -> Self {
@@ -847,7 +904,9 @@ impl From<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Success> for SdkWorkflowChildExecutionCompletedStatus {
+impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
+    for SdkWorkflowChildExecutionCompletedStatus
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::child_workflow::Success {
         temporalio_sdk_common::protos::coresdk::child_workflow::Success {
             result: self.result.try_into_or_none(),
@@ -871,7 +930,9 @@ impl From<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Failure> for SdkWorkflowChildExecutionFailedStatus {
+impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
+    for SdkWorkflowChildExecutionFailedStatus
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::child_workflow::Failure {
         temporalio_sdk_common::protos::coresdk::child_workflow::Failure {
             failure: self.failure.try_into_or_none(),
@@ -897,7 +958,9 @@ impl From<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation>
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation> for SdkWorkflowChildExecutionCancelledStatus {
+impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation>
+    for SdkWorkflowChildExecutionCancelledStatus
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation {
         temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation {
             failure: self.failure.try_into_or_none(),
@@ -912,23 +975,44 @@ pub enum SdkWorkflowChildExecutionStartStatus {
     Cancelled(SdkWorkflowChildExecutionStartCancelledStatus),
 }
 
-
-impl From<workflow_activation::resolve_child_workflow_execution_start::Status> for SdkWorkflowChildExecutionStartStatus {
+impl From<workflow_activation::resolve_child_workflow_execution_start::Status>
+    for SdkWorkflowChildExecutionStartStatus
+{
     fn from(external: workflow_activation::resolve_child_workflow_execution_start::Status) -> Self {
         match external {
-            workflow_activation::resolve_child_workflow_execution_start::Status::Succeeded(status) => Self::Succeeded(status.into()),
-            workflow_activation::resolve_child_workflow_execution_start::Status::Failed(status) => Self::Failed(status.into()),
-            workflow_activation::resolve_child_workflow_execution_start::Status::Cancelled(status) => Self::Cancelled(status.into()),
+            workflow_activation::resolve_child_workflow_execution_start::Status::Succeeded(
+                status,
+            ) => Self::Succeeded(status.into()),
+            workflow_activation::resolve_child_workflow_execution_start::Status::Failed(status) => {
+                Self::Failed(status.into())
+            }
+            workflow_activation::resolve_child_workflow_execution_start::Status::Cancelled(
+                status,
+            ) => Self::Cancelled(status.into()),
         }
     }
 }
 
-impl Into<workflow_activation::resolve_child_workflow_execution_start::Status> for SdkWorkflowChildExecutionStartStatus {
+impl Into<workflow_activation::resolve_child_workflow_execution_start::Status>
+    for SdkWorkflowChildExecutionStartStatus
+{
     fn into(self) -> workflow_activation::resolve_child_workflow_execution_start::Status {
         match self {
-            Self::Succeeded(status) => workflow_activation::resolve_child_workflow_execution_start::Status::Succeeded(status.into()),
-            Self::Failed(status) => workflow_activation::resolve_child_workflow_execution_start::Status::Failed(status.into()),
-            Self::Cancelled(status) => workflow_activation::resolve_child_workflow_execution_start::Status::Cancelled(status.into()),
+            Self::Succeeded(status) => {
+                workflow_activation::resolve_child_workflow_execution_start::Status::Succeeded(
+                    status.into(),
+                )
+            }
+            Self::Failed(status) => {
+                workflow_activation::resolve_child_workflow_execution_start::Status::Failed(
+                    status.into(),
+                )
+            }
+            Self::Cancelled(status) => {
+                workflow_activation::resolve_child_workflow_execution_start::Status::Cancelled(
+                    status.into(),
+                )
+            }
         }
     }
 }
@@ -949,7 +1033,9 @@ impl From<workflow_activation::ResolveChildWorkflowExecutionStartSuccess>
     }
 }
 
-impl Into<workflow_activation::ResolveChildWorkflowExecutionStartSuccess> for SdkWorkflowChildExecutionStartSucceededStatus {
+impl Into<workflow_activation::ResolveChildWorkflowExecutionStartSuccess>
+    for SdkWorkflowChildExecutionStartSucceededStatus
+{
     fn into(self) -> workflow_activation::ResolveChildWorkflowExecutionStartSuccess {
         workflow_activation::ResolveChildWorkflowExecutionStartSuccess {
             run_id: self.run_id,
@@ -977,7 +1063,9 @@ impl From<workflow_activation::ResolveChildWorkflowExecutionStartFailure>
     }
 }
 
-impl Into<workflow_activation::ResolveChildWorkflowExecutionStartFailure> for SdkWorkflowChildExecutionStartFailedStatus {
+impl Into<workflow_activation::ResolveChildWorkflowExecutionStartFailure>
+    for SdkWorkflowChildExecutionStartFailedStatus
+{
     fn into(self) -> workflow_activation::ResolveChildWorkflowExecutionStartFailure {
         workflow_activation::ResolveChildWorkflowExecutionStartFailure {
             workflow_id: self.workflow_id,
@@ -1003,7 +1091,9 @@ impl From<workflow_activation::ResolveChildWorkflowExecutionStartCancelled>
     }
 }
 
-impl Into<workflow_activation::ResolveChildWorkflowExecutionStartCancelled> for SdkWorkflowChildExecutionStartCancelledStatus {
+impl Into<workflow_activation::ResolveChildWorkflowExecutionStartCancelled>
+    for SdkWorkflowChildExecutionStartCancelledStatus
+{
     fn into(self) -> workflow_activation::ResolveChildWorkflowExecutionStartCancelled {
         workflow_activation::ResolveChildWorkflowExecutionStartCancelled {
             failure: self.failure.try_into_or_none(),
@@ -1029,7 +1119,9 @@ impl From<temporalio_sdk_common::protos::coresdk::activity_result::ActivityResol
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution> for SdkActivityResolution {
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution>
+    for SdkActivityResolution
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution {
         temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution {
             status: self.status.try_into_or_none(),
@@ -1044,7 +1136,6 @@ pub enum SdkActivityResolutionStatus {
     Cancelled(SdkActivityResolutionCancelledStatus),
     Backoff(SdkActivityResolutionBackoffStatus),
 }
-
 
 impl From<ActivityResolutionStatus> for SdkActivityResolutionStatus {
     fn from(external: ActivityResolutionStatus) -> Self {
@@ -1084,7 +1175,9 @@ impl From<temporalio_sdk_common::protos::coresdk::activity_result::Success>
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Success> for SdkActivityResolutionCompletedStatus {
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Success>
+    for SdkActivityResolutionCompletedStatus
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Success {
         temporalio_sdk_common::protos::coresdk::activity_result::Success {
             result: self.result.try_into_or_none(),
@@ -1108,7 +1201,9 @@ impl From<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure> for SdkActivityResolutionFailedStatus {
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
+    for SdkActivityResolutionFailedStatus
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Failure {
         temporalio_sdk_common::protos::coresdk::activity_result::Failure {
             failure: self.failure.try_into_or_none(),
@@ -1134,7 +1229,9 @@ impl From<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation> for SdkActivityResolutionCancelledStatus {
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
+    for SdkActivityResolutionCancelledStatus
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Cancellation {
         temporalio_sdk_common::protos::coresdk::activity_result::Cancellation {
             failure: self.failure.try_into_or_none(),
@@ -1162,7 +1259,9 @@ impl From<temporalio_sdk_common::protos::coresdk::activity_result::DoBackoff>
     }
 }
 
-impl Into<temporalio_sdk_common::protos::coresdk::activity_result::DoBackoff> for SdkActivityResolutionBackoffStatus {
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::DoBackoff>
+    for SdkActivityResolutionBackoffStatus
+{
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::DoBackoff {
         temporalio_sdk_common::protos::coresdk::activity_result::DoBackoff {
             attempt: self.attempt,
@@ -1369,8 +1468,12 @@ impl From<FailureInfo> for SdkWorkflowFailureInfo {
             FailureInfo::ServerFailureInfo(info) => Self::Server(info.into()),
             FailureInfo::ResetWorkflowFailureInfo(info) => Self::ResetWorkflow(info.into()),
             FailureInfo::ActivityFailureInfo(info) => Self::Activity(info.into()),
-            FailureInfo::ChildWorkflowExecutionFailureInfo(info) => Self::ChildExecution(info.into()),
-            FailureInfo::NexusOperationExecutionFailureInfo(info) => Self::NexusOperation(info.into()),
+            FailureInfo::ChildWorkflowExecutionFailureInfo(info) => {
+                Self::ChildExecution(info.into())
+            }
+            FailureInfo::NexusOperationExecutionFailureInfo(info) => {
+                Self::NexusOperation(info.into())
+            }
             FailureInfo::NexusHandlerFailureInfo(info) => Self::NexusHandler(info.into()),
         }
     }
@@ -1386,8 +1489,12 @@ impl Into<FailureInfo> for SdkWorkflowFailureInfo {
             Self::Server(info) => FailureInfo::ServerFailureInfo(info.into()),
             Self::ResetWorkflow(info) => FailureInfo::ResetWorkflowFailureInfo(info.into()),
             Self::Activity(info) => FailureInfo::ActivityFailureInfo(info.into()),
-            Self::ChildExecution(info) => FailureInfo::ChildWorkflowExecutionFailureInfo(info.into()),
-            Self::NexusOperation(info) => FailureInfo::NexusOperationExecutionFailureInfo(info.into()),
+            Self::ChildExecution(info) => {
+                FailureInfo::ChildWorkflowExecutionFailureInfo(info.into())
+            }
+            Self::NexusOperation(info) => {
+                FailureInfo::NexusOperationExecutionFailureInfo(info.into())
+            }
             Self::NexusHandler(info) => FailureInfo::NexusHandlerFailureInfo(info.into()),
         }
     }
@@ -1789,11 +1896,12 @@ pub enum SdkWorkflowActivationCompletionStatus {
     Failed(SdkWorkflowActivationCompletionFailureStatus),
 }
 
-
 impl From<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompletionStatus {
     fn from(external: WorkflowActivationCompletionStatus) -> Self {
         match external {
-            WorkflowActivationCompletionStatus::Successful(status) => Self::Successful(status.into()),
+            WorkflowActivationCompletionStatus::Successful(status) => {
+                Self::Successful(status.into())
+            }
             WorkflowActivationCompletionStatus::Failed(status) => Self::Failed(status.into()),
         }
     }
@@ -1802,7 +1910,9 @@ impl From<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompletio
 impl Into<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompletionStatus {
     fn into(self) -> WorkflowActivationCompletionStatus {
         match self {
-            Self::Successful(status) => WorkflowActivationCompletionStatus::Successful(status.into()),
+            Self::Successful(status) => {
+                WorkflowActivationCompletionStatus::Successful(status.into())
+            }
             Self::Failed(status) => WorkflowActivationCompletionStatus::Failed(status.into()),
         }
     }
@@ -1938,7 +2048,9 @@ pub enum SdkWorkflowCommandVariant {
     SetPatchMarker(SdkWorkflowCommandSetPatchMarker),
     StartChildWorkflowExecution(SdkWorkflowCommandStartChildWorkflowExecution),
     CancelChildWorkflowExecution(SdkWorkflowCommandCancelChildWorkflowExecution),
-    RequestCancelExternalWorkflowExecution(SdkWorkflowCommandRequestCancelExternalWorkflowExecution),
+    RequestCancelExternalWorkflowExecution(
+        SdkWorkflowCommandRequestCancelExternalWorkflowExecution,
+    ),
     SignalExternalWorkflowExecution(SdkWorkflowCommandSignalExternalWorkflowExecution),
     CancelSignalWorkflow(SdkWorkflowCommandCancelSignalWorkflow),
     ScheduleLocalActivity(SdkWorkflowCommandScheduleLocalActivity),
@@ -1947,9 +2059,8 @@ pub enum SdkWorkflowCommandVariant {
     ModifyWorkflowProperties(SdkWorkflowCommandModifyWorkflowProperties),
     UpdateResponse(SdkWorkflowCommandUpdateResponse),
     ScheduleNexusOperation(SdkWorkflowCommandScheduleNexusOperation),
-    RequestCancelNexusOperation(SdkWorkflowCommandRequestCancelNexusOperation)
+    RequestCancelNexusOperation(SdkWorkflowCommandRequestCancelNexusOperation),
 }
-
 
 impl From<WorkflowCommandVariant> for SdkWorkflowCommandVariant {
     fn from(external: WorkflowCommandVariant) -> Self {
@@ -1957,25 +2068,57 @@ impl From<WorkflowCommandVariant> for SdkWorkflowCommandVariant {
             WorkflowCommandVariant::StartTimer(cmd) => Self::StartTimer(cmd.into()),
             WorkflowCommandVariant::ScheduleActivity(cmd) => Self::ScheduleActivity(cmd.into()),
             WorkflowCommandVariant::RespondToQuery(cmd) => Self::RespondToQuery(cmd.into()),
-            WorkflowCommandVariant::RequestCancelActivity(cmd) => Self::RequestCancelActivity(cmd.into()),
+            WorkflowCommandVariant::RequestCancelActivity(cmd) => {
+                Self::RequestCancelActivity(cmd.into())
+            }
             WorkflowCommandVariant::CancelTimer(cmd) => Self::CancelTimer(cmd.into()),
-            WorkflowCommandVariant::CompleteWorkflowExecution(cmd) => Self::CompleteWorkflowExecution(cmd.into()),
-            WorkflowCommandVariant::FailWorkflowExecution(cmd) => Self::FailWorkflowExecution(cmd.into()),
-            WorkflowCommandVariant::ContinueAsNewWorkflowExecution(cmd) => Self::ContinueAsNewWorkflowExecution(cmd.into()),
-            WorkflowCommandVariant::CancelWorkflowExecution(cmd) => Self::CancelWorkflowExecution(cmd.into()),
+            WorkflowCommandVariant::CompleteWorkflowExecution(cmd) => {
+                Self::CompleteWorkflowExecution(cmd.into())
+            }
+            WorkflowCommandVariant::FailWorkflowExecution(cmd) => {
+                Self::FailWorkflowExecution(cmd.into())
+            }
+            WorkflowCommandVariant::ContinueAsNewWorkflowExecution(cmd) => {
+                Self::ContinueAsNewWorkflowExecution(cmd.into())
+            }
+            WorkflowCommandVariant::CancelWorkflowExecution(cmd) => {
+                Self::CancelWorkflowExecution(cmd.into())
+            }
             WorkflowCommandVariant::SetPatchMarker(cmd) => Self::SetPatchMarker(cmd.into()),
-            WorkflowCommandVariant::StartChildWorkflowExecution(cmd) => Self::StartChildWorkflowExecution(cmd.into()),
-            WorkflowCommandVariant::CancelChildWorkflowExecution(cmd) => Self::CancelChildWorkflowExecution(cmd.into()),
-            WorkflowCommandVariant::RequestCancelExternalWorkflowExecution(cmd) => Self::RequestCancelExternalWorkflowExecution(cmd.into()),
-            WorkflowCommandVariant::SignalExternalWorkflowExecution(cmd) => Self::SignalExternalWorkflowExecution(cmd.into()),
-            WorkflowCommandVariant::CancelSignalWorkflow(cmd) => Self::CancelSignalWorkflow(cmd.into()),
-            WorkflowCommandVariant::ScheduleLocalActivity(cmd) => Self::ScheduleLocalActivity(cmd.into()),
-            WorkflowCommandVariant::RequestCancelLocalActivity(cmd) => Self::RequestCancelLocalActivity(cmd.into()),
-            WorkflowCommandVariant::UpsertWorkflowSearchAttributes(cmd) => Self::UpsertWorkflowSearchAttributes(cmd.into()),
-            WorkflowCommandVariant::ModifyWorkflowProperties(cmd) => Self::ModifyWorkflowProperties(cmd.into()),
+            WorkflowCommandVariant::StartChildWorkflowExecution(cmd) => {
+                Self::StartChildWorkflowExecution(cmd.into())
+            }
+            WorkflowCommandVariant::CancelChildWorkflowExecution(cmd) => {
+                Self::CancelChildWorkflowExecution(cmd.into())
+            }
+            WorkflowCommandVariant::RequestCancelExternalWorkflowExecution(cmd) => {
+                Self::RequestCancelExternalWorkflowExecution(cmd.into())
+            }
+            WorkflowCommandVariant::SignalExternalWorkflowExecution(cmd) => {
+                Self::SignalExternalWorkflowExecution(cmd.into())
+            }
+            WorkflowCommandVariant::CancelSignalWorkflow(cmd) => {
+                Self::CancelSignalWorkflow(cmd.into())
+            }
+            WorkflowCommandVariant::ScheduleLocalActivity(cmd) => {
+                Self::ScheduleLocalActivity(cmd.into())
+            }
+            WorkflowCommandVariant::RequestCancelLocalActivity(cmd) => {
+                Self::RequestCancelLocalActivity(cmd.into())
+            }
+            WorkflowCommandVariant::UpsertWorkflowSearchAttributes(cmd) => {
+                Self::UpsertWorkflowSearchAttributes(cmd.into())
+            }
+            WorkflowCommandVariant::ModifyWorkflowProperties(cmd) => {
+                Self::ModifyWorkflowProperties(cmd.into())
+            }
             WorkflowCommandVariant::UpdateResponse(cmd) => Self::UpdateResponse(cmd.into()),
-            WorkflowCommandVariant::ScheduleNexusOperation(cmd) => Self::ScheduleNexusOperation(cmd.into()),
-            WorkflowCommandVariant::RequestCancelNexusOperation(cmd) => Self::RequestCancelNexusOperation(cmd.into()),
+            WorkflowCommandVariant::ScheduleNexusOperation(cmd) => {
+                Self::ScheduleNexusOperation(cmd.into())
+            }
+            WorkflowCommandVariant::RequestCancelNexusOperation(cmd) => {
+                Self::RequestCancelNexusOperation(cmd.into())
+            }
         }
     }
 }
@@ -1986,25 +2129,57 @@ impl Into<WorkflowCommandVariant> for SdkWorkflowCommandVariant {
             Self::StartTimer(cmd) => WorkflowCommandVariant::StartTimer(cmd.into()),
             Self::ScheduleActivity(cmd) => WorkflowCommandVariant::ScheduleActivity(cmd.into()),
             Self::RespondToQuery(cmd) => WorkflowCommandVariant::RespondToQuery(cmd.into()),
-            Self::RequestCancelActivity(cmd) => WorkflowCommandVariant::RequestCancelActivity(cmd.into()),
+            Self::RequestCancelActivity(cmd) => {
+                WorkflowCommandVariant::RequestCancelActivity(cmd.into())
+            }
             Self::CancelTimer(cmd) => WorkflowCommandVariant::CancelTimer(cmd.into()),
-            Self::CompleteWorkflowExecution(cmd) => WorkflowCommandVariant::CompleteWorkflowExecution(cmd.into()),
-            Self::FailWorkflowExecution(cmd) => WorkflowCommandVariant::FailWorkflowExecution(cmd.into()),
-            Self::ContinueAsNewWorkflowExecution(cmd) => WorkflowCommandVariant::ContinueAsNewWorkflowExecution(cmd.into()),
-            Self::CancelWorkflowExecution(cmd) => WorkflowCommandVariant::CancelWorkflowExecution(cmd.into()),
+            Self::CompleteWorkflowExecution(cmd) => {
+                WorkflowCommandVariant::CompleteWorkflowExecution(cmd.into())
+            }
+            Self::FailWorkflowExecution(cmd) => {
+                WorkflowCommandVariant::FailWorkflowExecution(cmd.into())
+            }
+            Self::ContinueAsNewWorkflowExecution(cmd) => {
+                WorkflowCommandVariant::ContinueAsNewWorkflowExecution(cmd.into())
+            }
+            Self::CancelWorkflowExecution(cmd) => {
+                WorkflowCommandVariant::CancelWorkflowExecution(cmd.into())
+            }
             Self::SetPatchMarker(cmd) => WorkflowCommandVariant::SetPatchMarker(cmd.into()),
-            Self::StartChildWorkflowExecution(cmd) => WorkflowCommandVariant::StartChildWorkflowExecution(cmd.into()),
-            Self::CancelChildWorkflowExecution(cmd) => WorkflowCommandVariant::CancelChildWorkflowExecution(cmd.into()),
-            Self::RequestCancelExternalWorkflowExecution(cmd) => WorkflowCommandVariant::RequestCancelExternalWorkflowExecution(cmd.into()),
-            Self::SignalExternalWorkflowExecution(cmd) => WorkflowCommandVariant::SignalExternalWorkflowExecution(cmd.into()),
-            Self::CancelSignalWorkflow(cmd) => WorkflowCommandVariant::CancelSignalWorkflow(cmd.into()),
-            Self::ScheduleLocalActivity(cmd) => WorkflowCommandVariant::ScheduleLocalActivity(cmd.into()),
-            Self::RequestCancelLocalActivity(cmd) => WorkflowCommandVariant::RequestCancelLocalActivity(cmd.into()),
-            Self::UpsertWorkflowSearchAttributes(cmd) => WorkflowCommandVariant::UpsertWorkflowSearchAttributes(cmd.into()),
-            Self::ModifyWorkflowProperties(cmd) => WorkflowCommandVariant::ModifyWorkflowProperties(cmd.into()),
+            Self::StartChildWorkflowExecution(cmd) => {
+                WorkflowCommandVariant::StartChildWorkflowExecution(cmd.into())
+            }
+            Self::CancelChildWorkflowExecution(cmd) => {
+                WorkflowCommandVariant::CancelChildWorkflowExecution(cmd.into())
+            }
+            Self::RequestCancelExternalWorkflowExecution(cmd) => {
+                WorkflowCommandVariant::RequestCancelExternalWorkflowExecution(cmd.into())
+            }
+            Self::SignalExternalWorkflowExecution(cmd) => {
+                WorkflowCommandVariant::SignalExternalWorkflowExecution(cmd.into())
+            }
+            Self::CancelSignalWorkflow(cmd) => {
+                WorkflowCommandVariant::CancelSignalWorkflow(cmd.into())
+            }
+            Self::ScheduleLocalActivity(cmd) => {
+                WorkflowCommandVariant::ScheduleLocalActivity(cmd.into())
+            }
+            Self::RequestCancelLocalActivity(cmd) => {
+                WorkflowCommandVariant::RequestCancelLocalActivity(cmd.into())
+            }
+            Self::UpsertWorkflowSearchAttributes(cmd) => {
+                WorkflowCommandVariant::UpsertWorkflowSearchAttributes(cmd.into())
+            }
+            Self::ModifyWorkflowProperties(cmd) => {
+                WorkflowCommandVariant::ModifyWorkflowProperties(cmd.into())
+            }
             Self::UpdateResponse(cmd) => WorkflowCommandVariant::UpdateResponse(cmd.into()),
-            Self::ScheduleNexusOperation(cmd) => WorkflowCommandVariant::ScheduleNexusOperation(cmd.into()),
-            Self::RequestCancelNexusOperation(cmd) => WorkflowCommandVariant::RequestCancelNexusOperation(cmd.into()),
+            Self::ScheduleNexusOperation(cmd) => {
+                WorkflowCommandVariant::ScheduleNexusOperation(cmd.into())
+            }
+            Self::RequestCancelNexusOperation(cmd) => {
+                WorkflowCommandVariant::RequestCancelNexusOperation(cmd.into())
+            }
         }
     }
 }
@@ -2745,8 +2920,12 @@ impl From<workflow_commands::update_response::Response> for SdkWorkflowCommandUp
     fn from(external: workflow_commands::update_response::Response) -> Self {
         match external {
             workflow_commands::update_response::Response::Accepted(()) => Self::Accepted(()),
-            workflow_commands::update_response::Response::Rejected(status) => Self::Rejected(status.into()),
-            workflow_commands::update_response::Response::Completed(payload) => Self::Completed(payload.into()),
+            workflow_commands::update_response::Response::Rejected(status) => {
+                Self::Rejected(status.into())
+            }
+            workflow_commands::update_response::Response::Completed(payload) => {
+                Self::Completed(payload.into())
+            }
         }
     }
 }
@@ -2755,8 +2934,12 @@ impl Into<workflow_commands::update_response::Response> for SdkWorkflowCommandUp
     fn into(self) -> workflow_commands::update_response::Response {
         match self {
             Self::Accepted(()) => workflow_commands::update_response::Response::Accepted(()),
-            Self::Rejected(status) => workflow_commands::update_response::Response::Rejected(status.into()),
-            Self::Completed(payload) => workflow_commands::update_response::Response::Completed(payload.into()),
+            Self::Rejected(status) => {
+                workflow_commands::update_response::Response::Rejected(status.into())
+            }
+            Self::Completed(payload) => {
+                workflow_commands::update_response::Response::Completed(payload.into())
+            }
         }
     }
 }
@@ -2835,23 +3018,37 @@ impl Into<workflow_commands::RequestCancelNexusOperation>
 #[derive(NifTaggedEnum, Clone)]
 pub enum SdkWorkflowCommandSignalExternalExecutionTarget {
     WorkflowExecution(SdkWorkflowNamespacedExecution),
-    ChildWorkflowId(String)
+    ChildWorkflowId(String),
 }
 
-impl From<workflow_commands::signal_external_workflow_execution::Target> for SdkWorkflowCommandSignalExternalExecutionTarget {
+impl From<workflow_commands::signal_external_workflow_execution::Target>
+    for SdkWorkflowCommandSignalExternalExecutionTarget
+{
     fn from(external: workflow_commands::signal_external_workflow_execution::Target) -> Self {
         match external {
-            workflow_commands::signal_external_workflow_execution::Target::WorkflowExecution(exec) => Self::WorkflowExecution(exec.into()),
-            workflow_commands::signal_external_workflow_execution::Target::ChildWorkflowId(id) => Self::ChildWorkflowId(id),
+            workflow_commands::signal_external_workflow_execution::Target::WorkflowExecution(
+                exec,
+            ) => Self::WorkflowExecution(exec.into()),
+            workflow_commands::signal_external_workflow_execution::Target::ChildWorkflowId(id) => {
+                Self::ChildWorkflowId(id)
+            }
         }
     }
 }
 
-impl Into<workflow_commands::signal_external_workflow_execution::Target> for SdkWorkflowCommandSignalExternalExecutionTarget {
+impl Into<workflow_commands::signal_external_workflow_execution::Target>
+    for SdkWorkflowCommandSignalExternalExecutionTarget
+{
     fn into(self) -> workflow_commands::signal_external_workflow_execution::Target {
         match self {
-            Self::WorkflowExecution(exec) => workflow_commands::signal_external_workflow_execution::Target::WorkflowExecution(exec.into()),
-            Self::ChildWorkflowId(id) => workflow_commands::signal_external_workflow_execution::Target::ChildWorkflowId(id),
+            Self::WorkflowExecution(exec) => {
+                workflow_commands::signal_external_workflow_execution::Target::WorkflowExecution(
+                    exec.into(),
+                )
+            }
+            Self::ChildWorkflowId(id) => {
+                workflow_commands::signal_external_workflow_execution::Target::ChildWorkflowId(id)
+            }
         }
     }
 }
@@ -2859,13 +3056,15 @@ impl Into<workflow_commands::signal_external_workflow_execution::Target> for Sdk
 #[derive(NifTaggedEnum, Clone)]
 pub enum SdkWorkflowCommandQueryResultVariant {
     Succeeded(SdkWorkflowCommandQuerySuccess),
-    Failed(SdkWorkflowFailure)
+    Failed(SdkWorkflowFailure),
 }
 
 impl From<workflow_commands::query_result::Variant> for SdkWorkflowCommandQueryResultVariant {
     fn from(external: workflow_commands::query_result::Variant) -> Self {
         match external {
-            workflow_commands::query_result::Variant::Succeeded(status) => Self::Succeeded(status.into()),
+            workflow_commands::query_result::Variant::Succeeded(status) => {
+                Self::Succeeded(status.into())
+            }
             workflow_commands::query_result::Variant::Failed(status) => Self::Failed(status.into()),
         }
     }
@@ -2874,7 +3073,9 @@ impl From<workflow_commands::query_result::Variant> for SdkWorkflowCommandQueryR
 impl Into<workflow_commands::query_result::Variant> for SdkWorkflowCommandQueryResultVariant {
     fn into(self) -> workflow_commands::query_result::Variant {
         match self {
-            Self::Succeeded(status) => workflow_commands::query_result::Variant::Succeeded(status.into()),
+            Self::Succeeded(status) => {
+                workflow_commands::query_result::Variant::Succeeded(status.into())
+            }
             Self::Failed(status) => workflow_commands::query_result::Variant::Failed(status.into()),
         }
     }
@@ -2899,5 +3100,178 @@ impl Into<workflow_commands::QuerySuccess> for SdkWorkflowCommandQuerySuccess {
         workflow_commands::QuerySuccess {
             response: self.response.try_into_or_none(),
         }
+    }
+}
+
+#[derive(NifStruct, Clone)]
+#[module = "Temporal.CoreSdk.Data.WorkflowStartOptions"]
+pub struct SdkWorkflowStartOptions {
+    pub task_queue: String,
+    pub workflow_id: String,
+    pub id_reuse_policy: SdkWorkflowIdReusePolicy,
+    pub id_conflict_policy: SdkWorkflowIdConflictPolicy,
+    pub execution_timeout: Option<SdkDuration>,
+    pub run_timeout: Option<SdkDuration>,
+    pub task_timeout: Option<SdkDuration>,
+    pub cron_schedule: Option<String>,
+    pub search_attributes: Option<HashMap<String, SdkPayload>>,
+    pub enable_eager_workflow_start: bool,
+    pub retry_policy: Option<SdkRetryPolicy>,
+    pub start_signal: Option<SdkWorkflowStartSignal>,
+    pub links: Vec<SdkLink>,
+    pub completion_callbacks: Vec<SdkCallback>,
+    pub priority: SdkClientPriority,
+    pub header: Option<SdkHeader>,
+    pub static_summary: Option<String>,
+    pub static_details: Option<String>
+}
+
+impl From<WorkflowStartOptions> for SdkWorkflowStartOptions {
+    fn from(external: WorkflowStartOptions) -> Self {
+        Self {
+            task_queue: external.task_queue,
+            workflow_id: external.workflow_id,
+            id_reuse_policy: external.id_reuse_policy.into(),
+            id_conflict_policy: external.id_conflict_policy.into(),
+            execution_timeout: external.execution_timeout.try_into_or_none(),
+            run_timeout: external.run_timeout.try_into_or_none(),
+            task_timeout: external.task_timeout.try_into_or_none(),
+            cron_schedule: external.cron_schedule.try_into_or_none(),
+            search_attributes: match external.search_attributes {
+                Some(attribs) => {
+                    Some(attribs.iter().map(|(k, v)| (k.to_string(), v.into())).collect())
+                },
+                None => None
+            },
+            enable_eager_workflow_start: external.enable_eager_workflow_start,
+            retry_policy: external.retry_policy.try_into_or_none(),
+            start_signal: external.start_signal.try_into_or_none(),
+            links: external.links.iter().map(|val| val.clone().into()).collect(),
+            completion_callbacks: external.completion_callbacks.iter().map(|val| val.clone().into()).collect(),
+            priority: external.priority.into(),
+            header: external.header.try_into_or_none(),
+            static_summary: external.static_summary,
+            static_details: external.static_details
+        }
+    }
+}
+
+impl Into<WorkflowStartOptions> for SdkWorkflowStartOptions {
+    fn into(self) -> WorkflowStartOptions {
+        WorkflowStartOptions::new(self.task_queue, self.workflow_id)
+            .id_reuse_policy(self.id_reuse_policy.into())
+            .id_conflict_policy(self.id_conflict_policy.into())
+            .maybe_execution_timeout(self.execution_timeout.try_into_or_none())
+            .maybe_run_timeout(self.run_timeout.try_into_or_none())
+            .maybe_task_timeout(self.task_timeout.try_into_or_none())
+            .maybe_cron_schedule(self.cron_schedule)
+            .maybe_search_attributes(match self.search_attributes {
+                Some(attribs) => {
+                    Some(attribs.iter().map(|(k, v)| (k.to_string(), v.into())).collect())
+                },
+                None => None
+            })
+            .enable_eager_workflow_start(self.enable_eager_workflow_start)
+            .maybe_retry_policy(self.retry_policy.try_into_or_none())
+            .maybe_start_signal(self.start_signal.try_into_or_none())
+            .links(self.links.into_iter().map(|val| val.into()).collect())
+            .completion_callbacks(self.completion_callbacks.into_iter().map(|val| val.into()).collect())
+            .priority(self.priority.into())
+            .maybe_header(self.header.try_into_or_none())
+            .maybe_static_summary(self.static_summary.clone())
+            .maybe_static_details(self.static_details.clone())
+            .build()
+    }
+}
+
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkWorkflowIdReusePolicy {
+    Unspecified,
+    AllowDuplicate,
+    AllowDuplicateFailedOnly,
+    RejectDuplicate,
+    TerminateIfRunning
+}
+
+impl From<WorkflowIdReusePolicy> for SdkWorkflowIdReusePolicy {
+    fn from(external: WorkflowIdReusePolicy) -> Self {
+        match external {
+            WorkflowIdReusePolicy::Unspecified => Self::Unspecified,
+            WorkflowIdReusePolicy::AllowDuplicate => Self::AllowDuplicate,
+            WorkflowIdReusePolicy::AllowDuplicateFailedOnly => Self::AllowDuplicateFailedOnly,
+            WorkflowIdReusePolicy::RejectDuplicate => Self::RejectDuplicate,
+            #[allow(deprecated)]
+            WorkflowIdReusePolicy::TerminateIfRunning => Self::TerminateIfRunning,
+        }
+    }
+}
+
+impl Into<WorkflowIdReusePolicy> for SdkWorkflowIdReusePolicy {
+    fn into(self) -> WorkflowIdReusePolicy {
+        match self {
+            Self::Unspecified => WorkflowIdReusePolicy::Unspecified,
+            Self::AllowDuplicate => WorkflowIdReusePolicy::AllowDuplicate,
+            Self::AllowDuplicateFailedOnly => WorkflowIdReusePolicy::AllowDuplicateFailedOnly,
+            Self::RejectDuplicate => WorkflowIdReusePolicy::RejectDuplicate,
+            #[allow(deprecated)]
+            Self::TerminateIfRunning => WorkflowIdReusePolicy::TerminateIfRunning,
+        }
+    }
+}
+
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkWorkflowIdConflictPolicy {
+    Unspecified,
+    Fail,
+    UseExisting,
+    TerminateExisting
+}
+
+impl From<WorkflowIdConflictPolicy> for SdkWorkflowIdConflictPolicy {
+    fn from(external: WorkflowIdConflictPolicy) -> Self {
+        match external {
+            WorkflowIdConflictPolicy::Unspecified => Self::Unspecified,
+            WorkflowIdConflictPolicy::Fail => Self::Fail,
+            WorkflowIdConflictPolicy::UseExisting => Self::UseExisting,
+            WorkflowIdConflictPolicy::TerminateExisting => Self::TerminateExisting,
+        }
+    }
+}
+
+impl Into<WorkflowIdConflictPolicy> for SdkWorkflowIdConflictPolicy {
+    fn into(self) -> WorkflowIdConflictPolicy {
+        match self {
+            Self::Unspecified => WorkflowIdConflictPolicy::Unspecified,
+            Self::Fail => WorkflowIdConflictPolicy::Fail,
+            Self::UseExisting => WorkflowIdConflictPolicy::UseExisting,
+            Self::TerminateExisting => WorkflowIdConflictPolicy::TerminateExisting,
+        }
+    }
+}
+
+#[derive(NifStruct, Clone)]
+#[module = "Temporal.CoreSdk.Data.WorkflowStartSignal"]
+pub struct SdkWorkflowStartSignal {
+    pub signal_name: String,
+    pub input: Option<SdkPayloads>,
+    pub header: Option<SdkHeader>
+}
+
+impl From<WorkflowStartSignal> for SdkWorkflowStartSignal {
+    fn from(external: WorkflowStartSignal) -> Self {
+        Self {
+            signal_name: external.signal_name,
+            input: external.input.try_into_or_none(),
+            header: external.header.try_into_or_none()
+        }
+    }
+}
+
+impl Into<WorkflowStartSignal> for SdkWorkflowStartSignal {
+    fn into(self) -> WorkflowStartSignal {
+        WorkflowStartSignal::new(self.signal_name)
+            .maybe_input(self.input.try_into_or_none())
+            .maybe_header(self.header.try_into_or_none())
+            .build()
     }
 }

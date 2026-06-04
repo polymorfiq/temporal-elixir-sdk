@@ -1,9 +1,9 @@
-use crate::common::{SdkDuration, SdkTimestamp, SdkPayload, SdkPriority, SdkRetryPolicy};
+use crate::common::{SdkDuration, SdkPayload, SdkPriority, SdkRetryPolicy, SdkTimestamp};
 use crate::core_workflows::{SdkWorkflowExecution, SdkWorkflowFailure};
 use rustler::{NifStruct, NifTaggedEnum};
 use std::collections::HashMap;
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_execution_result::Status as ActivityExecutionStatus;
-use temporalio_sdk_common::protos::coresdk::{activity_task};
+use temporalio_sdk_common::protos::coresdk::activity_task;
 use temporalio_sdk_common::protos::coresdk::activity_task::activity_task::Variant as ActivityTaskVariant;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 
@@ -35,7 +35,7 @@ impl Into<activity_task::ActivityTask> for SdkActivityTask {
 #[derive(NifTaggedEnum, Clone)]
 pub enum SdkActivityTaskVariant {
     Start(SdkActivityTaskStart),
-    Cancel(SdkActivityTaskCancel)
+    Cancel(SdkActivityTaskCancel),
 }
 
 impl From<ActivityTaskVariant> for SdkActivityTaskVariant {
@@ -276,7 +276,7 @@ pub enum SdkActivityExecutionStatus {
     Completed(SdkActivityExecutionSuccess),
     Failed(SdkActivityExecutionFailure),
     Cancelled(SdkActivityExecutionCancellation),
-    WillCompleteAsync(SdkActivityExecutionWillCompleteAsync)
+    WillCompleteAsync(SdkActivityExecutionWillCompleteAsync),
 }
 
 impl From<ActivityExecutionStatus> for SdkActivityExecutionStatus {
@@ -285,7 +285,9 @@ impl From<ActivityExecutionStatus> for SdkActivityExecutionStatus {
             ActivityExecutionStatus::Completed(status) => Self::Completed(status.into()),
             ActivityExecutionStatus::Failed(status) => Self::Failed(status.into()),
             ActivityExecutionStatus::Cancelled(status) => Self::Cancelled(status.into()),
-            ActivityExecutionStatus::WillCompleteAsync(status) => Self::WillCompleteAsync(status.into()),
+            ActivityExecutionStatus::WillCompleteAsync(status) => {
+                Self::WillCompleteAsync(status.into())
+            }
         }
     }
 }
@@ -296,7 +298,9 @@ impl Into<ActivityExecutionStatus> for SdkActivityExecutionStatus {
             Self::Completed(status) => ActivityExecutionStatus::Completed(status.into()),
             Self::Failed(status) => ActivityExecutionStatus::Failed(status.into()),
             Self::Cancelled(status) => ActivityExecutionStatus::Cancelled(status.into()),
-            Self::WillCompleteAsync(status) => ActivityExecutionStatus::WillCompleteAsync(status.into()),
+            Self::WillCompleteAsync(status) => {
+                ActivityExecutionStatus::WillCompleteAsync(status.into())
+            }
         }
     }
 }
