@@ -17,11 +17,11 @@ defmodule Temporal.CoreSdk.Data.WorkerOpts do
     :tuner,
     :nondeterminism_as_workflow_fail_for_types,
     :plugins,
+    :workflow_task_poller_behavior,
+    :activity_task_poller_behavior,
     max_worker_activities_per_second: nil,
     max_task_queue_activities_per_second: nil,
-    identity_override: nil,
-    workflow_task_poller_behavior: nil,
-    activity_task_poller_behavior: nil
+    identity_override: nil
   ]
 
   alias Temporal.CoreSdk.Data.WorkerDeploymentOpts
@@ -80,7 +80,7 @@ defmodule Temporal.CoreSdk.Data.WorkerOpts do
 
   @spec with_opts!(opts()) :: t()
   def with_opts!(opts) do
-    worker = struct!(WorkerOpts, opts)
+    worker = struct!(__MODULE__, opts)
 
     worker =
       update_in(

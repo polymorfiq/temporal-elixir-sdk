@@ -19,6 +19,6 @@ defmodule Temporal.CoreSdk.Data.WorkerPollerOpts do
   end
 
   def with_opts!({:simple_maximum, opts}) do
-    {:autoscaling, WorkerPollerSimpleMaximumOpts.with_opts!(opts)}
+    {:simple_maximum, WorkerPollerSimpleMaximumOpts.with_opts!(opts)}
   end
 end

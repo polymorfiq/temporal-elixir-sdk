@@ -33,7 +33,7 @@ defmodule Temporal.Worker do
       WorkerOpts.with_opts!(
         [
           namespace: client.namespace,
-          task_queue: task_queue.queue,
+          task_queue: task_queue.queue_name,
           deployment_options: [
             version: [
               build_id: "0.0.1",
@@ -78,6 +78,7 @@ defmodule Temporal.Worker do
           workers_sup,
           {WorkerSupervisor,
            {
+             worker_id,
              core_runtime,
              core_client,
              worker_opts,

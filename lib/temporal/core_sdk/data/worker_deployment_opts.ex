@@ -21,7 +21,7 @@ defmodule Temporal.CoreSdk.Data.WorkerDeploymentOpts do
 
   @spec with_opts!(opts()) :: t()
   def with_opts!(opts) do
-    deployment = struct!(__MODULE__, opts[:deployment_options])
+    deployment = struct!(__MODULE__, opts)
 
     deployment =
       update_in(

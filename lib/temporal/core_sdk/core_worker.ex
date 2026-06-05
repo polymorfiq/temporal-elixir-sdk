@@ -1,5 +1,6 @@
 defmodule Temporal.CoreSdk.CoreWorker do
   defstruct [:core]
+  use GenServer
 
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreRuntime
@@ -27,14 +28,18 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   @type worker_opts :: WorkerOpts.opts()
 
-  @spec start_link({CoreRuntime.t(), CoreClient.t(), WorkerOpts.t(), keyword()}) ::
+  @spec start_link(
+          {worker_id :: String.t(), CoreRuntime.t(), CoreClient.t(), WorkerOpts.t(), keyword()}
+        ) ::
           {:ok, pid()} | {:error, term()}
-  def start_link({runtime, client, opts, server_opts}) do
-    GenServer.start_link(__MODULE__, {runtime, client, opts}, server_opts)
+  def start_link({worker_id, runtime, client, opts, server_opts}) do
+    GenServer.start_link(__MODULE__, {worker_id, runtime, client, opts}, server_opts)
   end
 
-  @spec init({CoreRuntime.t(), CoreClient.t(), WorkerOpts.t()}) :: {:ok, t()} | {:error, term()}
-  def init({runtime, client, opts}) do
+  @impl true
+  @spec init({worker_id :: String.t(), CoreRuntime.t(), CoreClient.t(), WorkerOpts.t()}) ::
+          {:ok, t()} | {:error, term()}
+  def init({worker_id, runtime, client, opts}) do
     parent = self()
 
     {pid, ref} =
@@ -62,6 +67,8 @@ defmodule Temporal.CoreSdk.CoreWorker do
         {:DOWN, ^ref, :process, ^pid, reason} ->
           {:error, reason}
       end
+
+    Process.set_label({:worker, worker_id})
 
     with {:ok, core} <- worker_resp,
          :ok <- validate(core, runtime) do
@@ -222,4 +229,19 @@ defmodule Temporal.CoreSdk.CoreWorker do
       {:error, err} -> {:error, "Nexus task poll error: #{inspect(err)}"}
     end
   end
+
+  def get_core(pid), do: GenServer.call(pid, :get_core)
+  def get_runtime(pid), do: GenServer.call(pid, :get_runtime)
+
+  @impl true
+  def handle_call(:get_core, _from, state),
+    do: {:reply, {:ok, %__MODULE__{core: server_state(state, :core)}}, state}
+
+  @impl true
+  def handle_call(:get_runtime, _from, state),
+    do: {:reply, {:ok, server_state(state, :runtime)}, state}
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, :normal}, state),
+    do: {:noreply, state}
 end

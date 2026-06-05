@@ -22,7 +22,8 @@ end
 
 {:ok, runtime} = Temporal.Runtime.global()
 {:ok, client} = Temporal.Client.new("localhost:7233", [runtime: runtime])
-{:ok, worker} = Temporal.Worker.new(client, "default")
+task_queue = Temporal.TaskQueue.new(client, "default")
+{:ok, worker} = Temporal.Worker.new(task_queue)
 
 #{:ok, client} = Temporal.dial_client("localhost:7233")
 #{:ok, worker.ex} = Temporal.Worker.new(client, "default")
