@@ -22,10 +22,10 @@ defmodule Temporal.Runtime do
       {:ok, %__MODULE__{id: runtime_id}}
     else
       child_started =
-        DynamicSupervisor.start_child(Runtimes, {
-          RuntimeSupervisor,
-          {{runtime_id, opts}, [name: reg_name]}
-        })
+        DynamicSupervisor.start_child(
+          Runtimes,
+          {RuntimeSupervisor, opts ++ [name: reg_name, runtime_id: runtime_id]}
+        )
 
       with {:ok, _pid} <- child_started do
         {:ok, %__MODULE__{id: runtime_id}}

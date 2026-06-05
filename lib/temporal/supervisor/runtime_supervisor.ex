@@ -1,31 +1,42 @@
 defmodule Temporal.Supervisor.RuntimeSupervisor do
   use Supervisor
 
+  alias Temporal.Client
+  alias Temporal.Clients
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.Supervisor.ClientList
+  alias Temporal.Supervisor.ClientSupervisor
   alias Temporal.RuntimeRegistry
 
-  @spec core_for_id(runtime_id :: CoreRuntime.runtime_id()) :: {:ok, term()} | {:error, term()}
-  def core_for_id(runtime_id) do
-    CoreRuntime.get_core(via_registry({:core, runtime_id}))
+  def start_link(opts) do
+    Supervisor.start_link(__MODULE__, opts, opts)
   end
 
-  def start_link({{runtime_id, runtime_opts}, opts}),
-    do: Supervisor.start_link(__MODULE__, {runtime_id, runtime_opts}, opts)
-
   @impl true
-  def init({runtime_id, runtime_opts}) do
+  def init(opts) do
+    runtime_id = Keyword.fetch!(opts, :runtime_id)
+    {runtime_opts, opts} = Keyword.split(opts, [:runtime_id, :heartbeat_interval_secs])
+
     children = [
-      {CoreRuntime,
-       [
-         runtime_id: runtime_id,
-         runtime_opts: runtime_opts,
-         name: via_registry({:core, runtime_id})
-       ]},
+      {CoreRuntime, runtime_opts ++ [name: via_registry({:core, runtime_id})]},
       {ClientList, [name: via_registry({:clients, runtime_id})]}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
+  end
+
+  @spec core_for_id(runtime_id :: CoreRuntime.runtime_id()) :: {:ok, term()} | {:error, term()}
+  def core_for_id(runtime_id),
+    do: CoreRuntime.get_core(via_registry({:core, runtime_id}))
+
+  @spec client_list_for_id(runtime_id :: CoreRuntime.runtime_id()) ::
+          {:ok, term()} | {:error, term()}
+  def client_list_for_id(runtime_id) do
+    if pid = GenServer.whereis(via_registry({:clients, runtime_id})) do
+      {:ok, pid}
+    else
+      {:error, "Client list not found for runtime (#{inspect(runtime_id)})"}
+    end
   end
 
   defp via_registry(name),
