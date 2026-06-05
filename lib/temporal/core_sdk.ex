@@ -7,9 +7,6 @@ defmodule Temporal.CoreSdk do
   alias Temporal.CoreSdk.Data.ClientOpts
   alias Temporal.CoreSdk.Data.RuntimeOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
-  alias Temporal.CoreSdk.Data.WorkflowActivation
-  alias Temporal.CoreSdk.Data.ActivityTask
-  alias Temporal.CoreSdk.Data.NexusTask
 
   @doc false
   @spec _create_runtime(opts :: RuntimeOpts.t()) :: {:ok, term()} | {:error, term()}
@@ -17,7 +14,7 @@ defmodule Temporal.CoreSdk do
 
   @doc false
   @spec _create_client(runtime :: term(), opts :: ClientOpts.t(), resp_pid :: pid()) ::
-          {:ok, term()} | {:error, term()}
+          {:ok, bool()} | {:error, term()}
   def _create_client(_runtime, _opts, _resp_pid), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
@@ -27,7 +24,7 @@ defmodule Temporal.CoreSdk do
           opts :: WorkerOpts.t(),
           resp_pid :: pid()
         ) ::
-          {:ok, term()} | {:error, term()}
+          {:ok, bool()} | {:error, term()}
   def _create_worker(_runtime, _client, _opts, _resp_pid), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
@@ -37,19 +34,19 @@ defmodule Temporal.CoreSdk do
 
   @doc false
   @spec _worker_poll_workflow_activation(runtime :: term(), worker :: term(), resp_pid :: pid()) ::
-          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
+          {:ok, bool()} | {:error, term()}
   def _worker_poll_workflow_activation(_runtime, _worker, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
   @spec _worker_poll_activity_task(runtime :: term(), worker :: term(), resp_pid :: pid()) ::
-          {:ok, ActivityTask.t() | nil} | {:error, term()}
+          {:ok, bool()} | {:error, term()}
   def _worker_poll_activity_task(_runtime, _worker, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
   @spec _worker_poll_nexus_task(runtime :: term(), worker :: term(), resp_pid :: pid()) ::
-          {:ok, NexusTask.t() | nil} | {:error, term()}
+          {:ok, bool()} | {:error, term()}
   def _worker_poll_nexus_task(_runtime, _worker, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
 
@@ -60,7 +57,7 @@ defmodule Temporal.CoreSdk do
           completion :: Temporal.CoreSdk.Data.WorkflowActivationCompletion.t(),
           resp_pid :: pid()
         ) ::
-          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
+          {:ok, bool()} | {:error, term()}
   def _worker_complete_workflow_activation(_runtime, _worker, _completion, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
 
@@ -71,7 +68,7 @@ defmodule Temporal.CoreSdk do
           completion :: Temporal.CoreSdk.Data.ActivityTaskCompletion.t(),
           resp_pid :: pid()
         ) ::
-          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
+          {:ok, bool()} | {:error, term()}
   def _worker_complete_activity_task(_runtime, _worker, _completion, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
 
@@ -84,7 +81,18 @@ defmodule Temporal.CoreSdk do
           opts :: Data.WorkflowStartOptions.t(),
           resp_pid :: pid()
         ) ::
-          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
+          {:ok, bool()} | {:error, term()}
   def _client_start_workflow(_runtime, _client, _workflow, _input, _opts, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _workflow_handle_get_result(
+          runtime :: term(),
+          workflow_handle :: term(),
+          opts :: Data.SdkWorkflowGetResultOptions.t(),
+          resp_pid :: pid()
+        ) ::
+          {:ok, bool()} | {:error, term()}
+  def _workflow_handle_get_result(_runtime, _workflow_handle, _opts, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
 end

@@ -3389,3 +3389,25 @@ impl TemporalSerializable for SdkWorkflowInput {
         }
     }
 }
+
+#[derive(NifStruct, Clone)]
+#[module = "Temporal.CoreSdk.Data.WorkflowGetResultOptions"]
+pub struct SdkWorkflowGetResultOptions {
+    pub follow_runs: bool,
+}
+
+impl From<temporalio_sdk_client::WorkflowGetResultOptions> for SdkWorkflowGetResultOptions {
+    fn from(external: temporalio_sdk_client::WorkflowGetResultOptions) -> Self {
+        Self {
+            follow_runs: external.follow_runs,
+        }
+    }
+}
+
+impl Into<temporalio_sdk_client::WorkflowGetResultOptions> for SdkWorkflowGetResultOptions {
+    fn into(self) -> temporalio_sdk_client::WorkflowGetResultOptions {
+        temporalio_sdk_client::WorkflowGetResultOptions::builder()
+            .follow_runs(self.follow_runs)
+            .build()
+    }
+}

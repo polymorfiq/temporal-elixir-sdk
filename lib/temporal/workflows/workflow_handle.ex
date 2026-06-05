@@ -16,7 +16,3 @@ defmodule Temporal.Workflows.WorkflowHandle do
     %__MODULE__{client: client, name: name, opts: opts}
   end
 end
-
-defimpl Temporal.Workflow, for: Temporal.Workflows.WorkflowHandle do
-  def execute(_handle, _args), do: {:ok, "Response!"}
-end

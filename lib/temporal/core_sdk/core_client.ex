@@ -5,8 +5,6 @@ defmodule Temporal.CoreSdk.CoreClient do
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.Data.ClientOpts
 
-  @message_prefix :temporal_client_resp
-
   @type t :: %__MODULE__{
           runtime: CoreRuntime.t(),
           client: term()
@@ -14,36 +12,36 @@ defmodule Temporal.CoreSdk.CoreClient do
 
   @spec new(runtime :: CoreRuntime.t(), opts :: ClientOpts.t()) :: {:ok, t()} | {:error, term()}
   def new(runtime, opts) do
-    new_async(runtime, opts)
+    parent = self()
+
+    {pid, ref} =
+      spawn_monitor(fn ->
+        CoreSdk._create_client(runtime.core, opts, self())
+        |> case do
+          {:ok, _} -> :ok
+          {:error, err} -> raise "Could initialize client from Core SDK: #{inspect(err)}"
+        end
+
+        receive do
+          {:ok, client} ->
+            send(parent, {self(), {:ok, client}})
+
+          {:error, err} ->
+            send(parent, {self(), {:error, err}})
+        end
+      end)
 
     client_resp =
       receive do
-        {@message_prefix, resp} -> resp
+        {^pid, response} ->
+          response
+
+        {:DOWN, ^ref, :process, ^pid, reason} ->
+          {:error, reason}
       end
 
     with {:ok, client} <- client_resp do
       {:ok, %__MODULE__{runtime: runtime, client: client}}
     end
-  end
-
-  @spec new_async(runtime :: CoreRuntime.t(), opts :: ClientOpts.t()) ::
-          {:ok, t()} | {:error, term()}
-  def new_async(runtime, opts) do
-    parent = self()
-
-    spawn_link(fn ->
-      with {:ok, _} <- CoreSdk._create_client(runtime.runtime, opts, self()) do
-        receive do
-          {:ok, client} ->
-            send(parent, {@message_prefix, {:ok, client}})
-
-          {:error, err} ->
-            send(parent, {@message_prefix, {:error, {:connection_error, err}}})
-        end
-      else
-        {:error, err} ->
-          send(parent, {@message_prefix, {:error, {:creation_error, err}}})
-      end
-    end)
   end
 end

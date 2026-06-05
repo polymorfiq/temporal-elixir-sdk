@@ -52,7 +52,7 @@ Temporal.Client.start_workflow(
 From my current understanding, this orchestrates the asynchronous threads/fibers used within the Temporal Client.
 
 ```elixir
-{:ok, runtime} = Temporal.CoreSdk.CoreRuntime.new()
+{:ok, runtime} = Temporal.CoreRuntime.with_id(:my_runtime, )
 ```
 
 ## Initializing the Client
@@ -149,17 +149,9 @@ Temporal.CoreSdk.CoreWorker.poll_workflow_activations(worker, runtime)
 Temporal.CoreSdk.CoreWorker.poll_activity_tasks(worker, runtime)
 ```
 
-# Useful Vocabulary
+# Glossary of Terms
 
-Some vocabulary (and my understanding of that vocabulary) that I am picking up through the process of building the SDK.
-
-**Workflow Activations**: Work for the worker to do in progressing forward the state of a Workflow. The worker retrieves Activations from its polling of the Temporal Server and responds with Activation Completions to tell the server how it has handled those Activations.
-
-**Workflow Activation Completions**: The worker sends these back to the Server to inform the server of progress throughout the Workflow.
-
-**Activity Tasks**: Work for the worker to do that involves Starting or Cancelling of a specific Activity.
-
-**Activity Task Completions**: The worker sends these to the Temporal Server to report the progress on the Task Activities it received.
+For learning how to interact with the Temporal Core SDK, this [Glossary of Terms](https://github.com/temporalio/sdk-rust/blob/main/ARCHITECTURE.md#glossary-of-terms) can be helpful.
 
 # References (for building Lang SDKs)
 

@@ -5,7 +5,8 @@ use crate::core_runtime::ElixirRuntime;
 use crate::core_worker::ElixirWorker;
 use crate::core_workflows::{
     ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion,
-    SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowStartOptions,
+    SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowGetResultOptions,
+    SdkWorkflowStartOptions,
 };
 use rustler::{Env, LocalPid, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
@@ -632,6 +633,34 @@ fn _client_start_workflow(
                 handle: Mutex::new(handle),
             })),
             Err(error) => Err(format!("Error starting workflow: {}", error)),
+        };
+
+        let mut owned_env = OwnedEnv::new();
+        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+    });
+
+    Ok(true)
+}
+
+#[rustler::nif]
+fn _workflow_handle_get_result(
+    runtime: ResourceArc<ElixirRuntime>,
+    workflow_handle: ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>,
+    options: SdkWorkflowGetResultOptions,
+    resp_pid: LocalPid,
+) -> Result<bool, String> {
+    let handle = runtime.core.lock().unwrap().tokio_handle();
+    handle.spawn(async move {
+        let result = workflow_handle
+            .handle
+            .lock()
+            .await
+            .get_result(options.into())
+            .await;
+
+        let msg = match result {
+            Ok(outputs) => Ok(outputs),
+            Err(error) => Err(format!("Error getting workflow results: {}", error)),
         };
 
         let mut owned_env = OwnedEnv::new();

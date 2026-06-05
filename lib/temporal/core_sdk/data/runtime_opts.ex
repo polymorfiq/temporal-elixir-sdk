@@ -1,5 +1,5 @@
 defmodule Temporal.CoreSdk.Data.RuntimeOpts do
-  defstruct heartbeat_interval_secs: 60
+  defstruct [:heartbeat_interval_secs]
 
-  @type t :: %__MODULE__{heartbeat_interval_secs: pos_integer()}
+  @type t :: %__MODULE__{heartbeat_interval_secs: pos_integer() | nil}
 end

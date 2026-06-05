@@ -20,8 +20,8 @@ defmodule SampleWorkflow do
   end
 end
 
-{:ok, runtime} = Temporal.CoreSdk.CoreRuntime.new()
-{:ok, client} = Temporal.Client.new("localhost:7233")
+{:ok, runtime} = Temporal.Runtime.global()
+{:ok, client} = Temporal.Client.new("localhost:7233", [runtime: runtime])
 {:ok, worker} = Temporal.Worker.new(client, "default")
 
 #{:ok, client} = Temporal.dial_client("localhost:7233")

@@ -7,7 +7,13 @@ defmodule Temporal.Application do
 
   @impl true
   def start(_type, _args) do
-    children = []
+    children = [
+      {Registry, keys: :unique, name: Temporal.RuntimeRegistry},
+      {Registry, keys: :unique, name: Temporal.ClientRegistry},
+      {Registry, keys: :unique, name: Temporal.WorkerRegistry},
+      {Registry, keys: :unique, name: Temporal.WorkflowRunRegistry},
+      {Temporal.Supervisor.RuntimeList, [name: Temporal.Runtimes]}
+    ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

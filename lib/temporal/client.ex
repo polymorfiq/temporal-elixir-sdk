@@ -2,25 +2,13 @@ defmodule Temporal.Client do
   defstruct [:namespace, :runtime, :core]
 
   alias Temporal.Constants
-  alias Temporal.CoreSdk
-  alias Temporal.CoreSdk.CoreRuntime
+  alias Temporal.Runtime
   alias Temporal.CoreSdk.CoreClient
-
-  alias Temporal.Workflows.WorkflowExecHandle
-
-  alias Temporal.CoreSdk.Data.{
-    ClientOpts,
-    ClientRetryOpts,
-    WorkflowDefinition,
-    WorkflowStartOptions,
-    WorkflowArguments,
-    WorkflowInput,
-    ClientPriority
-  }
-
+  alias Temporal.CoreSdk.Data.ClientOpts
+  alias Temporal.CoreSdk.Data.ClientRetryOpts
   alias Temporal.Workflows.WorkflowHandle
 
-  @type t :: %__MODULE__{runtime: CoreRuntime.t(), core: CoreClient.t()}
+  @type t :: %__MODULE__{runtime: Runtime.t(), core: CoreClient.t()}
   @type target_host :: String.t()
 
   @type rpc_opts :: [
@@ -37,15 +25,6 @@ defmodule Temporal.Client do
           | {:rpc, rpc_opts()}
         ]
 
-  @type workflow_opts :: [
-          {:id_reuse_policy, WorkflowStartOptions.id_reuse_policy()}
-          | {:id_conflict_policy, WorkflowStartOptions.id_conflict_policy()}
-          | {:enable_eager_workflow_start, bool()}
-          | {:links, [CoreSdk.Data.Link.t()]}
-          | {:completion_callbacks, [CoreSdk.Data.Callback.t()]}
-          | {:priority, ClientPriority.t()}
-        ]
-
   @default_namespace "default"
   @default_rpc_opts [
     initial_interval_secs: 30.0,
@@ -55,7 +34,6 @@ defmodule Temporal.Client do
     max_elapsed_time_secs: 60.0,
     max_retries: 30
   ]
-  @start_workflow_msg_prefix :start_workflow
 
   @spec new(target_host(), client_opts()) :: {:ok, t()} | {:error, term()}
   def new(target_host, opts \\ []) do
@@ -66,18 +44,17 @@ defmodule Temporal.Client do
     end
   end
 
+  def core_runtime(client),
+    do: client.core.runtime.core
+
   @spec validate_opts(keyword()) :: {:ok, client_opts()} | {:error, term()}
   defp validate_opts(opts) do
-    identity =
-      Keyword.get_lazy(opts, :identity, fn ->
-        "#{UUID.uuid4()}@#{to_string(:net_adm.localhost())}"
-      end)
-
     opts_validate =
       Keyword.validate(opts, [
         :rpc,
-        identity: identity,
-        namespace: @default_namespace
+        :runtime,
+        :identity,
+        :namespace
       ])
 
     rpc_validate = Keyword.validate(opts[:rpc] || [], @default_rpc_opts)
@@ -101,12 +78,17 @@ defmodule Temporal.Client do
     namespace = Keyword.get(opts, :namespace, @default_namespace)
     rpc_opts = @default_rpc_opts ++ Keyword.get(opts, :rpc, [])
 
+    identity =
+      Keyword.get_lazy(opts, :identity, fn ->
+        "#{UUID.uuid4()}@#{to_string(:net_adm.localhost())}"
+      end)
+
     client_opts = %ClientOpts{
       target_host: target_host,
       namespace: namespace,
       client_name: Constants.sdk_name(),
       client_version: Constants.sdk_version(),
-      identity: Keyword.fetch!(opts, :identity),
+      identity: identity,
       rpc_retry: %ClientRetryOpts{
         initial_interval_secs: rpc_opts[:initial_interval_secs],
         randomization_factor: rpc_opts[:randomization_factor],
@@ -117,8 +99,16 @@ defmodule Temporal.Client do
       }
     }
 
-    with {:ok, runtime} <- Temporal.CoreSdk.CoreRuntime.new(),
-         {:ok, core} <- Temporal.CoreSdk.CoreClient.new(runtime, client_opts) do
+    runtime_resp =
+      if runtime = Keyword.get(opts, :runtime) do
+        {:ok, runtime}
+      else
+        Runtime.global()
+      end
+
+    with {:ok, runtime} <- runtime_resp,
+         {:ok, runtime_core} <- Runtime.core(runtime),
+         {:ok, core} <- Temporal.CoreSdk.CoreClient.new(runtime_core, client_opts) do
       {:ok, %__MODULE__{core: core, runtime: runtime, namespace: namespace}}
     end
   end
@@ -141,71 +131,5 @@ defmodule Temporal.Client do
     handle_opts = if is_module?, do: [{:module, workflow} | handle_opts], else: handle_opts
 
     WorkflowHandle.new(client, handle_opts ++ opts)
-  end
-
-  @spec start_workflow(
-          t(),
-          task_queue :: String.t(),
-          workflow_id :: String.t(),
-          workflow_name :: String.t(),
-          inputs :: [term()],
-          opts :: workflow_opts()
-        ) :: {:ok, WorkflowHandle.t()} | {:error, term()}
-  def start_workflow(client, task_queue, workflow_id, workflow_name, inputs, opts \\ []) do
-    args =
-      Enum.map(inputs, fn
-        {:bytes, val} -> {:bytes, val}
-        input -> WorkflowInput.new(input)
-      end)
-
-    parent = self()
-
-    spawn_link(fn ->
-      CoreSdk._client_start_workflow(
-        client.runtime.runtime,
-        client.core.client,
-        %WorkflowDefinition{name: workflow_name},
-        %WorkflowArguments{args: args},
-        %WorkflowStartOptions{
-          task_queue: task_queue,
-          workflow_id: workflow_id,
-          id_reuse_policy: Keyword.get(opts, :id_reuse_policy, :reject_duplicate),
-          id_conflict_policy: Keyword.get(opts, :id_conflict_policy, :fail),
-          enable_eager_workflow_start: Keyword.get(opts, :enable_eager_workflow_start, false),
-          links: Keyword.get(opts, :links, []),
-          completion_callbacks: Keyword.get(opts, :completion_callbacks, []),
-          priority:
-            Keyword.get(opts, :priority, %ClientPriority{
-              priority_key: 0,
-              fairness_key: "",
-              fairness_weight: 1.0
-            })
-        },
-        self()
-      )
-
-      receive do
-        {:ok, workflow_handle} ->
-          send(
-            parent,
-            {@start_workflow_msg_prefix,
-             {:ok,
-              WorkflowExecHandle.new(
-                client,
-                workflow_handle,
-                workflow_name: workflow_name,
-                workflow_id: workflow_id,
-                task_queue: task_queue
-              )}}
-          )
-
-        {:error, err} ->
-          send(parent, {@start_workflow_msg_prefix, {:error, err}})
-      end
-    end)
-
-    receive do
-      {@start_workflow_msg_prefix, resp} -> resp
-    end
   end
 end
