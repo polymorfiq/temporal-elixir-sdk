@@ -1,5 +1,5 @@
 defmodule Temporal.CoreSdk.CoreWorker do
-  defstruct [:worker]
+  defstruct [:core]
 
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreRuntime
@@ -8,14 +8,33 @@ defmodule Temporal.CoreSdk.CoreWorker do
   alias CoreSdk.Data.WorkflowActivation
   alias CoreSdk.Data.ActivityTask
   alias CoreSdk.Data.NexusTask
+  alias Temporal.CoreSdk.Data.WorkerOpts
+
+  require Record
+
+  Record.defrecordp(:server_state, [
+    :namespace,
+    :task_queue,
+    :identity_override,
+    :runtime,
+    :client,
+    :core
+  ])
 
   @type t :: %__MODULE__{
-          worker: term()
+          core: term()
         }
 
-  @spec new(runtime :: CoreRuntime.t(), client :: CoreClient.t(), opts :: WorkerOpts.t()) ::
-          {:ok, t()} | {:error, term()}
-  def new(runtime, client, opts) do
+  @type worker_opts :: WorkerOpts.opts()
+
+  @spec start_link({CoreRuntime.t(), CoreClient.t(), WorkerOpts.t(), keyword()}) ::
+          {:ok, pid()} | {:error, term()}
+  def start_link({runtime, client, opts, server_opts}) do
+    GenServer.start_link(__MODULE__, {runtime, client, opts}, server_opts)
+  end
+
+  @spec init({CoreRuntime.t(), CoreClient.t(), WorkerOpts.t()}) :: {:ok, t()} | {:error, term()}
+  def init({runtime, client, opts}) do
     parent = self()
 
     {pid, ref} =
@@ -44,9 +63,17 @@ defmodule Temporal.CoreSdk.CoreWorker do
           {:error, reason}
       end
 
-    with {:ok, worker_ref} <- worker_resp,
-         :ok <- validate(worker_ref, runtime) do
-      {:ok, %__MODULE__{worker: worker_ref}}
+    with {:ok, core} <- worker_resp,
+         :ok <- validate(core, runtime) do
+      {:ok,
+       server_state(
+         core: core,
+         task_queue: opts.task_queue,
+         namespace: opts.namespace,
+         identity_override: opts.identity_override,
+         runtime: runtime,
+         client: client
+       )}
     end
   end
 

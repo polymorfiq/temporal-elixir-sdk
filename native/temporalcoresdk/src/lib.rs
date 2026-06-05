@@ -255,41 +255,33 @@ fn _create_worker(
         .max_cached_workflows(options.max_cached_workflows as usize)
         .workflow_task_poller_behavior({
             match options.workflow_task_poller_behavior {
-                Some(crate::core_worker::SdkWorkerPollerOpts {
-                    autoscaling: Some(autoscaling),
-                    ..
-                }) => PollerBehavior::Autoscaling {
-                    minimum: autoscaling.minimum as usize,
-                    maximum: autoscaling.maximum as usize,
-                    initial: autoscaling.initial as usize,
-                },
+                core_worker::SdkWorkerPollerOpts::Autoscaling(autoscaling) => {
+                    PollerBehavior::Autoscaling {
+                        minimum: autoscaling.minimum as usize,
+                        maximum: autoscaling.maximum as usize,
+                        initial: autoscaling.initial as usize,
+                    }
+                }
 
-                Some(crate::core_worker::SdkWorkerPollerOpts {
-                    simple_maximum: Some(simple_max),
-                    ..
-                }) => PollerBehavior::SimpleMaximum(simple_max.simple_maximum as usize),
-
-                _ => return Err(String::from("workflow_task_poller_behavior not configured")),
+                core_worker::SdkWorkerPollerOpts::SimpleMaximum(simple_max) => {
+                    PollerBehavior::SimpleMaximum(simple_max.simple_maximum as usize)
+                }
             }
         })
         .nonsticky_to_sticky_poll_ratio(options.nonsticky_to_sticky_poll_ratio)
         .activity_task_poller_behavior({
             match options.activity_task_poller_behavior {
-                Some(crate::core_worker::SdkWorkerPollerOpts {
-                    autoscaling: Some(autoscaling),
-                    ..
-                }) => PollerBehavior::Autoscaling {
-                    minimum: autoscaling.minimum as usize,
-                    maximum: autoscaling.maximum as usize,
-                    initial: autoscaling.initial as usize,
-                },
+                core_worker::SdkWorkerPollerOpts::Autoscaling(autoscaling) => {
+                    PollerBehavior::Autoscaling {
+                        minimum: autoscaling.minimum as usize,
+                        maximum: autoscaling.maximum as usize,
+                        initial: autoscaling.initial as usize,
+                    }
+                }
 
-                Some(crate::core_worker::SdkWorkerPollerOpts {
-                    simple_maximum: Some(simple_max),
-                    ..
-                }) => PollerBehavior::SimpleMaximum(simple_max.simple_maximum as usize),
-
-                _ => return Err(String::from("activity_task_poller_behavior not configured")),
+                core_worker::SdkWorkerPollerOpts::SimpleMaximum(simple_max) => {
+                    PollerBehavior::SimpleMaximum(simple_max.simple_maximum as usize)
+                }
             }
         })
         .task_types(WorkerTaskTypes {
@@ -416,19 +408,16 @@ fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
     options: crate::core_worker::SdkWorkerSlotSupplierOpts,
     prev_slots_options: Option<ResourceBasedSlotsOptions>,
 ) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), String> {
-    if let Some(slots) = options.fixed_size {
-        Ok((
+    match options {
+        crate::core_worker::SdkWorkerSlotSupplierOpts::FixedSize(slots) => Ok((
             SlotSupplierOptions::FixedSize {
                 slots: slots as usize,
             },
             prev_slots_options,
-        ))
-    } else if let Some(resource) = options.resource_based {
-        build_tuner_resource_options(resource, prev_slots_options)
-    } else {
-        Err(String::from(
-            "Slot supplier must be fixed size or resource based",
-        ))
+        )),
+        crate::core_worker::SdkWorkerSlotSupplierOpts::ResourceBased(resource) => {
+            build_tuner_resource_options(resource, prev_slots_options)
+        }
     }
 }
 

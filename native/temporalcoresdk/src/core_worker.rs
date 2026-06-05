@@ -1,4 +1,4 @@
-use rustler::{NifStruct, Resource};
+use rustler::{NifStruct, NifTaggedEnum, Resource};
 use temporalio_sdk_common::worker::{WorkerDeploymentOptions, WorkerDeploymentVersion};
 use temporalio_sdk_core::Worker;
 use tokio::sync::Mutex;
@@ -11,7 +11,7 @@ pub struct ElixirWorker {
 #[rustler::resource_impl]
 impl Resource for ElixirWorker {}
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkerOpts"]
 pub struct SdkWorkerOpts {
     pub namespace: String,
@@ -34,11 +34,11 @@ pub struct SdkWorkerOpts {
     pub max_worker_activities_per_second: Option<f64>,
     pub max_task_queue_activities_per_second: Option<f64>,
     pub identity_override: Option<String>,
-    pub workflow_task_poller_behavior: Option<SdkWorkerPollerOpts>,
-    pub activity_task_poller_behavior: Option<SdkWorkerPollerOpts>,
+    pub workflow_task_poller_behavior: SdkWorkerPollerOpts,
+    pub activity_task_poller_behavior: SdkWorkerPollerOpts,
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkerDeploymentOpts"]
 pub struct SdkWorkerDeploymentOpts {
     pub version: SdkWorkerDeploymentVersion,
@@ -88,14 +88,13 @@ impl From<WorkerDeploymentVersion> for SdkWorkerDeploymentVersion {
     }
 }
 
-#[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.WorkerPollerOpts"]
-pub struct SdkWorkerPollerOpts {
-    pub autoscaling: Option<SdkWorkerPollerAutoscalingOpts>,
-    pub simple_maximum: Option<SdkWorkerPollerSimpleMaximumOpts>,
+#[derive(NifTaggedEnum, Clone)]
+pub enum SdkWorkerPollerOpts {
+    Autoscaling(SdkWorkerPollerAutoscalingOpts),
+    SimpleMaximum(SdkWorkerPollerSimpleMaximumOpts),
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkerPollerAutoscalingOpts"]
 pub struct SdkWorkerPollerAutoscalingOpts {
     pub minimum: u32,
@@ -103,13 +102,13 @@ pub struct SdkWorkerPollerAutoscalingOpts {
     pub initial: u32,
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkerPollerSimpleMaximumOpts"]
 pub struct SdkWorkerPollerSimpleMaximumOpts {
     pub simple_maximum: u32,
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkerTunerOpts"]
 pub struct SdkWorkerTunerOpts {
     pub workflow_slot_supplier: SdkWorkerSlotSupplierOpts,
@@ -117,14 +116,13 @@ pub struct SdkWorkerTunerOpts {
     pub local_activity_slot_supplier: SdkWorkerSlotSupplierOpts,
 }
 
-#[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.WorkerSlotSupplierOpts"]
-pub struct SdkWorkerSlotSupplierOpts {
-    pub fixed_size: Option<u32>,
-    pub resource_based: Option<SdkWorkerTunerResourceOpts>,
+#[derive(NifTaggedEnum, Clone)]
+pub enum SdkWorkerSlotSupplierOpts {
+    FixedSize(u32),
+    ResourceBased(SdkWorkerTunerResourceOpts),
 }
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkerTunerResourceOpts"]
 pub struct SdkWorkerTunerResourceOpts {
     pub target_mem_usage: f64,

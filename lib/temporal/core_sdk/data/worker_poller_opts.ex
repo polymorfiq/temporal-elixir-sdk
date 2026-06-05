@@ -5,8 +5,20 @@ defmodule Temporal.CoreSdk.Data.WorkerPollerOpts do
   alias Temporal.CoreSdk.Data.WorkerPollerAutoscalingOpts
   alias Temporal.CoreSdk.Data.WorkerPollerSimpleMaximumOpts
 
-  @type t :: %__MODULE__{
-          autoscaling: WorkerPollerAutoscalingOpts.t() | nil,
-          simple_maximum: WorkerPollerSimpleMaximumOpts.t() | nil
-        }
+  @type t ::
+          {:autoscaling, WorkerPollerAutoscalingOpts.t()}
+          | {:simple_maximum, WorkerPollerSimpleMaximumOpts.t()}
+
+  @type opts ::
+          {:autoscaling, WorkerPollerAutoscalingOpts.opts()}
+          | {:simple_maximum, WorkerPollerSimpleMaximumOpts.opts()}
+
+  @spec with_opts!(opts()) :: t()
+  def with_opts!({:autoscaling, opts}) do
+    {:autoscaling, WorkerPollerAutoscalingOpts.with_opts!(opts)}
+  end
+
+  def with_opts!({:simple_maximum, opts}) do
+    {:autoscaling, WorkerPollerSimpleMaximumOpts.with_opts!(opts)}
+  end
 end

@@ -5,7 +5,9 @@ defmodule Temporal.Client do
   alias Temporal.Constants
   alias Temporal.Runtime
   alias Temporal.Supervisor.ClientSupervisor
+  alias Temporal.Supervisor.RuntimeSupervisor
   alias Temporal.Workflows.WorkflowHandle
+  alias Temporal.CoreSdk.Data.ClientOpts
 
   @type t :: %__MODULE__{identity: String.t(), namespace: String.t(), runtime_id: String.t()}
   @type target_host :: String.t()
@@ -78,12 +80,29 @@ defmodule Temporal.Client do
 
   defp initialize_client(target_host, opts) do
     namespace = Keyword.get(opts, :namespace, @default_namespace)
-    rpc_opts = @default_rpc_opts ++ Keyword.get(opts, :rpc, [])
+    rpc_opts = @default_rpc_opts ++ Keyword.get(opts, :rpc_retry, [])
 
     identity =
       Keyword.get_lazy(opts, :identity, fn ->
         "#{UUID.uuid4()}@#{to_string(:net_adm.localhost())}"
       end)
+
+    client_opts =
+      ClientOpts.with_opts!(
+        target_host: target_host,
+        namespace: namespace,
+        client_name: Constants.sdk_name(),
+        client_version: Constants.sdk_version(),
+        identity: identity,
+        rpc_retry: [
+          initial_interval_secs: rpc_opts[:initial_interval_secs],
+          randomization_factor: rpc_opts[:randomization_factor],
+          multiplier: rpc_opts[:multiplier],
+          max_interval_secs: rpc_opts[:max_interval_secs],
+          max_elapsed_time_secs: rpc_opts[:max_elapsed_time_secs],
+          max_retries: rpc_opts[:max_retries]
+        ]
+      )
 
     runtime_resp =
       if runtime = Keyword.get(opts, :runtime) do
@@ -96,29 +115,14 @@ defmodule Temporal.Client do
 
     with {:ok, runtime} <- runtime_resp,
          {:ok, runtime_core} <- Runtime.core_for_id(runtime.id),
-         {:ok, clients_sup} <-
-           Temporal.Supervisor.RuntimeSupervisor.clients_sup_for_id(runtime.id) do
+         {:ok, clients_sup} <- RuntimeSupervisor.clients_sup_for_id(runtime.id) do
       child_started =
         DynamicSupervisor.start_child(
           clients_sup,
           {ClientSupervisor,
            {
              runtime_core,
-             [
-               target_host: target_host,
-               namespace: namespace,
-               client_name: Constants.sdk_name(),
-               client_version: Constants.sdk_version(),
-               identity: identity,
-               rpc_retry: [
-                 initial_interval_secs: rpc_opts[:initial_interval_secs],
-                 randomization_factor: rpc_opts[:randomization_factor],
-                 multiplier: rpc_opts[:multiplier],
-                 max_interval_secs: rpc_opts[:max_interval_secs],
-                 max_elapsed_time_secs: rpc_opts[:max_elapsed_time_secs],
-                 max_retries: rpc_opts[:max_retries]
-               ]
-             ],
+             client_opts,
              [name: reg_name]
            }}
         )

@@ -10,16 +10,25 @@ defmodule Temporal.Supervisor.ClientSupervisor do
 
   @impl true
   def init({runtime_core, opts}) do
-    identity = Keyword.fetch!(opts, :identity)
+    identity = opts.identity
 
     children = [
       {CoreClient, {runtime_core, opts, [name: via_registry({:core, identity})]}},
-      {WorkerList, [name: via_registry({:worker_list, identity})]}
+      {WorkerList, [name: via_registry({:workers, identity})]}
     ]
 
     Process.set_label({:client_sup, identity})
 
     Supervisor.init(children, strategy: :one_for_all)
+  end
+
+  @spec workers_sup_for_identity(identity :: String.t()) :: {:ok, pid()} | {:error, term()}
+  def workers_sup_for_identity(identity) do
+    if pid = GenServer.whereis(via_registry({:workers, identity})) do
+      {:ok, pid}
+    else
+      {:error, "Worker list not found for client (#{inspect(identity)})"}
+    end
   end
 
   @spec core_for_identity(identity :: String.t()) :: {:ok, term()} | {:error, term()}

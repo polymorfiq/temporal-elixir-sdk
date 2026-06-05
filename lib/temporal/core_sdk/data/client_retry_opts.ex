@@ -16,4 +16,18 @@ defmodule Temporal.CoreSdk.Data.ClientRetryOpts do
           max_elapsed_time_secs: float(),
           max_retries: pos_integer()
         }
+
+  @type opts :: [
+          {:initial_interval_secs, float()}
+          | {:randomization_factor, float()}
+          | {:multiplier, float()}
+          | {:max_interval_secs, float()}
+          | {:max_elapsed_time_secs, float()}
+          | {:max_retries, pos_integer()}
+        ]
+
+  @spec with_opts!(opts()) :: t()
+  def with_opts!(opts) do
+    struct!(__MODULE__, opts)
+  end
 end

@@ -52,4 +52,59 @@ defmodule Temporal.CoreSdk.Data.WorkerOpts do
           workflow_task_poller_behavior: WorkerPollerOpts.t(),
           activity_task_poller_behavior: WorkerPollerOpts.t()
         }
+
+  @type opts :: [
+          {:namespace, String.t()}
+          | {:task_queue, String.t()}
+          | {:deployment_options, WorkerDeploymentOpts.opts()}
+          | {:max_cached_workflows, pos_integer()}
+          | {:nonsticky_to_sticky_poll_ratio, float()}
+          | {:enable_workflows, bool()}
+          | {:enable_local_activities, bool()}
+          | {:enable_remote_activities, bool()}
+          | {:enable_nexus, bool()}
+          | {:sticky_queue_schedule_to_start_timeout_secs, float()}
+          | {:max_heartbeat_throttle_interval_secs, float()}
+          | {:default_heartbeat_throttle_interval_secs, float()}
+          | {:graceful_shutdown_period_secs, float()}
+          | {:nondeterminism_as_workflow_fail, bool()}
+          | {:nondeterminism_as_workflow_fail_for_types, [String.t()]}
+          | {:tuner, WorkerTunerOpts.opts()}
+          | {:plugins, [String.t()]}
+          | {:max_worker_activities_per_second, float()}
+          | {:max_task_queue_activities_per_second, float()}
+          | {:identity_override, String.t()}
+          | {:workflow_task_poller_behavior, WorkerPollerOpts.opts()}
+          | {:activity_task_poller_behavior, WorkerPollerOpts.opts()}
+        ]
+
+  @spec with_opts!(opts()) :: t()
+  def with_opts!(opts) do
+    worker = struct!(WorkerOpts, opts)
+
+    worker =
+      update_in(
+        worker,
+        [Access.key(:deployment_options)],
+        &WorkerDeploymentOpts.with_opts!(&1)
+      )
+
+    worker = update_in(worker, [Access.key(:tuner)], &WorkerTunerOpts.with_opts!/1)
+
+    worker =
+      update_in(
+        worker,
+        [Access.key(:workflow_task_poller_behavior)],
+        &WorkerPollerOpts.with_opts!/1
+      )
+
+    worker =
+      update_in(
+        worker,
+        [Access.key(:activity_task_poller_behavior)],
+        &WorkerPollerOpts.with_opts!/1
+      )
+
+    worker
+  end
 end

@@ -52,7 +52,7 @@ Temporal.Client.start_workflow(
 From my current understanding, this orchestrates the asynchronous threads/fibers used within the Temporal Client.
 
 ```elixir
-{:ok, runtime} = Temporal.CoreRuntime.with_id(:my_runtime, )
+{:ok, runtime} = Temporal.CoreRuntime.with_id(:my_runtime, heartbeat_interval_secs: 30)
 ```
 
 ## Initializing the Client
@@ -60,23 +60,21 @@ From my current understanding, this orchestrates the asynchronous threads/fibers
 The client is in charge of the overall connection with, messages passed back and forth, between the process and the gRPC Temporal Server.
 
 ```elixir
-client_opts = %Temporal.CoreSdk.Data.ClientOpts{
-  target_host: "localhost:7233",
-  namespace: "default",
-  client_name: "temporal-elixir",
-  client_version: "0.0.1",
-  identity: "iex-repl",
-  rpc_retry: %Temporal.CoreSdk.Data.ClientRetryOpts{
-    initial_interval_secs: 30.0,
-    randomization_factor: 5.0,
-    multiplier: 2.0,
-    max_interval_secs: 60.0,
-    max_elapsed_time_secs: 60.0,
-    max_retries: 30
-  }
-}
-
-{:ok, client} = Temporal.CoreSdk.CoreClient.new(runtime, client_opts)
+{:ok, client} = Temporal.Client.new(runtime, [
+    target_host: "localhost:7233",
+      namespace: "default",
+      client_name: "temporal-elixir",
+      client_version: "0.0.1",
+      identity: "iex-repl",
+      rpc_retry: [
+        initial_interval_secs: 30.0,
+        randomization_factor: 5.0,
+        multiplier: 2.0,
+        max_interval_secs: 60.0,
+        max_elapsed_time_secs: 60.0,
+        max_retries: 30
+      ]
+])
 ```
 
 ## Initializing a Worker
@@ -84,17 +82,18 @@ client_opts = %Temporal.CoreSdk.Data.ClientOpts{
 A worker polls various task queues (Workflow Activations, Activity Tasks, Nexus) for work to do, executes the work and responds via the Client to the Temporal Server with the results of those activities.
 
 ```elixir
-worker_opts = %Temporal.CoreSdk.Data.WorkerOpts{
+task_queue = Temporal.TaskQueue.new(client, "default")
+{:ok, worker} = Temporal.Worker.new(task_queue, [
   namespace: "default",
   task_queue: "default",
-  deployment_options: %Temporal.CoreSdk.Data.WorkerDeploymentOpts{
-    version: %Temporal.CoreSdk.Data.WorkerDeploymentVersion{
+  deployment_options: [
+    version: [
       build_id: "0.0.1",
       deployment_name: "iex-repl-deploy"
-    },
+    ],
     use_worker_versioning: false,
     default_versioning_behavior: 0
-  },
+  ],
   max_cached_workflows: 100,
   nonsticky_to_sticky_poll_ratio: 0.5,
   enable_workflows: true,
@@ -106,31 +105,19 @@ worker_opts = %Temporal.CoreSdk.Data.WorkerOpts{
   default_heartbeat_throttle_interval_secs: 30.0,
   graceful_shutdown_period_secs: 5.0,
   nondeterminism_as_workflow_fail: true,
-  tuner: %Temporal.CoreSdk.Data.WorkerTunerOpts{
-    workflow_slot_supplier: %Temporal.CoreSdk.Data.WorkerSlotSupplierOpts{
-      fixed_size: 10
-    },
-    activity_slot_supplier: %Temporal.CoreSdk.Data.WorkerSlotSupplierOpts{
-      fixed_size: 10
-    },
-    local_activity_slot_supplier: %Temporal.CoreSdk.Data.WorkerSlotSupplierOpts{
-      fixed_size: 10
-    }
-  },
+  tuner: [
+    workflow_slot_supplier: {:fixed_size, 10},
+    activity_slot_supplier: {:fixed_size, 10},
+    local_activity_slot_supplier: {:fixed_size, 10}
+  ],
   nondeterminism_as_workflow_fail_for_types: [],
   plugins: [],
   max_worker_activities_per_second: 60,
   max_task_queue_activities_per_second: 60,
   identity_override: nil,
-  workflow_task_poller_behavior: %Temporal.CoreSdk.Data.WorkerPollerOpts{
-    simple_maximum: %Temporal.CoreSdk.Data.WorkerPollerSimpleMaximumOpts{simple_maximum: 5}
-  },
-  activity_task_poller_behavior:  %Temporal.CoreSdk.Data.WorkerPollerOpts{
-    simple_maximum: %Temporal.CoreSdk.Data.WorkerPollerSimpleMaximumOpts{simple_maximum: 5}
-  }
-}
-
-{:ok, worker} = Temporal.CoreSdk.CoreWorker.new(runtime, client, worker_opts)
+  workflow_task_poller_behavior: {:simple_maximum, [simple_maximum: 5]},
+  activity_task_poller_behavior:  {:simple_maximum, [simple_maximum: 5]}
+])
 ```
 
 ## Polling Workflow Activations
