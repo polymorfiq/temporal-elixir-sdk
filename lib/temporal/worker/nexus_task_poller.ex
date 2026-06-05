@@ -1,4 +1,4 @@
-defmodule Temporal.Worker.WorkflowActivationPoller do
+defmodule Temporal.Worker.NexusTaskPoller do
   use GenServer
 
   alias Temporal.CoreSdk
@@ -23,14 +23,14 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
          worker_pid: worker_pid,
          core_worker: core_worker,
          core_runtime: core_runtime
-       ), {:continue, :poll_for_activations}}
+       ), {:continue, :poll_for_tasks}}
     end
   end
 
   @doc false
-  def handle_continue(:poll_for_activations, state) do
+  def handle_continue(:poll_for_tasks, state) do
     with {{:ok, _}, state} <- poll_and_inform_worker(state) do
-      {:noreply, state, {:continue, :poll_for_activations}}
+      {:noreply, state, {:continue, :poll_for_tasks}}
     else
       {{:err, error}, _} ->
         {:stop, {:poll_error, error}, state}
@@ -46,11 +46,11 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
 
     child =
       spawn_link(fn ->
-        CoreSdk._worker_poll_workflow_activation(runtime_core.core, worker_core.core, self())
+        CoreSdk._worker_poll_nexus_task(runtime_core.core, worker_core.core, self())
 
         receive do
-          {:ok, activation} ->
-            send(parent, {self(), {:ok, activation}})
+          {:ok, task} ->
+            send(parent, {self(), {:ok, task}})
 
           {:err, error} ->
             send(parent, {self(), {:err, error}})
@@ -60,12 +60,12 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
 
     poll_resp =
       receive do
-        {^child, {:ok, activation}} ->
-          send(worker_pid, {:workflow_activation, activation})
-          {:ok, activation}
+        {^child, {:ok, task}} ->
+          send(worker_pid, {:nexus_task, task})
+          {:ok, task}
 
         {^child, {:error, err}} ->
-          send(worker_pid, {:workflow_activation_error, err})
+          send(worker_pid, {:nexus_task_error, err})
           {:error, err}
       end
 

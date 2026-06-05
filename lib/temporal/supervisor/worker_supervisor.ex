@@ -8,7 +8,7 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.Worker.WorkflowActivationPoller
   alias Temporal.Worker.ActivityTaskPoller
-  alias Temporal.Worker.NexusOperationPoller
+  alias Temporal.Worker.NexusTaskPoller
 
   @type worker_id :: String.t()
 
@@ -26,8 +26,7 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
       {WorkflowActivationPoller,
        {worker_id, [name: via_registry({:workflow_activation_poller, worker_id})]}},
       {ActivityTaskPoller, {worker_id, [name: via_registry({:activity_task_poller, worker_id})]}},
-      {NexusOperationPoller,
-       {worker_id, [name: via_registry({:nexus_operation_poller, worker_id})]}}
+      {NexusTaskPoller, {worker_id, [name: via_registry({:nexus_operation_poller, worker_id})]}}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
