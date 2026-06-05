@@ -8,6 +8,7 @@ defmodule Temporal.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      prune_code_paths: false,
 
       # Docs
       name: "Temporal SDK",

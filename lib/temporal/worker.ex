@@ -86,8 +86,10 @@ defmodule Temporal.Worker do
       }
     }
 
-    with {:ok, core} <- CoreWorker.new(client.core.runtime, client.core, worker_opts) do
-      {:ok, %__MODULE__{client: client, runtime: client.runtime, core: core}}
+    with  {:ok, core_runtime} <- Client.core_runtime(client),
+          {:ok, core_client} <- Client.core_for_identity(client.identity),
+          {:ok, core} <- CoreWorker.new(core_runtime, core_client, worker_opts) do
+      {:ok, %__MODULE__{client: client, runtime: core_runtime, core: core}}
     end
   end
 end

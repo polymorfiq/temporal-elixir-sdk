@@ -35,8 +35,11 @@ defmodule Temporal.CoreSdk.CoreRuntime do
       heartbeat_interval_secs: Keyword.get(opts, :heartbeat_interval_secs)
     }
 
+    runtime_id = Keyword.fetch!(opts, :runtime_id)
+    Process.set_label({:runtime, runtime_id})
+
     with {:ok, core} <- CoreSdk._create_runtime(runtime_opts) do
-      {:ok, server_state(id: Keyword.fetch!(opts, :runtime_id), core: core)}
+      {:ok, server_state(id: runtime_id, core: core)}
     end
   end
 

@@ -17,6 +17,8 @@ defmodule Temporal.Supervisor.ClientSupervisor do
       {WorkerList, [name: via_registry({:worker_list, identity})]}
     ]
 
+    Process.set_label({:client_sup, identity})
+
     Supervisor.init(children, strategy: :one_for_all)
   end
 

@@ -20,7 +20,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
     {pid, ref} =
       spawn_monitor(fn ->
-        CoreSdk._create_worker(runtime.core, client.client, opts, self())
+        CoreSdk._create_worker(runtime.core, client.core, opts, self())
         |> case do
           {:ok, _} -> :ok
           {:error, err} -> raise "Could initialize worker from Core SDK: #{inspect(err)}"
@@ -81,7 +81,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
       end
 
     case validate_resp do
-      :ok -> :ok
+      {:ok, true} -> :ok
       {:error, err} -> {:error, "Validation error: #{inspect(err)}"}
     end
   end

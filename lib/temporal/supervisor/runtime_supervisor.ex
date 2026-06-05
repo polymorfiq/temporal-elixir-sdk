@@ -19,6 +19,8 @@ defmodule Temporal.Supervisor.RuntimeSupervisor do
       {ClientList, [name: via_registry({:clients, runtime_id})]}
     ]
 
+    Process.set_label({:runtime_sup, runtime_id})
+
     Supervisor.init(children, strategy: :one_for_all)
   end
 

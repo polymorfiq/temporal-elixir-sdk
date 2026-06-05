@@ -65,11 +65,12 @@ defmodule Temporal.CoreSdk.CoreClient do
   @spec init({CoreRuntime.t(), opts :: client_opts()}) :: {:ok, t()} | {:error, term()}
   def init({runtime, opts}) do
     parent = self()
-
     client_opts = struct!(ClientOpts, opts)
 
     retry_opts = Keyword.fetch!(opts, :rpc_retry)
     client_opts = %{client_opts | rpc_retry: struct!(ClientRetryOpts, retry_opts)}
+
+    Process.set_label({:core_client, client_opts.identity})
 
     client_opts =
       if tls_opts = opts[:tls] do
