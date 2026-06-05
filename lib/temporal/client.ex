@@ -1,14 +1,13 @@
 defmodule Temporal.Client do
-  defstruct [:namespace, :runtime, :core]
+  defstruct [:identity, :namespace, :runtime_id]
 
+  alias Temporal.ClientRegistry
   alias Temporal.Constants
   alias Temporal.Runtime
-  alias Temporal.CoreSdk.CoreClient
-  alias Temporal.CoreSdk.Data.ClientOpts
-  alias Temporal.CoreSdk.Data.ClientRetryOpts
+  alias Temporal.Supervisor.ClientSupervisor
   alias Temporal.Workflows.WorkflowHandle
 
-  @type t :: %__MODULE__{runtime: Runtime.t(), core: CoreClient.t()}
+  @type t :: %__MODULE__{identity: String.t(), namespace: String.t(), runtime_id: String.t()}
   @type target_host :: String.t()
 
   @type rpc_opts :: [
@@ -45,7 +44,10 @@ defmodule Temporal.Client do
   end
 
   def core_runtime(client),
-    do: client.core.runtime.core
+    do: Runtime.core_for_id(client.runtime_id)
+
+  def core_for_identity(identity),
+    do: ClientSupervisor.core_for_identity(identity)
 
   @spec validate_opts(keyword()) :: {:ok, client_opts()} | {:error, term()}
   defp validate_opts(opts) do
@@ -90,25 +92,40 @@ defmodule Temporal.Client do
         Runtime.global()
       end
 
+    reg_name = {:via, Registry, {ClientRegistry, {:client, identity}}}
+
     with {:ok, runtime} <- runtime_resp,
-         {:ok, runtime_core} <- Runtime.core(runtime),
-         {:ok, core} <-
-           Temporal.CoreSdk.CoreClient.new(runtime_core,
-             target_host: target_host,
-             namespace: namespace,
-             client_name: Constants.sdk_name(),
-             client_version: Constants.sdk_version(),
-             identity: identity,
-             rpc_retry: [
-               initial_interval_secs: rpc_opts[:initial_interval_secs],
-               randomization_factor: rpc_opts[:randomization_factor],
-               multiplier: rpc_opts[:multiplier],
-               max_interval_secs: rpc_opts[:max_interval_secs],
-               max_elapsed_time_secs: rpc_opts[:max_elapsed_time_secs],
-               max_retries: rpc_opts[:max_retries]
-             ]
-           ) do
-      {:ok, %__MODULE__{core: core, runtime: runtime, namespace: namespace}}
+         {:ok, runtime_core} <- Runtime.core_for_id(runtime.id),
+         {:ok, clients_sup} <-
+           Temporal.Supervisor.RuntimeSupervisor.clients_sup_for_id(runtime.id) do
+      child_started =
+        DynamicSupervisor.start_child(
+          clients_sup,
+          {ClientSupervisor,
+           {
+             runtime_core,
+             [
+               target_host: target_host,
+               namespace: namespace,
+               client_name: Constants.sdk_name(),
+               client_version: Constants.sdk_version(),
+               identity: identity,
+               rpc_retry: [
+                 initial_interval_secs: rpc_opts[:initial_interval_secs],
+                 randomization_factor: rpc_opts[:randomization_factor],
+                 multiplier: rpc_opts[:multiplier],
+                 max_interval_secs: rpc_opts[:max_interval_secs],
+                 max_elapsed_time_secs: rpc_opts[:max_elapsed_time_secs],
+                 max_retries: rpc_opts[:max_retries]
+               ]
+             ],
+             [name: reg_name]
+           }}
+        )
+
+      with {:ok, _} <- child_started do
+        {:ok, %__MODULE__{identity: identity, namespace: namespace, runtime_id: runtime.id}}
+      end
     end
   end
 

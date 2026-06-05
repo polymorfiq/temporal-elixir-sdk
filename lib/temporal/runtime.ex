@@ -10,8 +10,8 @@ defmodule Temporal.Runtime do
 
   @global_name :_global
 
-  def core(runtime),
-    do: RuntimeSupervisor.core_for_id(runtime.id)
+  def core_for_id(runtime_id),
+    do: RuntimeSupervisor.core_for_id(runtime_id)
 
   @spec with_id(CoreRuntime.runtime_id(), CoreRuntime.runtime_opts()) ::
           {:ok, t()} | {:error, term()}

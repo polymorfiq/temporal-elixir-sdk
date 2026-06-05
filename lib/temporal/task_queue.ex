@@ -62,28 +62,32 @@ defmodule Temporal.TaskQueue do
 
       {pid, ref} =
         spawn_monitor(fn ->
-          CoreSdk._client_start_workflow(
-            Client.core_runtime(queue.client),
-            queue.client.core.client,
-            %WorkflowDefinition{name: WorkflowName.server_recognized_name(workflow_name)},
-            %WorkflowArguments{args: args},
-            %WorkflowStartOptions{
-              task_queue: queue.queue_name,
-              workflow_id: workflow_id,
-              id_reuse_policy: Keyword.get(opts, :id_reuse_policy, :unspecified),
-              id_conflict_policy: Keyword.get(opts, :id_conflict_policy, :unspecified),
-              enable_eager_workflow_start: Keyword.get(opts, :enable_eager_workflow_start, false),
-              links: Keyword.get(opts, :links, []),
-              completion_callbacks: Keyword.get(opts, :completion_callbacks, []),
-              priority:
-                Keyword.get(opts, :priority, %ClientPriority{
-                  priority_key: 0,
-                  fairness_key: "",
-                  fairness_weight: 1.0
-                })
-            },
-            self()
-          )
+          with {:ok, runtime_core} <- Client.core_runtime(queue.client),
+               {:ok, client_core} <- Client.core_for_identity(queue.client.identity) do
+            CoreSdk._client_start_workflow(
+              runtime_core.core,
+              client_core.core,
+              %WorkflowDefinition{name: WorkflowName.server_recognized_name(workflow_name)},
+              %WorkflowArguments{args: args},
+              %WorkflowStartOptions{
+                task_queue: queue.queue_name,
+                workflow_id: workflow_id,
+                id_reuse_policy: Keyword.get(opts, :id_reuse_policy, :unspecified),
+                id_conflict_policy: Keyword.get(opts, :id_conflict_policy, :unspecified),
+                enable_eager_workflow_start:
+                  Keyword.get(opts, :enable_eager_workflow_start, false),
+                links: Keyword.get(opts, :links, []),
+                completion_callbacks: Keyword.get(opts, :completion_callbacks, []),
+                priority:
+                  Keyword.get(opts, :priority, %ClientPriority{
+                    priority_key: 0,
+                    fairness_key: "",
+                    fairness_weight: 1.0
+                  })
+              },
+              self()
+            )
+          end
           |> case do
             {:ok, _} -> :ok
             {:error, err} -> raise "Could not start workflow via Core SDK: #{inspect(err)}"
