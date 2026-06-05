@@ -19,20 +19,24 @@ defmodule Temporal.CoreSdk.CoreRuntime do
   def start_link(opts) do
     {runtime_opts, server_opts} = Keyword.split(opts, [:runtime_id, :heartbeat_interval_secs])
 
-    GenServer.start_link(__MODULE__, runtime_opts, server_opts)
+    cond do
+      !runtime_opts[:runtime_id] ->
+        {:error, {:required_option, :runtime_id}}
+
+      true ->
+        GenServer.start_link(__MODULE__, runtime_opts, server_opts)
+    end
   end
 
   @impl true
   @spec init(runtime_opts()) :: {:ok, pid} | {:error, term()}
   def init(opts) do
-    id = Keyword.get_lazy(opts, :runtime_id, fn -> UUID.uuid4() end)
-
     runtime_opts = %RuntimeOpts{
       heartbeat_interval_secs: Keyword.get(opts, :heartbeat_interval_secs)
     }
 
     with {:ok, core} <- CoreSdk._create_runtime(runtime_opts) do
-      {:ok, server_state(id: id, core: core)}
+      {:ok, server_state(id: Keyword.fetch!(opts, :runtime_id), core: core)}
     end
   end
 

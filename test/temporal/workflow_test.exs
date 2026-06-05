@@ -26,6 +26,13 @@ defmodule Temporal.WorkflowTest do
                  "wrong"
                ])
     end
+
+#    test "responds appropriately", %{queue: queue} do
+#      {:ok, handle} =
+#        TaskQueue.start_workflow(queue, unique_name("can-be-started"), StartableNoArgs, [])
+#
+#      assert {:ok, "Hello"} = Temporal.Workflow.watch_result(handle)
+#    end
   end
 
   describe "with inputs" do

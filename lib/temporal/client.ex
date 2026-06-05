@@ -83,22 +83,6 @@ defmodule Temporal.Client do
         "#{UUID.uuid4()}@#{to_string(:net_adm.localhost())}"
       end)
 
-    client_opts = %ClientOpts{
-      target_host: target_host,
-      namespace: namespace,
-      client_name: Constants.sdk_name(),
-      client_version: Constants.sdk_version(),
-      identity: identity,
-      rpc_retry: %ClientRetryOpts{
-        initial_interval_secs: rpc_opts[:initial_interval_secs],
-        randomization_factor: rpc_opts[:randomization_factor],
-        multiplier: rpc_opts[:multiplier],
-        max_interval_secs: rpc_opts[:max_interval_secs],
-        max_elapsed_time_secs: rpc_opts[:max_elapsed_time_secs],
-        max_retries: rpc_opts[:max_retries]
-      }
-    }
-
     runtime_resp =
       if runtime = Keyword.get(opts, :runtime) do
         {:ok, runtime}
@@ -108,7 +92,22 @@ defmodule Temporal.Client do
 
     with {:ok, runtime} <- runtime_resp,
          {:ok, runtime_core} <- Runtime.core(runtime),
-         {:ok, core} <- Temporal.CoreSdk.CoreClient.new(runtime_core, client_opts) do
+         {:ok, core} <-
+           Temporal.CoreSdk.CoreClient.new(runtime_core,
+             target_host: target_host,
+             namespace: namespace,
+             client_name: Constants.sdk_name(),
+             client_version: Constants.sdk_version(),
+             identity: identity,
+             rpc_retry: [
+               initial_interval_secs: rpc_opts[:initial_interval_secs],
+               randomization_factor: rpc_opts[:randomization_factor],
+               multiplier: rpc_opts[:multiplier],
+               max_interval_secs: rpc_opts[:max_interval_secs],
+               max_elapsed_time_secs: rpc_opts[:max_elapsed_time_secs],
+               max_retries: rpc_opts[:max_retries]
+             ]
+           ) do
       {:ok, %__MODULE__{core: core, runtime: runtime, namespace: namespace}}
     end
   end
