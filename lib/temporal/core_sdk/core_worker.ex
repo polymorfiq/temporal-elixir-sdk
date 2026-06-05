@@ -10,41 +10,46 @@ defmodule Temporal.CoreSdk.CoreWorker do
   alias CoreSdk.Data.ActivityTask
   alias CoreSdk.Data.NexusTask
   alias Temporal.CoreSdk.Data.WorkerOpts
+  alias Temporal.CoreSdk.Data.WorkflowFailure
+  alias Temporal.CoreSdk.Data.WorkflowActivationCompletionFailureStatus
 
   require Record
 
   Record.defrecordp(:server_state, [
+    :id,
     :namespace,
     :task_queue,
     :identity_override,
     :runtime,
     :client,
-    :core
+    :core,
+    forward_polled_pid: nil
   ])
 
+  @type worker_id :: String.t()
   @type t :: %__MODULE__{
           core: term()
         }
 
-  @type worker_opts :: WorkerOpts.opts()
+  @type worker_opts :: [{:config, WorkerOpts.t()} | {:forward_polled_messages, pid()}]
 
-  @spec start_link(
-          {worker_id :: String.t(), CoreRuntime.t(), CoreClient.t(), WorkerOpts.t(), keyword()}
-        ) ::
+  @spec start_link({worker_id(), CoreRuntime.t(), CoreClient.t(), worker_opts(), keyword()}) ::
           {:ok, pid()} | {:error, term()}
   def start_link({worker_id, runtime, client, opts, server_opts}) do
-    GenServer.start_link(__MODULE__, {worker_id, runtime, client, opts}, server_opts)
+    config = Keyword.fetch!(opts, :config)
+
+    GenServer.start_link(__MODULE__, {worker_id, runtime, client, config, opts}, server_opts)
   end
 
   @impl true
-  @spec init({worker_id :: String.t(), CoreRuntime.t(), CoreClient.t(), WorkerOpts.t()}) ::
+  @spec init({worker_id(), CoreRuntime.t(), CoreClient.t(), WorkerOpts.t(), worker_opts()}) ::
           {:ok, t()} | {:error, term()}
-  def init({worker_id, runtime, client, opts}) do
+  def init({worker_id, runtime, client, config, opts}) do
     parent = self()
 
     {pid, ref} =
       spawn_monitor(fn ->
-        CoreSdk._create_worker(runtime.core, client.core, opts, self())
+        CoreSdk._create_worker(runtime.core, client.core, config, self())
         |> case do
           {:ok, _} -> :ok
           {:error, err} -> raise "Could initialize worker from Core SDK: #{inspect(err)}"
@@ -74,12 +79,14 @@ defmodule Temporal.CoreSdk.CoreWorker do
          :ok <- validate(core, runtime) do
       {:ok,
        server_state(
+         id: worker_id,
          core: core,
-         task_queue: opts.task_queue,
-         namespace: opts.namespace,
-         identity_override: opts.identity_override,
+         task_queue: config.task_queue,
+         namespace: config.namespace,
+         identity_override: config.identity_override,
          runtime: runtime,
-         client: client
+         client: client,
+         forward_polled_pid: Keyword.get(opts, :forward_polled_messages)
        )}
     end
   end
@@ -232,6 +239,54 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   def get_core(pid), do: GenServer.call(pid, :get_core)
   def get_runtime(pid), do: GenServer.call(pid, :get_runtime)
+
+  def process_workflow_activation(pid, activation) do
+    GenServer.call(pid, {:process_workflow_activation, activation}, :infinity)
+  end
+
+  def process_activity_task(pid, task) do
+    GenServer.call(pid, {:process_activity_task, task}, :infinity)
+  end
+
+  def process_nexus_task(pid, task) do
+    GenServer.call(pid, {:process_nexus_task, task}, :infinity)
+  end
+
+  @impl true
+  def handle_call({:process_workflow_activation, _activation} = msg, _from, state) do
+    if forward_to = server_state(state, :forward_polled_pid) do
+      send(forward_to, msg)
+    end
+
+    {:reply,
+     {:ok,
+      %WorkflowActivationCompletionFailureStatus{
+        force_cause: 0,
+        failure: %WorkflowFailure{
+          message: "Failed!",
+          source: "catch-all",
+          stack_trace: inspect(Process.info(self(), :current_stacktrace))
+        }
+      }}, state}
+  end
+
+  @impl true
+  def handle_call({:process_activity_task, _task} = msg, _from, state) do
+    if forward_to = server_state(state, :forward_polled_pid) do
+      send(forward_to, msg)
+    end
+
+    {:reply, :ok, state}
+  end
+
+  @impl true
+  def handle_call({:process_nexus_task, _task} = msg, _from, state) do
+    if forward_to = server_state(state, :forward_polled_pid) do
+      send(forward_to, msg)
+    end
+
+    {:reply, :ok, state}
+  end
 
   @impl true
   def handle_call(:get_core, _from, state),

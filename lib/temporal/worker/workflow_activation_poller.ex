@@ -4,6 +4,10 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreWorker
   alias Temporal.Supervisor.WorkerSupervisor
+  alias Temporal.CoreSdk.Data.WorkflowActivationCompletion
+  alias Temporal.CoreSdk.Data.WorkflowActivationCompletionFailureStatus
+  alias Temporal.CoreSdk.Data.WorkflowActivationCompletionSuccessStatus
+  alias Temporal.CoreSdk.Data.WorkflowFailure
 
   require Record
   Record.defrecordp(:poll_state, [:worker_id, :worker_pid, :core_worker, :core_runtime])
@@ -46,7 +50,8 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
 
     child =
       spawn_link(fn ->
-        CoreSdk._worker_poll_workflow_activation(runtime_core.core, worker_core.core, self())
+        {:ok, _} =
+          CoreSdk._worker_poll_workflow_activation(runtime_core.core, worker_core.core, self())
 
         receive do
           {:ok, activation} ->
@@ -61,8 +66,26 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     poll_resp =
       receive do
         {^child, {:ok, activation}} ->
-          send(worker_pid, {:workflow_activation, activation})
-          {:ok, activation}
+          case CoreWorker.process_workflow_activation(worker_pid, activation) do
+            {:ok, resp} ->
+              :ok = send_complete_activation(activation.run_id, state, resp)
+              {:ok, activation}
+
+            {:error, err} ->
+              :ok =
+                send_complete_activation(
+                  activation.run_id,
+                  state,
+                  %WorkflowActivationCompletionFailureStatus{
+                    force_cause: 0,
+                    failure: %WorkflowFailure{
+                      message: "Error processing polled activation: #{inspect(err)}"
+                    }
+                  }
+                )
+
+              {:error, err}
+          end
 
         {^child, {:error, err}} ->
           send(worker_pid, {:workflow_activation_error, err})
@@ -70,5 +93,48 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
       end
 
     {poll_resp, state}
+  end
+
+  defp send_complete_activation(run_id, state, response) do
+    runtime_core = poll_state(state, :core_runtime)
+    worker_core = poll_state(state, :core_worker)
+
+    resp_msg =
+      case response do
+        %WorkflowActivationCompletionSuccessStatus{} ->
+          %WorkflowActivationCompletion{run_id: run_id, status: {:successful, response}}
+
+        %WorkflowActivationCompletionFailureStatus{} ->
+          %WorkflowActivationCompletion{run_id: run_id, status: {:failed, response}}
+      end
+
+    parent = self()
+
+    child =
+      spawn_link(fn ->
+        {:ok, _} =
+          CoreSdk._worker_complete_workflow_activation(
+            runtime_core.core,
+            worker_core.core,
+            resp_msg,
+            self()
+          )
+
+        receive do
+          {:ok, _} ->
+            send(parent, {self(), {:ok, true}})
+
+          {:err, error} ->
+            send(parent, {self(), {:err, error}})
+        end
+      end)
+
+    receive do
+      {^child, {:ok, _}} ->
+        :ok
+
+      {^child, {:error, err}} ->
+        {:error, err}
+    end
   end
 end

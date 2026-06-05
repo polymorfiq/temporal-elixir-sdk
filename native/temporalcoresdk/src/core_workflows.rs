@@ -1386,14 +1386,12 @@ impl Into<temporalio_sdk_common::protos::coresdk::common::NamespacedWorkflowExec
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationExternalPayloadDetails"]
-pub struct SdkActivationExternalPayloadDetails {
+#[module = "Temporal.CoreSdk.Data.ExternalPayloadDetails"]
+pub struct SdkExternalPayloadDetails {
     pub size_bytes: i64,
 }
 
-impl From<temporal_api::common::v1::payload::ExternalPayloadDetails>
-    for SdkActivationExternalPayloadDetails
-{
+impl From<temporal_api::common::v1::payload::ExternalPayloadDetails> for SdkExternalPayloadDetails {
     fn from(external: temporal_api::common::v1::payload::ExternalPayloadDetails) -> Self {
         Self {
             size_bytes: external.size_bytes,
@@ -1401,9 +1399,7 @@ impl From<temporal_api::common::v1::payload::ExternalPayloadDetails>
     }
 }
 
-impl Into<temporal_api::common::v1::payload::ExternalPayloadDetails>
-    for SdkActivationExternalPayloadDetails
-{
+impl Into<temporal_api::common::v1::payload::ExternalPayloadDetails> for SdkExternalPayloadDetails {
     fn into(self) -> temporal_api::common::v1::payload::ExternalPayloadDetails {
         temporal_api::common::v1::payload::ExternalPayloadDetails {
             size_bytes: self.size_bytes,
@@ -1412,7 +1408,7 @@ impl Into<temporal_api::common::v1::payload::ExternalPayloadDetails>
 }
 
 impl Into<temporal_api::common::v1::payload::ExternalPayloadDetails>
-    for &SdkActivationExternalPayloadDetails
+    for &SdkExternalPayloadDetails
 {
     fn into(self) -> temporal_api::common::v1::payload::ExternalPayloadDetails {
         temporal_api::common::v1::payload::ExternalPayloadDetails {

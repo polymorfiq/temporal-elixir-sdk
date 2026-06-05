@@ -621,7 +621,7 @@ fn _client_start_workflow(
             Ok(handle) => Ok(ResourceArc::new(ElixirWorkflowHandle {
                 handle: Mutex::new(handle),
             })),
-            Err(error) => Err(format!("Error starting workflow: {}", error)),
+            Err(error) => Err(format!("Error starting workflow - {}", error)),
         };
 
         let mut owned_env = OwnedEnv::new();

@@ -61,7 +61,7 @@ defmodule Temporal.Worker.NexusTaskPoller do
     poll_resp =
       receive do
         {^child, {:ok, task}} ->
-          send(worker_pid, {:nexus_task, task})
+          CoreWorker.process_nexus_task(worker_pid, task)
           {:ok, task}
 
         {^child, {:error, err}} ->

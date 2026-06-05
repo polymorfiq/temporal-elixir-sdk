@@ -1,43 +1,33 @@
 defmodule Temporal.TaskQueue do
-  defstruct [:queue_name, :client, default_workflow_opts: []]
+  defstruct [:queue_name, :client, default_workflow_opts: [], default_worker_opts: []]
 
   alias Temporal.Client
   alias Temporal.CoreSdk
-  alias Temporal.CoreSdk.Data.Callback
-  alias Temporal.CoreSdk.Data.Link
+  alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkflowDefinition
   alias Temporal.CoreSdk.Data.WorkflowStartOptions
   alias Temporal.CoreSdk.Data.WorkflowArguments
-  alias Temporal.CoreSdk.Data.WorkflowInput
-  alias Temporal.CoreSdk.Data.ClientPriority
   alias Temporal.Workflows.WorkflowExecHandle
   alias Temporal.Workflows.WorkflowName
 
   @type t() :: %__MODULE__{
           queue_name: String.t(),
           client: Client.t(),
-          default_workflow_opts: workflow_opts()
+          default_workflow_opts: WorkflowStartOptions.opts()
         }
 
-  @type workflow_opts :: [
-          {:id_reuse_policy, WorkflowStartOptions.id_reuse_policy()}
-          | {:id_conflict_policy, WorkflowStartOptions.id_conflict_policy()}
-          | {:enable_eager_workflow_start, bool()}
-          | {:links, [Link.t()]}
-          | {:completion_callbacks, [Callback.t()]}
-          | {:priority, ClientPriority.t()}
+  @type opts :: [
+          {:default_workflow_opts, WorkflowStartOptions.opts()}
+          | {:default_worker_opts, WorkerOpts.opts()}
         ]
 
-  @type queue_opts :: [
-          {:default_workflow_opts, workflow_opts()}
-        ]
-
-  @spec new(Client.t(), queue_name :: String.t(), queue_opts()) :: t()
+  @spec new(Client.t(), queue_name :: String.t(), opts()) :: t()
   def new(client, queue_name, opts \\ []) do
     %__MODULE__{
       client: client,
       queue_name: queue_name,
-      default_workflow_opts: Keyword.get(opts, :default_workflow_opts, [])
+      default_workflow_opts: Keyword.get(opts, :default_workflow_opts, []),
+      default_worker_opts: Keyword.get(opts, :default_worker_opts, [])
     }
   end
 
@@ -46,17 +36,18 @@ defmodule Temporal.TaskQueue do
           workflow_id :: String.t(),
           workflow_name :: WorkflowName.t(),
           inputs :: [term()],
-          opts :: workflow_opts()
+          opts :: WorkflowStartOptions.opts()
         ) :: {:ok, WorkflowExecHandle.t()} | {:error, term()}
   def start_workflow(queue, workflow_id, workflow_name, inputs, opts \\ []) do
+    wf_server_name = WorkflowName.server_recognized_name(workflow_name)
+    workflow_def = WorkflowDefinition.with_opts!(name: wf_server_name)
+
     opts = queue.default_workflow_opts ++ opts
+    opts = opts ++ [workflow_id: workflow_id, task_queue: queue.queue_name]
+    start_opts = WorkflowStartOptions.with_opts!(opts)
 
     with :ok <- validate_workflow_inputs(workflow_name, inputs) do
-      args =
-        Enum.map(inputs, fn
-          {:bytes, val} -> {:bytes, val}
-          input -> WorkflowInput.new(input)
-        end)
+      args = WorkflowArguments.with_opts!(args: inputs)
 
       parent = self()
 
@@ -67,24 +58,9 @@ defmodule Temporal.TaskQueue do
             CoreSdk._client_start_workflow(
               runtime_core.core,
               client_core.core,
-              %WorkflowDefinition{name: WorkflowName.server_recognized_name(workflow_name)},
-              %WorkflowArguments{args: args},
-              %WorkflowStartOptions{
-                task_queue: queue.queue_name,
-                workflow_id: workflow_id,
-                id_reuse_policy: Keyword.get(opts, :id_reuse_policy, :unspecified),
-                id_conflict_policy: Keyword.get(opts, :id_conflict_policy, :unspecified),
-                enable_eager_workflow_start:
-                  Keyword.get(opts, :enable_eager_workflow_start, false),
-                links: Keyword.get(opts, :links, []),
-                completion_callbacks: Keyword.get(opts, :completion_callbacks, []),
-                priority:
-                  Keyword.get(opts, :priority, %ClientPriority{
-                    priority_key: 0,
-                    fairness_key: "",
-                    fairness_weight: 1.0
-                  })
-              },
+              workflow_def,
+              args,
+              start_opts,
               self()
             )
           end

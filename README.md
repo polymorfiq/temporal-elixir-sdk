@@ -30,11 +30,12 @@ I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more
 alias Temporal.CoreSdk.Data.WorkflowInput
 
 {:ok, client} = Temporal.Client.new("localhost:7233")
-{:ok, worker} = Temporal.Worker.new(client, "default")
+task_queue = Temporal.TaskQueue.new(client, "default")
 
-Temporal.Client.start_workflow(
-  client,
-  "default",
+{:ok, worker} = Temporal.Worker.new(task_queue)
+
+Temporal.TaskQueue.start_workflow(
+  task_queue,
   "my-workflow-id-v5",
   "MySpecialWorkflow",
   [

@@ -11,7 +11,8 @@ defmodule Temporal.Worker do
   alias Temporal.WorkerRegistry
 
   @type t :: %__MODULE__{id: String.t(), task_queue: TaskQueue.t()}
-  @type worker_opts :: []
+  @type worker_opts :: WorkerOpts.opts() | extra_opts()
+  @type extra_opts :: [{:forward_polled_messages, pid()}]
   @type task_queue :: String.t()
 
   @spec new(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}
@@ -26,6 +27,9 @@ defmodule Temporal.Worker do
 
   @spec initialize_worker(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}
   defp initialize_worker(task_queue, opts) do
+    opts = task_queue.default_worker_opts ++ opts
+    {extra_opts, core_opts} = Keyword.split(opts, [:forward_polled_messages])
+
     worker_id = UUID.uuid4()
     client = task_queue.client
 
@@ -65,7 +69,7 @@ defmodule Temporal.Worker do
           identity_override: nil,
           workflow_task_poller_behavior: {:simple_maximum, [simple_maximum: 5]},
           activity_task_poller_behavior: {:simple_maximum, [simple_maximum: 5]}
-        ] ++ opts
+        ] ++ core_opts
       )
 
     with {:ok, core_runtime} <- Client.core_runtime(client),
@@ -81,7 +85,7 @@ defmodule Temporal.Worker do
              worker_id,
              core_runtime,
              core_client,
-             worker_opts,
+             extra_opts ++ [config: worker_opts],
              [name: reg_name]
            }}
         )

@@ -1,11 +1,12 @@
 defmodule Temporal.CoreSdk.Data.WorkflowActivationCompletion do
-  defstruct successful: nil,
-            failed: nil
+  defstruct [:run_id, :status]
 
   alias Temporal.CoreSdk.Data
 
   @type t :: %__MODULE__{
-          successful: Data.WorkflowActivationCompletionSuccessStatus.t() | nil,
-          failed: Data.WorkflowActivationCompletionFailureStatus.t() | nil
+          run_id: String.t(),
+          status:
+            {:successful, Data.WorkflowActivationCompletionSuccessStatus.t()}
+            | {:failed, Data.WorkflowActivationCompletionFailureStatus.t()}
         }
 end

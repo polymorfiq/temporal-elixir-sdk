@@ -1,4 +1,4 @@
-use crate::core_workflows::SdkActivationExternalPayloadDetails;
+use crate::core_workflows::SdkExternalPayloadDetails;
 use rustler::{NifStruct, NifTaggedEnum};
 use std::collections::HashMap;
 use temporalio_sdk_common::protos::temporal::api as temporal_api;
@@ -76,7 +76,7 @@ impl Into<prost_wkt_types::Timestamp> for SdkTimestamp {
 pub struct SdkPayload {
     pub metadata: HashMap<String, Vec<u8>>,
     pub data: Vec<u8>,
-    pub external_payloads: Vec<SdkActivationExternalPayloadDetails>,
+    pub external_payloads: Vec<SdkExternalPayloadDetails>,
 }
 
 impl From<temporal_api::common::v1::Payload> for SdkPayload {
