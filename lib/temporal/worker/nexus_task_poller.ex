@@ -32,6 +32,9 @@ defmodule Temporal.Worker.NexusTaskPoller do
     with {{:ok, _}, state} <- poll_and_inform_worker(state) do
       {:noreply, state, {:continue, :poll_for_tasks}}
     else
+      {{:error, "core_shutdown"}, _} ->
+        {:stop, :shutdown, state}
+
       {{:error, error}, _} ->
         {:stop, {:poll_error, error}, state}
     end

@@ -22,10 +22,10 @@ defimpl Temporal.Workflows.WorkflowName, for: Atom do
 
   def server_recognized_name(name) do
     cond do
-      !is_module?(name) ->
-        to_string(name)
+      is_binary(name) ->
+        name
 
-      Kernel.function_exported?(name, :workflow_type, 0) ->
+      is_module?(name) && Kernel.function_exported?(name, :workflow_type, 0) ->
         name.workflow_type()
 
       true ->

@@ -22,11 +22,7 @@ use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
 use temporalio_sdk_common::worker::{
     WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes,
 };
-use temporalio_sdk_core::{
-    init_worker, CoreRuntime, PollerBehavior, ResourceBasedSlotsOptions, ResourceSlotOptions,
-    RuntimeOptions, SlotKind, SlotSupplierOptions, TokioRuntimeBuilder, TunerHolder,
-    TunerHolderOptions, WorkerConfig, WorkerVersioningStrategy, WorkflowErrorType,
-};
+use temporalio_sdk_core::{init_worker, CoreRuntime, PollError, PollerBehavior, ResourceBasedSlotsOptions, ResourceSlotOptions, RuntimeOptions, SlotKind, SlotSupplierOptions, TokioRuntimeBuilder, TunerHolder, TunerHolderOptions, WorkerConfig, WorkerVersioningStrategy, WorkflowErrorType};
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use tracing::{error, warn};
@@ -493,7 +489,8 @@ fn _worker_poll_activity_task(
                 let poll_result = core_worker.poll_activity_task().await;
                 let msg: Result<SdkActivityTask, String> = match poll_result {
                     Ok(activity_task) => Ok(activity_task.into()),
-                    Err(error) => Err(format!("Error polling workflows activation: {}", error)),
+                    Err(PollError::ShutDown) => Err(String::from("core_shutdown")),
+                    Err(error) => Err(format!("Error polling activity tasks: {}", error)),
                 };
 
                 let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
@@ -524,7 +521,8 @@ fn _worker_poll_nexus_task(
                 let poll_result = core_worker.poll_nexus_task().await;
                 let msg: Result<SdkNexusTask, String> = match poll_result {
                     Ok(task) => Ok(task.into()),
-                    Err(error) => Err(format!("Error polling workflows activation: {}", error)),
+                    Err(PollError::ShutDown) => Err(String::from("core_shutdown")),
+                    Err(error) => Err(format!("Error polling nexus tasks: {}", error)),
                 };
 
                 let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
@@ -623,7 +621,8 @@ fn _worker_poll_workflow_activation(
                 let poll_result = core_worker.poll_workflow_activation().await;
                 let msg: Result<SdkWorkflowActivation, String> = match poll_result {
                     Ok(activation) => Ok(activation.into()),
-                    Err(error) => Err(format!("Error polling workflows activation: {}", error)),
+                    Err(PollError::ShutDown) => Err(String::from("core_shutdown")),
+                    Err(error) => Err(format!("Error polling workflow activations: {}", error)),
                 };
 
                 let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);

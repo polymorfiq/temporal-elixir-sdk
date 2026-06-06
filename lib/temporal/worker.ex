@@ -7,11 +7,14 @@ defmodule Temporal.Worker do
   alias Temporal.Supervisor.ClientSupervisor
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.WorkerRegistry
+  alias Temporal.Workflows.WorkflowName
+  alias Temporal.Worker.WorkerWorkflowManager
 
   @type t :: %__MODULE__{id: String.t(), task_queue: TaskQueue.t()}
   @type worker_opts :: WorkerOpts.opts() | extra_opts()
   @type extra_opts :: [{:forward_polled_messages, pid()}]
   @type task_queue :: String.t()
+  @type register_workflow_opts :: [{:name, WorkflowName.t()}]
 
   @spec new(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}
   def new(task_queue, opts \\ []) do
@@ -85,6 +88,30 @@ defmodule Temporal.Worker do
 
       with {:ok, _} <- child_started do
         {:ok, %__MODULE__{id: worker_id, task_queue: task_queue}}
+      end
+    end
+  end
+
+  @spec register_workflow(t(), WorkflowName.t(), register_workflow_opts()) ::
+          :ok | {:error, term()}
+  def register_workflow(worker, workflow_mod, opts \\ []) do
+    workflow_name =
+      Keyword.get_lazy(opts, :name, fn ->
+        WorkflowName.server_recognized_name(workflow_mod)
+      end)
+
+    with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id) do
+      arities_resp = WorkflowName.execution_arities(workflow_mod)
+
+      cond do
+        match?({:error, :unknown}, arities_resp) ->
+          {:error, "#{inspect(workflow_mod)} is not a module..."}
+
+        match?({:ok, []}, arities_resp) ->
+          {:error, "#{inspect(workflow_mod)} does not implement execute/* function..."}
+
+        true ->
+          WorkerWorkflowManager.register(manager_pid, workflow_name, workflow_mod)
       end
     end
   end

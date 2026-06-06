@@ -7,8 +7,8 @@ defmodule Temporal.CoreSdk.CoreWorker do
   alias Temporal.CoreSdk.CoreClient
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
-  alias Temporal.CoreSdk.Data.WorkflowFailure
-  alias Temporal.CoreSdk.Data.WorkflowActivationCompletionFailureStatus
+  alias Temporal.Supervisor.WorkerSupervisor
+  alias Temporal.Worker.WorkerWorkflowManager
 
   require Record
   require Logger
@@ -142,21 +142,16 @@ defmodule Temporal.CoreSdk.CoreWorker do
   end
 
   @impl true
-  def handle_call({:process_workflow_activation, _activation} = msg, _from, state) do
-    if forward_to = server_state(state, :forward_polled_pid) do
-      send(forward_to, msg)
-    end
+  def handle_call({:process_workflow_activation, activation}, _from, state) do
+    forward_to = server_state(state, :forward_polled_pid)
 
-    {:reply,
-     {:ok,
-      %WorkflowActivationCompletionFailureStatus{
-        force_cause: 0,
-        failure: %WorkflowFailure{
-          message: "Failed!",
-          source: "catch-all",
-          stack_trace: inspect(Process.info(self(), :current_stacktrace))
-        }
-      }}, state}
+    state =
+      Enum.reduce(activation.jobs, state, fn job, curr_state ->
+        if forward_to, do: send(forward_to, {:workflow_activation_job, job.variant})
+        process_activation_job(job.variant, curr_state)
+      end)
+
+    {:reply, :ok, state}
   end
 
   @impl true
@@ -188,6 +183,14 @@ defmodule Temporal.CoreSdk.CoreWorker do
   @impl true
   def handle_info({:DOWN, _ref, :process, _pid, :normal}, state),
     do: {:noreply, state}
+
+  defp process_activation_job(job, state) do
+    worker_id = server_state(state, :id)
+    workflow_manager_pid = WorkerSupervisor.workflow_manager_pid(worker_id)
+    WorkerWorkflowManager.process_activation_job(workflow_manager_pid, job)
+
+    state
+  end
 
   @impl true
   def terminate(_reason, state) do
