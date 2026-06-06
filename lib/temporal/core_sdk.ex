@@ -95,4 +95,22 @@ defmodule Temporal.CoreSdk do
           {:ok, bool()} | {:error, term()}
   def _workflow_handle_get_result(_runtime, _workflow_handle, _opts, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _worker_initiate_shutdown(
+          worker :: term(),
+          resp_pid :: pid()
+        ) ::
+          {:ok, bool()} | {:error, term()}
+  def _worker_initiate_shutdown(_worker, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _worker_finalize_shutdown(
+          worker :: term(),
+          resp_pid :: pid()
+        ) ::
+          {:ok, bool()} | {:error, term()}
+  def _worker_finalize_shutdown(_worker, _resp_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
 end

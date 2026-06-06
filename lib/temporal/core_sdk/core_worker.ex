@@ -6,14 +6,12 @@ defmodule Temporal.CoreSdk.CoreWorker do
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.CoreClient
   alias Temporal.CoreSdk.Data.WorkerOpts
-  alias CoreSdk.Data.WorkflowActivation
-  alias CoreSdk.Data.ActivityTask
-  alias CoreSdk.Data.NexusTask
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkflowFailure
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletionFailureStatus
 
   require Record
+  require Logger
 
   Record.defrecordp(:server_state, [
     :id,
@@ -45,6 +43,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
   @spec init({worker_id(), CoreRuntime.t(), CoreClient.t(), WorkerOpts.t(), worker_opts()}) ::
           {:ok, t()} | {:error, term()}
   def init({worker_id, runtime, client, config, opts}) do
+    Process.flag(:trap_exit, true)
     parent = self()
 
     {pid, ref} =
@@ -104,8 +103,8 @@ defmodule Temporal.CoreSdk.CoreWorker do
         end
 
         receive do
-          {:ok, task} ->
-            send(parent, {self(), {:ok, task}})
+          {:ok, resp} ->
+            send(parent, {self(), {:ok, resp}})
 
           {:error, err} ->
             send(parent, {self(), {:error, err}})
@@ -124,116 +123,6 @@ defmodule Temporal.CoreSdk.CoreWorker do
     case validate_resp do
       {:ok, true} -> :ok
       {:error, err} -> {:error, "Validation error: #{inspect(err)}"}
-    end
-  end
-
-  @spec poll_workflow_activations(t(), CoreRuntime.t()) ::
-          {:ok, WorkflowActivation.t() | nil} | {:error, term()}
-  def poll_workflow_activations(worker, runtime) do
-    parent = self()
-
-    {pid, ref} =
-      spawn_monitor(fn ->
-        CoreSdk._worker_poll_workflow_activation(runtime.core, worker.worker, self())
-        |> case do
-          {:ok, _} -> :ok
-          {:error, err} -> raise "Could poll activations from Core SDK: #{inspect(err)}"
-        end
-
-        receive do
-          {:ok, activation} ->
-            send(parent, {self(), {:ok, activation}})
-
-          {:error, err} ->
-            send(parent, {self(), {:error, err}})
-        end
-      end)
-
-    activations_resp =
-      receive do
-        {^pid, response} ->
-          response
-
-        {:DOWN, ^ref, :process, ^pid, reason} ->
-          {:error, reason}
-      end
-
-    case activations_resp do
-      {:ok, activation} -> {:ok, activation}
-      {:error, err} -> {:error, "Workflow activation poll error: #{inspect(err)}"}
-    end
-  end
-
-  @spec poll_activity_tasks(t(), CoreRuntime.t()) ::
-          {:ok, ActivityTask.t() | nil} | {:error, term()}
-  def poll_activity_tasks(worker, runtime) do
-    parent = self()
-
-    {pid, ref} =
-      spawn_monitor(fn ->
-        CoreSdk._worker_poll_activity_task(runtime.core, worker.worker, self())
-        |> case do
-          {:ok, _} -> :ok
-          {:error, err} -> raise "Could not poll activity tasks from Core SDK: #{inspect(err)}"
-        end
-
-        receive do
-          {:ok, task} ->
-            send(parent, {self(), {:ok, task}})
-
-          {:error, err} ->
-            send(parent, {self(), {:error, err}})
-        end
-      end)
-
-    task_resp =
-      receive do
-        {^pid, response} ->
-          response
-
-        {:DOWN, ^ref, :process, ^pid, reason} ->
-          {:error, reason}
-      end
-
-    case task_resp do
-      {:ok, task} -> {:ok, task}
-      {:error, err} -> {:error, "Activity task poll error: #{inspect(err)}"}
-    end
-  end
-
-  @spec poll_nexus_tasks(t(), CoreRuntime.t()) :: {:ok, NexusTask.t() | nil} | {:error, term()}
-  def poll_nexus_tasks(worker, runtime) do
-    parent = self()
-
-    {pid, ref} =
-      spawn_monitor(fn ->
-        CoreSdk._worker_poll_nexus_task(runtime.core, worker.worker, self())
-        |> case do
-          {:ok, _} -> :ok
-          {:error, err} -> raise "Could not poll nexus tasks from Core SDK: #{inspect(err)}"
-        end
-
-        receive do
-          {:ok, task} ->
-            send(parent, {self(), {:ok, task}})
-
-          {:error, err} ->
-            send(parent, {self(), {:error, err}})
-        end
-      end)
-
-    task_resp =
-      receive do
-        {^pid, response} ->
-          response
-
-        {:DOWN, ^ref, :process, ^pid, reason} ->
-          {:error, reason}
-      end
-
-    case task_resp do
-      {:ok, task} -> {:ok, task}
-      {:error, err} -> {:error, "Nexus task poll error: #{inspect(err)}"}
     end
   end
 
@@ -299,4 +188,90 @@ defmodule Temporal.CoreSdk.CoreWorker do
   @impl true
   def handle_info({:DOWN, _ref, :process, _pid, :normal}, state),
     do: {:noreply, state}
+
+  @impl true
+  def terminate(_reason, state) do
+    Logger.debug("Worker (#{friendly_name(state)}) terminating...")
+
+    with :ok <- initiate_shutdown(state),
+         :ok <- finalize_shutdown(state) do
+      :shutdown
+    end
+  end
+
+  defp initiate_shutdown(state) do
+    worker_core = server_state(state, :core)
+
+    parent = self()
+
+    child =
+      spawn_link(fn ->
+        case CoreSdk._worker_initiate_shutdown(worker_core, self()) do
+          :ok ->
+            receive do
+              {:ok, success} ->
+                Logger.debug("Worker (#{friendly_name(state)}) shutdown initiated.")
+                send(parent, {self(), {:ok, success}})
+
+              {:error, error} ->
+                Logger.debug(
+                  "Worker (#{friendly_name(state)}) shutdown initiation errored (#{inspect(error)})."
+                )
+
+                send(parent, {self(), {:error, error}})
+            end
+
+          resp ->
+            send(parent, {self(), {:error, "Error initiating shutdown: #{inspect(resp)}"}})
+        end
+      end)
+
+    receive do
+      {^child, {:ok, _}} ->
+        :ok
+
+      {^child, {:error, err}} ->
+        {:error, err}
+    end
+  end
+
+  defp finalize_shutdown(state) do
+    worker_core = server_state(state, :core)
+
+    parent = self()
+
+    child =
+      spawn_link(fn ->
+        Logger.debug("Worker (#{friendly_name(state)}) finalizing shutdown...")
+
+        case CoreSdk._worker_finalize_shutdown(worker_core, self()) do
+          :ok ->
+            receive do
+              {:ok, success} ->
+                Logger.debug("Worker (#{friendly_name(state)}) shutdown finalized.")
+                send(parent, {self(), {:ok, success}})
+
+              {:error, error} ->
+                Logger.debug(
+                  "Worker (#{friendly_name(state)}) shutdown finalization errored (#{inspect(error)})."
+                )
+
+                send(parent, {self(), {:error, error}})
+            end
+
+          resp ->
+            send(parent, {self(), {:error, "Error finalizing shutdown: #{inspect(resp)}"}})
+        end
+      end)
+
+    receive do
+      {^child, {:ok, _}} ->
+        :ok
+
+      {^child, {:error, err}} ->
+        {:error, err}
+    end
+  end
+
+  defp friendly_name(state), do: server_state(state, :id)
 end

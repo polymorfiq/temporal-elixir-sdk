@@ -22,7 +22,8 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
   def init({worker_id, runtime_core, client_core, opts}) do
     children = [
       {CoreWorker,
-       {worker_id, runtime_core, client_core, opts, [name: via_registry({:core, worker_id})]}},
+       {worker_id, runtime_core, client_core, opts,
+        [name: via_registry({:core, worker_id}), shutdown: 10_000]}},
       {WorkflowActivationPoller,
        {worker_id, [name: via_registry({:workflow_activation_poller, worker_id})]}},
       {ActivityTaskPoller, {worker_id, [name: via_registry({:activity_task_poller, worker_id})]}},

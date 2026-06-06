@@ -65,7 +65,7 @@ defmodule Temporal.TaskQueue do
             )
           end
           |> case do
-            {:ok, _} -> :ok
+            :ok -> :ok
             {:error, err} -> raise "Could not start workflow via Core SDK: #{inspect(err)}"
           end
 

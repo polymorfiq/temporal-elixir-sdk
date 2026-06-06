@@ -1,10 +1,10 @@
 use rustler::{NifStruct, Resource};
-use std::sync::Mutex;
+use std::sync::{Arc, RwLock};
 use temporalio_sdk_core::CoreRuntime;
 
 pub struct ElixirRuntime {
     #[allow(dead_code)]
-    pub core: Mutex<CoreRuntime>,
+    pub core: RwLock<Arc<CoreRuntime>>,
 }
 
 #[rustler::resource_impl]

@@ -3,9 +3,7 @@ defmodule Temporal.Worker do
 
   alias Temporal.Client
   alias Temporal.TaskQueue
-  alias Temporal.CoreSdk.CoreWorker
   alias Temporal.CoreSdk.Data.WorkerOpts
-  alias Temporal.CoreSdk.Data.WorkflowActivation
   alias Temporal.Supervisor.ClientSupervisor
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.WorkerRegistry
@@ -18,11 +16,6 @@ defmodule Temporal.Worker do
   @spec new(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}
   def new(task_queue, opts \\ []) do
     initialize_worker(task_queue, opts)
-  end
-
-  @spec poll_workflow_activations(t()) :: {:ok, WorkflowActivation.t()} | {:error, term()}
-  def poll_workflow_activations(worker) do
-    CoreWorker.poll_workflow_activations(worker.core, worker.runtime)
   end
 
   @spec initialize_worker(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}

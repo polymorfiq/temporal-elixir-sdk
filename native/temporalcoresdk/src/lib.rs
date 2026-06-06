@@ -8,9 +8,10 @@ use crate::core_workflows::{
     SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowGetResultOptions,
     SdkWorkflowStartOptions,
 };
-use rustler::{Env, LocalPid, OwnedEnv, ResourceArc};
+use rustler::{Atom, LocalPid, NifResult, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::ops::Deref;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use temporalio_sdk_client::{
     Client, ClientKeepAliveOptions, ClientOptions, ClientTlsOptions, Connection, ConnectionOptions,
@@ -45,7 +46,7 @@ mod atoms {
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn _create_runtime(
     opts: Option<crate::core_runtime::SdkRuntimeOpts>,
 ) -> Result<ResourceArc<ElixirRuntime>, String> {
@@ -70,7 +71,7 @@ fn _create_runtime(
     match core {
         Ok(new_core) => {
             let runtime = ElixirRuntime {
-                core: std::sync::Mutex::new(new_core),
+                core: RwLock::new(Arc::new(new_core)),
             };
 
             Ok(ResourceArc::new(runtime))
@@ -79,7 +80,7 @@ fn _create_runtime(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _create_client(
     runtime: ResourceArc<ElixirRuntime>,
     options: crate::core_client::SdkClientOpts,
@@ -104,7 +105,6 @@ fn _create_client(
     };
 
     let has_http_connect_settings = options.http_connect_proxy.is_some();
-    let core_runtime = runtime.core.lock().unwrap();
     let opts = ConnectionOptions::new(host_url)
         .client_name(options.client_name)
         .client_version(options.client_version)
@@ -179,34 +179,31 @@ fn _create_client(
         } else {
             None
         })
-        .maybe_metrics_meter(core_runtime.telemetry().get_temporal_metric_meter())
         .build();
 
-    core_runtime.tokio_handle().spawn(async move {
+    let handle = runtime.core.read().unwrap().tokio_handle();
+    handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match Connection::connect(opts).await {
             Ok(conn) => {
                 let client =
                     Client::new(conn, ClientOptions::new(options.namespace).build()).unwrap();
 
+                let resp: Result<ResourceArc<ElixirClient>, String> =
+                    Ok(ResourceArc::new(ElixirClient { client }));
+
                 owned_env
-                    .send_and_clear(&resp_pid, |_curr_env| {
-                        let resp: Result<ResourceArc<ElixirClient>, String> =
-                            Ok(ResourceArc::new(ElixirClient { client }));
-                        resp
-                    })
+                    .send_and_clear(&resp_pid, |_env| resp)
                     .unwrap_or_else(|err| {
                         error!("Error sending client response message: {:?}", err)
                     });
             }
 
             Err(err) => {
+                let resp: Result<ResourceArc<ElixirClient>, String> =
+                    Err(format!("Error creating Elixir client: {}", err));
                 owned_env
-                    .send_and_clear(&resp_pid, |_curr_env| {
-                        let resp: Result<ResourceArc<ElixirClient>, String> =
-                            Err(format!("Error creating Elixir client: {}", err));
-                        resp
-                    })
+                    .send_and_clear(&resp_pid, |_env| resp)
                     .unwrap_or_else(|err| {
                         error!("Error sending client response message: {:?}", err)
                     });
@@ -217,7 +214,7 @@ fn _create_client(
     Ok(true)
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyCpu")]
 fn _create_worker(
     runtime: ResourceArc<ElixirRuntime>,
     client: ResourceArc<ElixirClient>,
@@ -331,31 +328,28 @@ fn _create_worker(
 
     match config {
         Ok(config) => {
-            let handle = runtime.core.lock().unwrap().tokio_handle();
+            let core_runtime = runtime.core.read().unwrap().clone();
+            let handle = core_runtime.tokio_handle();
             handle.spawn(async move {
-                let initialized = match runtime.core.lock() {
-                    Ok(core) => init_worker(&core, config, client.client.connection().clone()),
-
-                    Err(err) => {
-                        return Err(format!("Error getting runtime handle: {}", err));
-                    }
-                };
+                let initialized = init_worker(
+                    core_runtime.as_ref(),
+                    config,
+                    client.client.connection().clone(),
+                );
 
                 let resp = match initialized {
                     Ok(worker) => Ok(ResourceArc::new(ElixirWorker {
-                        worker: Mutex::new(worker),
+                        worker: Some(worker),
                     })),
                     Err(err) => Err(format!("Error creating worker.ex: {}", err)),
                 };
 
                 let mut owned_env = OwnedEnv::new();
                 owned_env
-                    .send_and_clear(&resp_pid, |_curr_env| resp)
+                    .send_and_clear(&resp_pid, |_env| resp)
                     .unwrap_or_else(|err| {
                         error!("Error sending worker.ex response message: {:?}", err)
                     });
-
-                Ok(true)
             });
 
             Ok(true)
@@ -456,70 +450,95 @@ fn build_tuner_resource_options<SK: SlotKind>(
 
 #[rustler::nif]
 fn _validate_worker(
-    env: Env,
-    _runtime: ResourceArc<ElixirRuntime>,
+    runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
 ) -> Result<bool, String> {
-    let rt = Runtime::new().unwrap();
+    let handle = runtime.core.read().unwrap().tokio_handle();
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        match worker.worker.as_ref() {
+            Some(core_worker) => {
+                let validate_resp = core_worker.validate().await;
+                let msg = match validate_resp {
+                    Ok(_) => Ok(true),
+                    Err(err) => Err(format!("Error validating worker.ex: {}", err)),
+                };
 
-    rt.block_on(async {
-        let core_worker = worker.worker.lock().await;
-        let validate_resp = core_worker.validate().await;
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
 
-        let resp = match validate_resp {
-            Ok(_) => Ok(true),
-            Err(err) => Err(format!("Error validating worker.ex: {}", err)),
-        };
-
-        let _ = env.send(&resp_pid, resp);
+            None => {
+                let msg: Result<bool, String> =
+                    Err(String::from("Core Worker instance unavailable..."));
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+        }
     });
 
     Ok(true)
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _worker_poll_activity_task(
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
-    let handle = runtime.core.lock().unwrap().tokio_handle();
+) -> NifResult<Atom> {
+    let handle = runtime.core.read().unwrap().tokio_handle();
     handle.spawn(async move {
-        let poll_result = worker.worker.lock().await.poll_activity_task().await;
-
-        let msg: Result<SdkActivityTask, String> = match poll_result {
-            Ok(activity_task) => Ok(activity_task.into()),
-            Err(error) => Err(format!("Error polling workflows activation: {}", error)),
-        };
-
         let mut owned_env = OwnedEnv::new();
-        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+        match worker.worker.as_ref() {
+            Some(core_worker) => {
+                let poll_result = core_worker.poll_activity_task().await;
+                let msg: Result<SdkActivityTask, String> = match poll_result {
+                    Ok(activity_task) => Ok(activity_task.into()),
+                    Err(error) => Err(format!("Error polling workflows activation: {}", error)),
+                };
+
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+
+            None => {
+                let msg: Result<bool, String> =
+                    Err(String::from("Core Worker instance unavailable..."));
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+        }
     });
 
-    Ok(true)
+    Ok(atoms::ok())
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _worker_poll_nexus_task(
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
-    let handle = runtime.core.lock().unwrap().tokio_handle();
+) -> NifResult<Atom> {
+    let handle = runtime.core.read().unwrap().tokio_handle();
     handle.spawn(async move {
-        let poll_result = worker.worker.lock().await.poll_nexus_task().await;
-
-        let msg: Result<SdkNexusTask, String> = match poll_result {
-            Ok(task) => Ok(task.into()),
-            Err(error) => Err(format!("Error polling workflows activation: {}", error)),
-        };
-
         let mut owned_env = OwnedEnv::new();
-        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+        match worker.worker.as_ref() {
+            Some(core_worker) => {
+                let poll_result = core_worker.poll_nexus_task().await;
+                let msg: Result<SdkNexusTask, String> = match poll_result {
+                    Ok(task) => Ok(task.into()),
+                    Err(error) => Err(format!("Error polling workflows activation: {}", error)),
+                };
+
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+
+            None => {
+                let msg: Result<bool, String> =
+                    Err(String::from("Core Worker instance unavailable..."));
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+        }
     });
 
-    Ok(true)
+    Ok(atoms::ok())
 }
 
 #[rustler::nif]
@@ -528,26 +547,33 @@ fn _worker_complete_workflow_activation(
     worker: ResourceArc<ElixirWorker>,
     completion: SdkWorkflowActivationCompletion,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
-    let handle = runtime.core.lock().unwrap().tokio_handle();
+) -> NifResult<Atom> {
+    let handle = runtime.core.read().unwrap().tokio_handle();
     handle.spawn(async move {
-        let completion_result = worker
-            .worker
-            .lock()
-            .await
-            .complete_workflow_activation(completion.into())
-            .await;
-
-        let msg: Result<bool, String> = match completion_result {
-            Ok(()) => Ok(true),
-            Err(error) => Err(format!("Error completing workflows activation: {}", error)),
-        };
-
         let mut owned_env = OwnedEnv::new();
-        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+        match worker.worker.as_ref() {
+            Some(core_worker) => {
+                let completion_result = core_worker
+                    .complete_workflow_activation(completion.into())
+                    .await;
+
+                let msg: Result<bool, String> = match completion_result {
+                    Ok(()) => Ok(true),
+                    Err(error) => Err(format!("Error completing workflows activation: {}", error)),
+                };
+
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+
+            None => {
+                let msg: Result<bool, String> =
+                    Err(String::from("Core Worker instance unavailable..."));
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+        }
     });
 
-    Ok(true)
+    Ok(atoms::ok())
 }
 
 #[rustler::nif]
@@ -556,26 +582,31 @@ fn _worker_complete_activity_task(
     worker: ResourceArc<ElixirWorker>,
     completion: SdkActivityTaskCompletion,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
-    let handle = runtime.core.lock().unwrap().tokio_handle();
+) -> NifResult<Atom> {
+    let handle = runtime.core.read().unwrap().tokio_handle();
     handle.spawn(async move {
-        let completion_result = worker
-            .worker
-            .lock()
-            .await
-            .complete_activity_task(completion.into())
-            .await;
-
-        let msg: Result<bool, String> = match completion_result {
-            Ok(()) => Ok(true),
-            Err(error) => Err(format!("Error completing workflows activation: {}", error)),
-        };
-
         let mut owned_env = OwnedEnv::new();
-        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+        match worker.worker.as_ref() {
+            Some(core_worker) => {
+                let completion_result = core_worker.complete_activity_task(completion.into()).await;
+
+                let msg: Result<bool, String> = match completion_result {
+                    Ok(()) => Ok(true),
+                    Err(error) => Err(format!("Error completing workflows activation: {}", error)),
+                };
+
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+
+            None => {
+                let msg: Result<bool, String> =
+                    Err(String::from("Core Worker instance unavailable..."));
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+        }
     });
 
-    Ok(true)
+    Ok(atoms::ok())
 }
 
 #[rustler::nif]
@@ -583,21 +614,87 @@ fn _worker_poll_workflow_activation(
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
-    let handle = runtime.core.lock().unwrap().tokio_handle();
+) -> NifResult<Atom> {
+    let handle = runtime.core.read().unwrap().tokio_handle();
     handle.spawn(async move {
-        let poll_result = worker.worker.lock().await.poll_workflow_activation().await;
-
-        let msg: Result<SdkWorkflowActivation, String> = match poll_result {
-            Ok(activation) => Ok(activation.into()),
-            Err(error) => Err(format!("Error polling workflows activation: {}", error)),
-        };
-
         let mut owned_env = OwnedEnv::new();
-        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+        match worker.worker.as_ref() {
+            Some(core_worker) => {
+                let poll_result = core_worker.poll_workflow_activation().await;
+                let msg: Result<SdkWorkflowActivation, String> = match poll_result {
+                    Ok(activation) => Ok(activation.into()),
+                    Err(error) => Err(format!("Error polling workflows activation: {}", error)),
+                };
+
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+
+            None => {
+                let msg: Result<bool, String> =
+                    Err(String::from("Core Worker instance unavailable..."));
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+        }
     });
 
-    Ok(true)
+    Ok(atoms::ok())
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+fn _worker_initiate_shutdown(
+    worker: ResourceArc<ElixirWorker>,
+    resp_pid: LocalPid,
+) -> NifResult<Atom> {
+    let rt = Runtime::new().unwrap();
+    let _ = rt.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        match worker.worker.as_ref() {
+            Some(core_worker) => {
+                core_worker.initiate_shutdown();
+
+                let msg: Result<bool, String> = Ok(true);
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+
+            None => {
+                let msg: Result<bool, String> =
+                    Err(String::from("Core Worker instance unavailable..."));
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+        }
+    });
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+fn _worker_finalize_shutdown(
+    worker: ResourceArc<ElixirWorker>,
+    resp_pid: LocalPid,
+) -> NifResult<Atom> {
+    let worker_mut = worker.deref() as *const ElixirWorker as *mut ElixirWorker;
+    let stolen_core = unsafe { (*worker_mut).worker.take() };
+
+    let rt = Runtime::new().unwrap();
+    let _ = rt.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        match stolen_core {
+            Some(core_worker) => {
+                core_worker.finalize_shutdown().await;
+
+                let msg: Atom = atoms::ok();
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+
+            None => {
+                let msg: Result<bool, String> =
+                    Err(String::from("Core Worker instance unavailable..."));
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+            }
+        }
+    });
+
+    Ok(atoms::ok())
 }
 
 #[rustler::nif]
@@ -608,10 +705,10 @@ fn _client_start_workflow(
     input: SdkWorkflowArguments,
     options: SdkWorkflowStartOptions,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
-    let handle = runtime.core.lock().unwrap().tokio_handle();
+) -> NifResult<Atom> {
+    let handle = runtime.core.read().unwrap().tokio_handle();
     handle.spawn(async move {
-        // let poll_result = worker.worker.lock().await.poll_workflow_activation().await;
+        let mut owned_env = OwnedEnv::new();
         let started = client
             .client
             .start_workflow(workflow, input, options.into())
@@ -624,22 +721,22 @@ fn _client_start_workflow(
             Err(error) => Err(format!("Error starting workflow - {}", error)),
         };
 
-        let mut owned_env = OwnedEnv::new();
-        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
     });
 
-    Ok(true)
+    Ok(atoms::ok())
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _workflow_handle_get_result(
     runtime: ResourceArc<ElixirRuntime>,
     workflow_handle: ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>,
     options: SdkWorkflowGetResultOptions,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
-    let handle = runtime.core.lock().unwrap().tokio_handle();
-    handle.spawn(async move {
+) -> NifResult<Atom> {
+    let handle = runtime.core.read().unwrap().tokio_handle();
+    handle.block_on(async move {
+        let mut owned_env = OwnedEnv::new();
         let result = workflow_handle
             .handle
             .lock()
@@ -652,11 +749,10 @@ fn _workflow_handle_get_result(
             Err(error) => Err(format!("Error getting workflow results: {}", error)),
         };
 
-        let mut owned_env = OwnedEnv::new();
-        let _ = owned_env.send_and_clear(&resp_pid, |_curr_env| msg);
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
     });
 
-    Ok(true)
+    Ok(atoms::ok())
 }
 
 rustler::init!("Elixir.Temporal.CoreSdk");

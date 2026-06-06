@@ -33,3 +33,5 @@ temporal-*.tar
 .idea
 /projectFilesBackup
 *.iml
+
+config/dev.exs

@@ -32,7 +32,7 @@ defmodule Temporal.Worker.NexusTaskPoller do
     with {{:ok, _}, state} <- poll_and_inform_worker(state) do
       {:noreply, state, {:continue, :poll_for_tasks}}
     else
-      {{:err, error}, _} ->
+      {{:error, error}, _} ->
         {:stop, {:poll_error, error}, state}
     end
   end
@@ -46,15 +46,18 @@ defmodule Temporal.Worker.NexusTaskPoller do
 
     child =
       spawn_link(fn ->
-        CoreSdk._worker_poll_nexus_task(runtime_core.core, worker_core.core, self())
+        case CoreSdk._worker_poll_nexus_task(runtime_core.core, worker_core.core, self()) do
+          :ok ->
+            receive do
+              {:ok, task} ->
+                send(parent, {self(), {:ok, task}})
 
-        receive do
-          {:ok, task} ->
-            send(parent, {self(), {:ok, task}})
+              {:error, error} ->
+                send(parent, {self(), {:error, error}})
+            end
 
-          {:err, error} ->
-            send(parent, {self(), {:err, error}})
-            {:stop, {:poll_error, error}, state}
+          resp ->
+            send(parent, {self(), {:error, "Error polling nexus tasks: #{inspect(resp)}"}})
         end
       end)
 

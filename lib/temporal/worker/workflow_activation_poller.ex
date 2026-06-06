@@ -9,6 +9,7 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletionSuccessStatus
   alias Temporal.CoreSdk.Data.WorkflowFailure
 
+  require Logger
   require Record
   Record.defrecordp(:poll_state, [:worker_id, :worker_pid, :core_worker, :core_runtime])
 
@@ -36,7 +37,7 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     with {{:ok, _}, state} <- poll_and_inform_worker(state) do
       {:noreply, state, {:continue, :poll_for_activations}}
     else
-      {{:err, error}, _} ->
+      {{:error, error}, _} ->
         {:stop, {:poll_error, error}, state}
     end
   end
@@ -50,16 +51,21 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
 
     child =
       spawn_link(fn ->
-        {:ok, _} =
-          CoreSdk._worker_poll_workflow_activation(runtime_core.core, worker_core.core, self())
+        case CoreSdk._worker_poll_workflow_activation(runtime_core.core, worker_core.core, self()) do
+          :ok ->
+            receive do
+              {:ok, activation} ->
+                send(parent, {self(), {:ok, activation}})
 
-        receive do
-          {:ok, activation} ->
-            send(parent, {self(), {:ok, activation}})
+              {:error, error} ->
+                send(parent, {self(), {:error, error}})
+            end
 
-          {:err, error} ->
-            send(parent, {self(), {:err, error}})
-            {:stop, {:poll_error, error}, state}
+          resp ->
+            send(
+              parent,
+              {self(), {:error, "Error polling workflow activations: #{inspect(resp)}"}}
+            )
         end
       end)
 
@@ -112,20 +118,24 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
 
     child =
       spawn_link(fn ->
-        {:ok, _} =
-          CoreSdk._worker_complete_workflow_activation(
-            runtime_core.core,
-            worker_core.core,
-            resp_msg,
-            self()
-          )
+        CoreSdk._worker_complete_workflow_activation(
+          runtime_core.core,
+          worker_core.core,
+          resp_msg,
+          self()
+        )
+        |> case do
+          :ok ->
+            receive do
+              {:ok, _} ->
+                send(parent, {self(), {:ok, true}})
 
-        receive do
-          {:ok, _} ->
-            send(parent, {self(), {:ok, true}})
+              {:error, error} ->
+                send(parent, {self(), {:error, error}})
+            end
 
-          {:err, error} ->
-            send(parent, {self(), {:err, error}})
+          resp ->
+            send(parent, {self(), {:error, "Error completing activation: #{inspect(resp)}"}})
         end
       end)
 

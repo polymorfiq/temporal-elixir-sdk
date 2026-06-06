@@ -1,11 +1,10 @@
 use rustler::{NifStruct, NifTaggedEnum, Resource};
 use temporalio_sdk_common::worker::{WorkerDeploymentOptions, WorkerDeploymentVersion};
 use temporalio_sdk_core::Worker;
-use tokio::sync::Mutex;
 
 pub struct ElixirWorker {
     #[allow(dead_code)]
-    pub worker: Mutex<Worker>,
+    pub worker: Option<Worker>,
 }
 
 #[rustler::resource_impl]
