@@ -96,7 +96,36 @@ defmodule Temporal.WorkflowTest do
       workflow_id = unique_name("completes-workflow")
       {:ok, _} = TaskQueue.start_workflow(queue, workflow_id, ShouldRunSuccessfully, ["World!"])
 
-      Process.sleep(1000)
+      raise "TODO"
+    end
+  end
+
+  describe "with activities" do
+    defmodule WorkflowWithActivities do
+      use Temporal.Workflow
+
+      alias Temporal.{Activity, Workflow}
+
+      def execute(ctx, msg) do
+        act1 = Workflow.execute_activity(ctx, &activity_1/2)
+        {:ok, resp} = Activity.get_response(ctx, act1)
+
+        {:ok, resp}
+      end
+
+      def activity_1(ctx, msg) do
+        {:ok, "Hello, #{msg}!"}
+      end
+    end
+
+    test "executes correct activity and gets response", %{client: client} do
+      queue = create_basic_queue(client, "activities_1")
+      {:ok, _} = Worker.new(queue, forward_polled_messages: self())
+
+      workflow_id = unique_name("workflow-with-activities")
+      {:ok, _} = TaskQueue.start_workflow(queue, workflow_id, WorkflowWithActivities, ["World!"])
+
+      raise "TODO"
     end
   end
 
