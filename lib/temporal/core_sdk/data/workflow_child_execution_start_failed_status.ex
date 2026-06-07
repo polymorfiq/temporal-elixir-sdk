@@ -1,5 +1,6 @@
 defmodule Temporal.CoreSdk.Data.WorkflowChildExecutionStartFailedStatus do
-  defstruct [:workflow_id, :workflow_type, :cause]
+  defstruct [:workflow_id, :workflow_type, cause: :unspecified]
 
-  @type t :: %__MODULE__{workflow_id: String.t(), workflow_type: String.t(), cause: integer()}
+  @type cause :: :unspecified | :workflow_already_exists
+  @type t :: %__MODULE__{workflow_id: String.t(), workflow_type: String.t(), cause: cause()}
 end

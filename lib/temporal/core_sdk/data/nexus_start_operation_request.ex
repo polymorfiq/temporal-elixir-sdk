@@ -8,7 +8,7 @@ defmodule Temporal.CoreSdk.Data.NexusStartOperationRequest do
           operation: String.t(),
           request_id: String.t(),
           callback: String.t(),
-          payload: Data.ActivationPayload.t() | nil,
+          payload: Data.Payload.t() | nil,
           callback_header: map(),
           links: [Data.NexusLink.t()]
         }

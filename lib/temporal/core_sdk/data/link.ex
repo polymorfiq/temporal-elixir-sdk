@@ -6,12 +6,12 @@ defmodule Temporal.CoreSdk.Data.Link do
   alias Temporal.CoreSdk.Data
 
   @type t :: %__MODULE__{
-          fields: %{String.t() => Data.ActivationPayload.t()}
+          fields: %{String.t() => Data.Payload.t()}
         }
 
   @type opts ::
-          [{:fields, %{String.t() => Data.ActivationPayload.opts()}}]
-          | %{String.t() => Data.ActivationPayload.t()}
+          [{:fields, %{String.t() => Data.Payload.opts()}}]
+          | %{String.t() => Data.Payload.t()}
 
   @spec with_opts!(opts()) :: t()
   def with_opts!(fields) when is_map(fields) do

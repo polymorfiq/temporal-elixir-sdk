@@ -4,7 +4,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowNexusOperationStatus do
   alias Temporal.CoreSdk.Data
 
   @type t :: %__MODULE__{
-          completed: Data.ActivationPayload.t() | nil,
+          completed: Data.Payload.t() | nil,
           failed: Data.WorkflowFailure.t() | nil,
           cancelled: Data.WorkflowFailure.t() | nil,
           timed_out: Data.WorkflowFailure.t() | nil

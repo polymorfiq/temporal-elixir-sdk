@@ -8,6 +8,6 @@ defmodule Temporal.CoreSdk.Data.WorkflowCanceledFailureInfo do
 
   @type t :: %__MODULE__{
           identity: String.t(),
-          details: Data.ActivationPayloads.t() | nil
+          details: Data.Payload.t() | nil
         }
 end

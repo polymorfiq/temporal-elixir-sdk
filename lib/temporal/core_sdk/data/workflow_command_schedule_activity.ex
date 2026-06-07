@@ -25,7 +25,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandScheduleActivity do
           activity_type: String.t(),
           task_queue: String.t(),
           headers: map(),
-          arguments: [Data.ActivationPayload.t()],
+          arguments: [Data.Payload.t()],
           schedule_to_close_timeout: Data.Duration.t() | nil,
           schedule_to_start_timeout: Data.Duration.t() | nil,
           start_to_close_timeout: Data.Duration.t() | nil,

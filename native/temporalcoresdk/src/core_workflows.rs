@@ -1068,7 +1068,7 @@ impl Into<workflow_activation::ResolveChildWorkflowExecutionStartSuccess>
 pub struct SdkWorkflowChildExecutionStartFailedStatus {
     pub workflow_id: String,
     pub workflow_type: String,
-    pub cause: i32,
+    pub cause: SdkStartChildWorkflowExecutionFailedCause,
 }
 
 impl From<workflow_activation::ResolveChildWorkflowExecutionStartFailure>
@@ -1078,7 +1078,7 @@ impl From<workflow_activation::ResolveChildWorkflowExecutionStartFailure>
         Self {
             workflow_id: external.workflow_id,
             workflow_type: external.workflow_type,
-            cause: external.cause,
+            cause: external.cause.into(),
         }
     }
 }
@@ -1090,7 +1090,33 @@ impl Into<workflow_activation::ResolveChildWorkflowExecutionStartFailure>
         workflow_activation::ResolveChildWorkflowExecutionStartFailure {
             workflow_id: self.workflow_id,
             workflow_type: self.workflow_type,
-            cause: self.cause,
+            cause: self.cause.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkStartChildWorkflowExecutionFailedCause {
+    Unspecified = 0,
+    WorkflowAlreadyExists = 1,
+}
+
+impl Into<i32> for SdkStartChildWorkflowExecutionFailedCause {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::WorkflowAlreadyExists => 1,
+        }
+    }
+}
+
+impl From<i32> for SdkStartChildWorkflowExecutionFailedCause {
+    fn from(intent: i32) -> SdkStartChildWorkflowExecutionFailedCause {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::WorkflowAlreadyExists,
+            _ => Self::Unspecified
         }
     }
 }
@@ -1523,7 +1549,7 @@ pub struct SdkWorkflowApplicationFailureInfo {
     pub non_retryable: bool,
     pub details: Option<SdkPayloads>,
     pub next_retry_delay: Option<SdkDuration>,
-    pub category: i32,
+    pub category: SdkApplicationErrorCategory,
 }
 
 impl From<temporal_api::failure::v1::ApplicationFailureInfo> for SdkWorkflowApplicationFailureInfo {
@@ -1533,7 +1559,7 @@ impl From<temporal_api::failure::v1::ApplicationFailureInfo> for SdkWorkflowAppl
             non_retryable: external.non_retryable,
             details: external.details.try_into_or_none(),
             next_retry_delay: external.next_retry_delay.try_into_or_none(),
-            category: external.category,
+            category: external.category.into(),
         }
     }
 }
@@ -1545,7 +1571,33 @@ impl Into<temporal_api::failure::v1::ApplicationFailureInfo> for SdkWorkflowAppl
             non_retryable: self.non_retryable,
             details: self.details.try_into_or_none(),
             next_retry_delay: self.next_retry_delay.try_into_or_none(),
-            category: self.category,
+            category: self.category.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkApplicationErrorCategory {
+    Unspecified = 0,
+    Benign = 1,
+}
+
+impl Into<i32> for SdkApplicationErrorCategory {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Benign => 1,
+        }
+    }
+}
+
+impl From<i32> for SdkApplicationErrorCategory {
+    fn from(intent: i32) -> SdkApplicationErrorCategory {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Benign,
+            _ => Self::Unspecified
         }
     }
 }
@@ -1553,14 +1605,14 @@ impl Into<temporal_api::failure::v1::ApplicationFailureInfo> for SdkWorkflowAppl
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowTimeoutFailureInfo"]
 pub struct SdkWorkflowTimeoutFailureInfo {
-    pub timeout_type: i32,
+    pub timeout_type: SdkTimeoutType,
     pub last_heartbeat_details: Option<SdkPayloads>,
 }
 
 impl From<temporal_api::failure::v1::TimeoutFailureInfo> for SdkWorkflowTimeoutFailureInfo {
     fn from(external: temporal_api::failure::v1::TimeoutFailureInfo) -> Self {
         Self {
-            timeout_type: external.timeout_type,
+            timeout_type: external.timeout_type.into(),
             last_heartbeat_details: external.last_heartbeat_details.try_into_or_none(),
         }
     }
@@ -1569,8 +1621,43 @@ impl From<temporal_api::failure::v1::TimeoutFailureInfo> for SdkWorkflowTimeoutF
 impl Into<temporal_api::failure::v1::TimeoutFailureInfo> for SdkWorkflowTimeoutFailureInfo {
     fn into(self) -> temporal_api::failure::v1::TimeoutFailureInfo {
         temporal_api::failure::v1::TimeoutFailureInfo {
-            timeout_type: self.timeout_type,
+            timeout_type: self.timeout_type.into(),
             last_heartbeat_details: self.last_heartbeat_details.try_into_or_none(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkTimeoutType {
+    Unspecified = 0,
+    StartToClose = 1,
+    ScheduleToStart = 2,
+    ScheduleToClose = 3,
+    Heartbeat = 4,
+}
+
+impl Into<i32> for SdkTimeoutType {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::StartToClose => 1,
+            Self::ScheduleToStart => 2,
+            Self::ScheduleToClose => 3,
+            Self::Heartbeat => 4,
+        }
+    }
+}
+
+impl From<i32> for SdkTimeoutType {
+    fn from(intent: i32) -> SdkTimeoutType {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::StartToClose,
+            2 => Self::ScheduleToStart,
+            3 => Self::ScheduleToClose,
+            4 => Self::Heartbeat,
+            _ => Self::Unspecified
         }
     }
 }
@@ -1674,7 +1761,7 @@ pub struct SdkWorkflowActivityFailureInfo {
     pub identity: String,
     pub activity_type: Option<SdkWorkflowActivityType>,
     pub activity_id: String,
-    pub retry_state: i32,
+    pub retry_state: SdkRetryState,
 }
 
 impl From<temporal_api::failure::v1::ActivityFailureInfo> for SdkWorkflowActivityFailureInfo {
@@ -1685,7 +1772,7 @@ impl From<temporal_api::failure::v1::ActivityFailureInfo> for SdkWorkflowActivit
             identity: external.identity,
             activity_type: external.activity_type.try_into_or_none(),
             activity_id: external.activity_id,
-            retry_state: external.retry_state,
+            retry_state: external.retry_state.into(),
         }
     }
 }
@@ -1698,7 +1785,51 @@ impl Into<temporal_api::failure::v1::ActivityFailureInfo> for SdkWorkflowActivit
             identity: self.identity,
             activity_type: self.activity_type.try_into_or_none(),
             activity_id: self.activity_id,
-            retry_state: self.retry_state,
+            retry_state: self.retry_state.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkRetryState {
+    Unspecified = 0,
+    InProgress = 1,
+    NonRetryableFailure = 2,
+    Timeout = 3,
+    MaximumAttemptsReached = 4,
+    RetryPolicyNotSet = 5,
+    InternalServerError = 6,
+    CancelRequested = 7,
+}
+
+impl Into<i32> for SdkRetryState {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::InProgress => 1,
+            Self::NonRetryableFailure => 2,
+            Self::Timeout => 3,
+            Self::MaximumAttemptsReached => 4,
+            Self::RetryPolicyNotSet => 5,
+            Self::InternalServerError => 6,
+            Self::CancelRequested => 7,
+        }
+    }
+}
+
+impl From<i32> for SdkRetryState {
+    fn from(intent: i32) -> SdkRetryState {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::InProgress,
+            2 => Self::NonRetryableFailure,
+            3 => Self::Timeout,
+            4 => Self::MaximumAttemptsReached,
+            5 => Self::RetryPolicyNotSet,
+            6 => Self::InternalServerError,
+            7 => Self::CancelRequested,
+            _ => Self::Unspecified
         }
     }
 }
@@ -1731,7 +1862,7 @@ pub struct SdkWorkflowChildExecutionFailureInfo {
     pub workflow_type: Option<SdkWorkflowType>,
     pub initiated_event_id: i64,
     pub started_event_id: i64,
-    pub retry_state: i32,
+    pub retry_state: SdkRetryState,
 }
 
 impl From<temporal_api::failure::v1::ChildWorkflowExecutionFailureInfo>
@@ -1744,7 +1875,7 @@ impl From<temporal_api::failure::v1::ChildWorkflowExecutionFailureInfo>
             workflow_type: external.workflow_type.try_into_or_none(),
             initiated_event_id: external.initiated_event_id,
             started_event_id: external.started_event_id,
-            retry_state: external.retry_state,
+            retry_state: external.retry_state.into(),
         }
     }
 }
@@ -1759,7 +1890,7 @@ impl Into<temporal_api::failure::v1::ChildWorkflowExecutionFailureInfo>
             workflow_type: self.workflow_type.try_into_or_none(),
             initiated_event_id: self.initiated_event_id,
             started_event_id: self.started_event_id,
-            retry_state: self.retry_state,
+            retry_state: self.retry_state.into(),
         }
     }
 }
@@ -1856,7 +1987,7 @@ impl Into<temporal_api::failure::v1::NexusOperationFailureInfo>
 #[module = "Temporal.CoreSdk.Data.WorkflowNexusHandlerFailureInfo"]
 pub struct SdkWorkflowNexusHandlerFailureInfo {
     pub failure_type: String,
-    pub retry_behavior: i32,
+    pub retry_behavior: SdkNexusHandlerErrorRetryBehavior,
 }
 
 impl From<temporal_api::failure::v1::NexusHandlerFailureInfo>
@@ -1865,7 +1996,7 @@ impl From<temporal_api::failure::v1::NexusHandlerFailureInfo>
     fn from(external: temporal_api::failure::v1::NexusHandlerFailureInfo) -> Self {
         Self {
             failure_type: external.r#type,
-            retry_behavior: external.retry_behavior,
+            retry_behavior: external.retry_behavior.into(),
         }
     }
 }
@@ -1876,7 +2007,36 @@ impl Into<temporal_api::failure::v1::NexusHandlerFailureInfo>
     fn into(self) -> temporal_api::failure::v1::NexusHandlerFailureInfo {
         temporal_api::failure::v1::NexusHandlerFailureInfo {
             r#type: self.failure_type,
-            retry_behavior: self.retry_behavior,
+            retry_behavior: self.retry_behavior.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkNexusHandlerErrorRetryBehavior {
+    Unspecified = 0,
+    Retryable = 1,
+    NonRetryable = 2,
+}
+
+impl Into<i32> for SdkNexusHandlerErrorRetryBehavior {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Retryable => 1,
+            Self::NonRetryable => 2,
+        }
+    }
+}
+
+impl From<i32> for SdkNexusHandlerErrorRetryBehavior {
+    fn from(intent: i32) -> SdkNexusHandlerErrorRetryBehavior {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Retryable,
+            2 => Self::NonRetryable,
+            _ => Self::Unspecified
         }
     }
 }
@@ -1939,7 +2099,7 @@ impl Into<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompletio
 pub struct SdkWorkflowActivationCompletionSuccessStatus {
     pub commands: Vec<SdkWorkflowCommand>,
     pub used_internal_flags: Vec<u32>,
-    pub versioning_behavior: i32,
+    pub versioning_behavior: SdkVersioningBehavior,
 }
 
 impl From<workflow_completion::Success> for SdkWorkflowActivationCompletionSuccessStatus {
@@ -1951,7 +2111,7 @@ impl From<workflow_completion::Success> for SdkWorkflowActivationCompletionSucce
                 .map(|val| val.clone().into())
                 .collect(),
             used_internal_flags: external.used_internal_flags,
-            versioning_behavior: external.versioning_behavior,
+            versioning_behavior: external.versioning_behavior.into(),
         }
     }
 }
@@ -1961,7 +2121,36 @@ impl Into<workflow_completion::Success> for SdkWorkflowActivationCompletionSucce
         workflow_completion::Success {
             commands: self.commands.iter().map(|val| val.clone().into()).collect(),
             used_internal_flags: self.used_internal_flags,
-            versioning_behavior: self.versioning_behavior,
+            versioning_behavior: self.versioning_behavior.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkVersioningBehavior {
+    Unspecified = 0,
+    Pinned = 1,
+    AutoUpgrade = 2
+}
+
+impl Into<i32> for SdkVersioningBehavior {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Pinned => 1,
+            Self::AutoUpgrade => 2
+        }
+    }
+}
+
+impl From<i32> for SdkVersioningBehavior {
+    fn from(intent: i32) -> SdkVersioningBehavior {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Pinned,
+            2 => Self::AutoUpgrade,
+            _ => Self::Unspecified
         }
     }
 }
@@ -1970,14 +2159,14 @@ impl Into<workflow_completion::Success> for SdkWorkflowActivationCompletionSucce
 #[module = "Temporal.CoreSdk.Data.WorkflowActivationCompletionFailureStatus"]
 pub struct SdkWorkflowActivationCompletionFailureStatus {
     pub failure: Option<SdkWorkflowFailure>,
-    pub force_cause: i32,
+    pub force_cause: SdkWorkflowTaskFailedCause,
 }
 
 impl From<workflow_completion::Failure> for SdkWorkflowActivationCompletionFailureStatus {
     fn from(external: workflow_completion::Failure) -> Self {
         Self {
             failure: external.failure.try_into_or_none(),
-            force_cause: external.force_cause,
+            force_cause: external.force_cause.into(),
         }
     }
 }
@@ -1986,7 +2175,141 @@ impl Into<workflow_completion::Failure> for SdkWorkflowActivationCompletionFailu
     fn into(self) -> workflow_completion::Failure {
         workflow_completion::Failure {
             failure: self.failure.try_into_or_none(),
-            force_cause: self.force_cause,
+            force_cause: self.force_cause.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkWorkflowTaskFailedCause {
+    Unspecified = 0,
+    UnhandledCommand = 1,
+    BadScheduleActivityAttributes = 2,
+    BadRequestCancelActivityAttributes = 3,
+    BadStartTimerAttributes = 4,
+    BadCancelTimerAttributes = 5,
+    BadRecordMarkerAttributes = 6,
+    BadCompleteWorkflowExecutionAttributes = 7,
+    BadFailWorkflowExecutionAttributes = 8,
+    BadCancelWorkflowExecutionAttributes = 9,
+    BadRequestCancelExternalWorkflowExecutionAttributes = 10,
+    BadContinueAsNewAttributes = 11,
+    StartTimerDuplicateId = 12,
+    ResetStickyTaskQueue = 13,
+    WorkflowWorkerUnhandledFailure = 14,
+    BadSignalWorkflowExecutionAttributes = 15,
+    BadStartChildExecutionAttributes = 16,
+    ForceCloseCommand = 17,
+    FailoverCloseCommand = 18,
+    BadSignalInputSize = 19,
+    ResetWorkflow = 20,
+    BadBinary = 21,
+    ScheduleActivityDuplicateId = 22,
+    BadSearchAttributes = 23,
+    NonDeterministicError = 24,
+    BadModifyWorkflowPropertiesAttributes = 25,
+    PendingChildWorkflowsLimitExceeded = 26,
+    PendingActivitiesLimitExceeded = 27,
+    PendingSignalsLimitExceeded = 28,
+    PendingRequestCancelLimitExceeded = 29,
+    BadUpdateWorkflowExecutionMessage = 30,
+    UnhandledUpdate = 31,
+    BadScheduleNexusOperationAttributes = 32,
+    PendingNexusOperationsLimitExceeded = 33,
+    BadRequestCancelNexusOperationAttributes = 34,
+    FeatureDisabled = 35,
+    GrpcMessageTooLarge = 36,
+    PayloadsTooLarge = 37
+}
+
+impl Into<i32> for SdkWorkflowTaskFailedCause {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::UnhandledCommand => 1,
+            Self::BadScheduleActivityAttributes => 2,
+            Self::BadRequestCancelActivityAttributes => 3,
+            Self::BadStartTimerAttributes => 4,
+            Self::BadCancelTimerAttributes => 5,
+            Self::BadRecordMarkerAttributes => 6,
+            Self::BadCompleteWorkflowExecutionAttributes => 7,
+            Self::BadFailWorkflowExecutionAttributes => 8,
+            Self::BadCancelWorkflowExecutionAttributes => 9,
+            Self::BadRequestCancelExternalWorkflowExecutionAttributes => 10,
+            Self::BadContinueAsNewAttributes => 11,
+            Self::StartTimerDuplicateId => 12,
+            Self::ResetStickyTaskQueue => 13,
+            Self::WorkflowWorkerUnhandledFailure => 14,
+            Self::BadSignalWorkflowExecutionAttributes => 15,
+            Self::BadStartChildExecutionAttributes => 16,
+            Self::ForceCloseCommand => 17,
+            Self::FailoverCloseCommand => 18,
+            Self::BadSignalInputSize => 19,
+            Self::ResetWorkflow => 20,
+            Self::BadBinary => 21,
+            Self::ScheduleActivityDuplicateId => 22,
+            Self::BadSearchAttributes => 23,
+            Self::NonDeterministicError => 24,
+            Self::BadModifyWorkflowPropertiesAttributes => 25,
+            Self::PendingChildWorkflowsLimitExceeded => 26,
+            Self::PendingActivitiesLimitExceeded => 27,
+            Self::PendingSignalsLimitExceeded => 28,
+            Self::PendingRequestCancelLimitExceeded => 29,
+            Self::BadUpdateWorkflowExecutionMessage => 30,
+            Self::UnhandledUpdate => 31,
+            Self::BadScheduleNexusOperationAttributes => 32,
+            Self::PendingNexusOperationsLimitExceeded => 33,
+            Self::BadRequestCancelNexusOperationAttributes => 34,
+            Self::FeatureDisabled => 35,
+            Self::GrpcMessageTooLarge => 36,
+            Self::PayloadsTooLarge => 37
+        }
+    }
+}
+
+impl From<i32> for SdkWorkflowTaskFailedCause {
+    fn from(intent: i32) -> SdkWorkflowTaskFailedCause {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::UnhandledCommand,
+            2 => Self::BadScheduleActivityAttributes,
+            3 => Self::BadRequestCancelActivityAttributes,
+            4 => Self::BadStartTimerAttributes,
+            5 => Self::BadCancelTimerAttributes,
+            6 => Self::BadRecordMarkerAttributes,
+            7 => Self::BadCompleteWorkflowExecutionAttributes,
+            8 => Self::BadFailWorkflowExecutionAttributes,
+            9 => Self::BadCancelWorkflowExecutionAttributes,
+            10 => Self::BadRequestCancelExternalWorkflowExecutionAttributes,
+            11 => Self::BadContinueAsNewAttributes,
+            12 => Self::StartTimerDuplicateId,
+            13 => Self::ResetStickyTaskQueue,
+            14 => Self::WorkflowWorkerUnhandledFailure,
+            15 => Self::BadSignalWorkflowExecutionAttributes,
+            16 => Self::BadStartChildExecutionAttributes,
+            17 => Self::ForceCloseCommand,
+            18 => Self::FailoverCloseCommand,
+            19 => Self::BadSignalInputSize,
+            20 => Self::ResetWorkflow,
+            21 => Self::BadBinary,
+            22 => Self::ScheduleActivityDuplicateId,
+            23 => Self::BadSearchAttributes,
+            24 => Self::NonDeterministicError,
+            25 => Self::BadModifyWorkflowPropertiesAttributes,
+            26 => Self::PendingChildWorkflowsLimitExceeded,
+            27 => Self::PendingActivitiesLimitExceeded,
+            28 => Self::PendingSignalsLimitExceeded,
+            29 => Self::PendingRequestCancelLimitExceeded,
+            30 => Self::BadUpdateWorkflowExecutionMessage,
+            31 => Self::UnhandledUpdate,
+            32 => Self::BadScheduleNexusOperationAttributes,
+            33 => Self::PendingNexusOperationsLimitExceeded,
+            34 => Self::BadRequestCancelNexusOperationAttributes,
+            35 => Self::FeatureDisabled,
+            36 => Self::GrpcMessageTooLarge,
+            37 => Self::PayloadsTooLarge,
+            _ => Self::Unspecified
         }
     }
 }
@@ -2239,9 +2562,9 @@ pub struct SdkWorkflowCommandScheduleActivity {
     pub start_to_close_timeout: Option<SdkDuration>,
     pub heartbeat_timeout: Option<SdkDuration>,
     pub retry_policy: Option<SdkRetryPolicy>,
-    pub cancellation_type: i32,
+    pub cancellation_type: SdkActivityCancellationType,
     pub do_not_eagerly_execute: bool,
-    pub versioning_intent: i32,
+    pub versioning_intent: SdkVersioningIntent,
     pub priority: Option<SdkPriority>,
 }
 
@@ -2267,9 +2590,9 @@ impl From<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleAct
             start_to_close_timeout: external.start_to_close_timeout.try_into_or_none(),
             heartbeat_timeout: external.heartbeat_timeout.try_into_or_none(),
             retry_policy: external.retry_policy.try_into_or_none(),
-            cancellation_type: external.cancellation_type,
+            cancellation_type: external.cancellation_type.into(),
             do_not_eagerly_execute: external.do_not_eagerly_execute,
-            versioning_intent: external.versioning_intent,
+            versioning_intent: external.versioning_intent.into(),
             priority: external.priority.try_into_or_none(),
         }
     }
@@ -2297,9 +2620,9 @@ impl Into<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleAct
             start_to_close_timeout: self.start_to_close_timeout.try_into_or_none(),
             heartbeat_timeout: self.heartbeat_timeout.try_into_or_none(),
             retry_policy: self.retry_policy.try_into_or_none(),
-            cancellation_type: self.cancellation_type,
+            cancellation_type: self.cancellation_type.into(),
             do_not_eagerly_execute: self.do_not_eagerly_execute,
-            versioning_intent: self.versioning_intent,
+            versioning_intent: self.versioning_intent.into(),
             priority: self.priority.try_into_or_none(),
         }
     }
@@ -2426,8 +2749,37 @@ pub struct SdkWorkflowCommandContinueAsNewWorkflowExecution {
     pub headers: HashMap<String, SdkPayload>,
     pub search_attributes: Option<SdkWorkflowSearchAttributes>,
     pub retry_policy: Option<SdkRetryPolicy>,
-    pub versioning_intent: i32,
-    pub initial_versioning_behavior: i32,
+    pub versioning_intent: SdkVersioningIntent,
+    pub initial_versioning_behavior: SdkContinueAsNewVersioningBehavior,
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkContinueAsNewVersioningBehavior {
+    Unspecified = 0,
+    AutoUpgrade = 1,
+    UseRampVersion = 2
+}
+
+impl Into<i32> for SdkContinueAsNewVersioningBehavior {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::AutoUpgrade => 1,
+            Self::UseRampVersion => 2
+        }
+    }
+}
+
+impl From<i32> for SdkContinueAsNewVersioningBehavior {
+    fn from(intent: i32) -> SdkContinueAsNewVersioningBehavior {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::AutoUpgrade,
+            2 => Self::UseRampVersion,
+            _ => Self::Unspecified
+        }
+    }
 }
 
 impl From<workflow_commands::ContinueAsNewWorkflowExecution>
@@ -2456,8 +2808,8 @@ impl From<workflow_commands::ContinueAsNewWorkflowExecution>
                 .collect(),
             search_attributes: external.search_attributes.try_into_or_none(),
             retry_policy: external.retry_policy.try_into_or_none(),
-            versioning_intent: external.versioning_intent,
-            initial_versioning_behavior: external.initial_versioning_behavior,
+            versioning_intent: external.versioning_intent.into(),
+            initial_versioning_behavior: external.initial_versioning_behavior.into(),
         }
     }
 }
@@ -2488,8 +2840,8 @@ impl Into<workflow_commands::ContinueAsNewWorkflowExecution>
                 .collect(),
             search_attributes: self.search_attributes.try_into_or_none(),
             retry_policy: self.retry_policy.try_into_or_none(),
-            versioning_intent: self.versioning_intent,
-            initial_versioning_behavior: self.initial_versioning_behavior,
+            versioning_intent: self.versioning_intent.into(),
+            initial_versioning_behavior: self.initial_versioning_behavior.into(),
         }
     }
 }
@@ -2551,15 +2903,15 @@ pub struct SdkWorkflowCommandStartChildWorkflowExecution {
     pub workflow_execution_timeout: Option<SdkDuration>,
     pub workflow_run_timeout: Option<SdkDuration>,
     pub workflow_task_timeout: Option<SdkDuration>,
-    pub parent_close_policy: i32,
-    pub workflow_id_reuse_policy: i32,
+    pub parent_close_policy: SdkChildWorkflowParentClosePolicy,
+    pub workflow_id_reuse_policy: SdkWorkflowIdReusePolicy,
     pub retry_policy: Option<SdkRetryPolicy>,
     pub cron_schedule: String,
     pub headers: HashMap<String, SdkPayload>,
     pub memo: HashMap<String, SdkPayload>,
     pub search_attributes: Option<SdkWorkflowSearchAttributes>,
-    pub cancellation_type: i32,
-    pub versioning_intent: i32,
+    pub cancellation_type: SdkChildWorkflowCancellationType,
+    pub versioning_intent: SdkVersioningIntent,
     pub priority: Option<SdkPriority>,
 }
 
@@ -2577,8 +2929,8 @@ impl From<workflow_commands::StartChildWorkflowExecution>
             workflow_execution_timeout: external.workflow_execution_timeout.try_into_or_none(),
             workflow_run_timeout: external.workflow_run_timeout.try_into_or_none(),
             workflow_task_timeout: external.workflow_task_timeout.try_into_or_none(),
-            parent_close_policy: external.parent_close_policy,
-            workflow_id_reuse_policy: external.workflow_id_reuse_policy,
+            parent_close_policy: external.parent_close_policy.into(),
+            workflow_id_reuse_policy: external.workflow_id_reuse_policy.into(),
             retry_policy: external.retry_policy.try_into_or_none(),
             cron_schedule: external.cron_schedule,
             headers: external
@@ -2592,8 +2944,8 @@ impl From<workflow_commands::StartChildWorkflowExecution>
                 .map(|(k, v)| (k.clone(), v.clone().into()))
                 .collect(),
             search_attributes: external.search_attributes.try_into_or_none(),
-            cancellation_type: external.cancellation_type,
-            versioning_intent: external.versioning_intent,
+            cancellation_type: external.cancellation_type.into(),
+            versioning_intent: external.versioning_intent.into(),
             priority: external.priority.try_into_or_none(),
         }
     }
@@ -2613,8 +2965,8 @@ impl Into<workflow_commands::StartChildWorkflowExecution>
             workflow_execution_timeout: self.workflow_execution_timeout.try_into_or_none(),
             workflow_run_timeout: self.workflow_run_timeout.try_into_or_none(),
             workflow_task_timeout: self.workflow_task_timeout.try_into_or_none(),
-            parent_close_policy: self.parent_close_policy,
-            workflow_id_reuse_policy: self.workflow_id_reuse_policy,
+            parent_close_policy: self.parent_close_policy.into(),
+            workflow_id_reuse_policy: self.workflow_id_reuse_policy.into(),
             retry_policy: self.retry_policy.try_into_or_none(),
             cron_schedule: self.cron_schedule,
             headers: self
@@ -2628,9 +2980,162 @@ impl Into<workflow_commands::StartChildWorkflowExecution>
                 .map(|(k, v)| (k.clone(), v.clone().into()))
                 .collect(),
             search_attributes: self.search_attributes.try_into_or_none(),
-            cancellation_type: self.cancellation_type,
-            versioning_intent: self.versioning_intent,
+            cancellation_type: self.cancellation_type.into(),
+            versioning_intent: self.versioning_intent.into(),
             priority: self.priority.try_into_or_none(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkVersioningIntent {
+    Unspecified = 0,
+    Compatible = 1,
+    Default = 2
+}
+
+impl Into<i32> for SdkVersioningIntent {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Compatible => 1,
+            Self::Default => 2
+        }
+    }
+}
+
+impl From<i32> for SdkVersioningIntent {
+    fn from(intent: i32) -> SdkVersioningIntent {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Compatible,
+            2 => Self::Default,
+            _ => Self::Unspecified
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkChildWorkflowCancellationType {
+    Abandon = 0,
+    TryCancel = 1,
+    WaitCancellationCompleted = 2,
+    WaitCancellationRequested = 3
+}
+
+impl Into<i32> for SdkChildWorkflowCancellationType {
+    fn into(self) -> i32 {
+        match self {
+            Self::Abandon => 0,
+            Self::TryCancel => 1,
+            Self::WaitCancellationCompleted => 2,
+            Self::WaitCancellationRequested => 3
+        }
+    }
+}
+
+impl From<i32> for SdkChildWorkflowCancellationType {
+    fn from(intent: i32) -> SdkChildWorkflowCancellationType {
+        match intent {
+            0 => Self::Abandon,
+            1 => Self::TryCancel,
+            2 => Self::WaitCancellationCompleted,
+            3 => Self::WaitCancellationRequested,
+            _ => Self::Abandon
+        }
+    }
+}
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkChildWorkflowParentClosePolicy {
+    Unspecified = 0,
+    Terminate = 1,
+    Abandon = 2,
+    RequestCancel = 3,
+}
+
+impl Into<i32> for SdkChildWorkflowParentClosePolicy {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Terminate => 1,
+            Self::Abandon => 2,
+            Self::RequestCancel => 2
+        }
+    }
+}
+
+impl From<i32> for SdkChildWorkflowParentClosePolicy {
+    fn from(intent: i32) -> SdkChildWorkflowParentClosePolicy {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Terminate,
+            2 => Self::Abandon,
+            3 => Self::RequestCancel,
+            _ => Self::Unspecified
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkWorkflowIdReusePolicy {
+    Unspecified = 0,
+    AllowDuplicate = 1,
+    AllowDuplicateFailedOnly = 2,
+    RejectDuplicate = 3,
+    TerminateIfRunning = 4
+}
+
+impl Into<i32> for SdkWorkflowIdReusePolicy {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::AllowDuplicate => 1,
+            Self::AllowDuplicateFailedOnly => 2,
+            Self::RejectDuplicate => 3,
+            Self::TerminateIfRunning => 4
+        }
+    }
+}
+
+impl From<i32> for SdkWorkflowIdReusePolicy {
+    fn from(intent: i32) -> SdkWorkflowIdReusePolicy {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::AllowDuplicate,
+            2 => Self::AllowDuplicateFailedOnly,
+            3 => Self::RejectDuplicate,
+            4 => Self::TerminateIfRunning,
+            _ => Self::Unspecified
+        }
+    }
+}
+
+impl From<WorkflowIdReusePolicy> for SdkWorkflowIdReusePolicy {
+    fn from(external: WorkflowIdReusePolicy) -> Self {
+        match external {
+            WorkflowIdReusePolicy::Unspecified => Self::Unspecified,
+            WorkflowIdReusePolicy::AllowDuplicate => Self::AllowDuplicate,
+            WorkflowIdReusePolicy::AllowDuplicateFailedOnly => Self::AllowDuplicateFailedOnly,
+            WorkflowIdReusePolicy::RejectDuplicate => Self::RejectDuplicate,
+            #[allow(deprecated)]
+            WorkflowIdReusePolicy::TerminateIfRunning => Self::TerminateIfRunning,
+        }
+    }
+}
+
+impl Into<WorkflowIdReusePolicy> for SdkWorkflowIdReusePolicy {
+    fn into(self) -> WorkflowIdReusePolicy {
+        match self {
+            Self::Unspecified => WorkflowIdReusePolicy::Unspecified,
+            Self::AllowDuplicate => WorkflowIdReusePolicy::AllowDuplicate,
+            Self::AllowDuplicateFailedOnly => WorkflowIdReusePolicy::AllowDuplicateFailedOnly,
+            Self::RejectDuplicate => WorkflowIdReusePolicy::RejectDuplicate,
+            #[allow(deprecated)]
+            Self::TerminateIfRunning => WorkflowIdReusePolicy::TerminateIfRunning,
         }
     }
 }
@@ -2775,7 +3280,36 @@ pub struct SdkWorkflowCommandScheduleLocalActivity {
     pub start_to_close_timeout: Option<SdkDuration>,
     pub retry_policy: Option<SdkRetryPolicy>,
     pub local_retry_threshold: Option<SdkDuration>,
-    pub cancellation_type: i32,
+    pub cancellation_type: SdkActivityCancellationType,
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkActivityCancellationType {
+    TryCancel = 0,
+    WaitCancellationCompleted = 1,
+    Abandon = 2
+}
+
+impl Into<i32> for SdkActivityCancellationType {
+    fn into(self) -> i32 {
+        match self {
+            Self::TryCancel => 0,
+            Self::WaitCancellationCompleted => 1,
+            Self::Abandon => 2
+        }
+    }
+}
+
+impl From<i32> for SdkActivityCancellationType {
+    fn from(intent: i32) -> SdkActivityCancellationType {
+        match intent {
+            0 => Self::TryCancel,
+            1 => Self::WaitCancellationCompleted,
+            2 => Self::Abandon,
+            _ => Self::TryCancel
+        }
+    }
 }
 
 impl From<workflow_commands::ScheduleLocalActivity> for SdkWorkflowCommandScheduleLocalActivity {
@@ -2797,7 +3331,7 @@ impl From<workflow_commands::ScheduleLocalActivity> for SdkWorkflowCommandSchedu
             start_to_close_timeout: external.start_to_close_timeout.try_into_or_none(),
             retry_policy: external.retry_policy.try_into_or_none(),
             local_retry_threshold: external.local_retry_threshold.try_into_or_none(),
-            cancellation_type: external.cancellation_type,
+            cancellation_type: external.cancellation_type.into(),
         }
     }
 }
@@ -2821,7 +3355,7 @@ impl Into<workflow_commands::ScheduleLocalActivity> for SdkWorkflowCommandSchedu
             start_to_close_timeout: self.start_to_close_timeout.try_into_or_none(),
             retry_policy: self.retry_policy.try_into_or_none(),
             local_retry_threshold: self.local_retry_threshold.try_into_or_none(),
-            cancellation_type: self.cancellation_type,
+            cancellation_type: self.cancellation_type.into(),
         }
     }
 }
@@ -2970,7 +3504,7 @@ pub struct SdkWorkflowCommandScheduleNexusOperation {
     pub input: Option<SdkPayload>,
     pub schedule_to_close_timeout: Option<SdkDuration>,
     pub nexus_header: HashMap<String, String>,
-    pub cancellation_type: i32,
+    pub cancellation_type: SdkNexusOperationCancellationType,
     pub schedule_to_start_timeout: Option<SdkDuration>,
     pub start_to_close_timeout: Option<SdkDuration>,
 }
@@ -2985,7 +3519,7 @@ impl From<workflow_commands::ScheduleNexusOperation> for SdkWorkflowCommandSched
             input: external.input.try_into_or_none(),
             schedule_to_close_timeout: external.schedule_to_close_timeout.try_into_or_none(),
             nexus_header: external.nexus_header,
-            cancellation_type: external.cancellation_type,
+            cancellation_type: external.cancellation_type.into(),
             schedule_to_start_timeout: external.schedule_to_start_timeout.try_into_or_none(),
             start_to_close_timeout: external.start_to_close_timeout.try_into_or_none(),
         }
@@ -3002,9 +3536,41 @@ impl Into<workflow_commands::ScheduleNexusOperation> for SdkWorkflowCommandSched
             input: self.input.try_into_or_none(),
             schedule_to_close_timeout: self.schedule_to_close_timeout.try_into_or_none(),
             nexus_header: self.nexus_header,
-            cancellation_type: self.cancellation_type,
+            cancellation_type: self.cancellation_type.into(),
             schedule_to_start_timeout: self.schedule_to_start_timeout.try_into_or_none(),
             start_to_close_timeout: self.start_to_close_timeout.try_into_or_none(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkNexusOperationCancellationType {
+    WaitCancellationCompleted = 0,
+    Abandon = 1,
+    TryCancel = 2,
+    WaitCancellationRequested = 3,
+}
+
+impl Into<i32> for SdkNexusOperationCancellationType {
+    fn into(self) -> i32 {
+        match self {
+            Self::WaitCancellationCompleted => 0,
+            Self::Abandon => 1,
+            Self::TryCancel => 2,
+            Self::WaitCancellationRequested => 3,
+        }
+    }
+}
+
+impl From<i32> for SdkNexusOperationCancellationType {
+    fn from(intent: i32) -> SdkNexusOperationCancellationType {
+        match intent {
+            0 => Self::WaitCancellationCompleted,
+            1 => Self::Abandon,
+            2 => Self::TryCancel,
+            3 => Self::WaitCancellationRequested,
+            _ => Self::WaitCancellationCompleted
         }
     }
 }
@@ -3220,41 +3786,6 @@ impl Into<WorkflowStartOptions> for SdkWorkflowStartOptions {
 }
 
 #[derive(NifUnitEnum, Clone)]
-pub enum SdkWorkflowIdReusePolicy {
-    Unspecified,
-    AllowDuplicate,
-    AllowDuplicateFailedOnly,
-    RejectDuplicate,
-    TerminateIfRunning,
-}
-
-impl From<WorkflowIdReusePolicy> for SdkWorkflowIdReusePolicy {
-    fn from(external: WorkflowIdReusePolicy) -> Self {
-        match external {
-            WorkflowIdReusePolicy::Unspecified => Self::Unspecified,
-            WorkflowIdReusePolicy::AllowDuplicate => Self::AllowDuplicate,
-            WorkflowIdReusePolicy::AllowDuplicateFailedOnly => Self::AllowDuplicateFailedOnly,
-            WorkflowIdReusePolicy::RejectDuplicate => Self::RejectDuplicate,
-            #[allow(deprecated)]
-            WorkflowIdReusePolicy::TerminateIfRunning => Self::TerminateIfRunning,
-        }
-    }
-}
-
-impl Into<WorkflowIdReusePolicy> for SdkWorkflowIdReusePolicy {
-    fn into(self) -> WorkflowIdReusePolicy {
-        match self {
-            Self::Unspecified => WorkflowIdReusePolicy::Unspecified,
-            Self::AllowDuplicate => WorkflowIdReusePolicy::AllowDuplicate,
-            Self::AllowDuplicateFailedOnly => WorkflowIdReusePolicy::AllowDuplicateFailedOnly,
-            Self::RejectDuplicate => WorkflowIdReusePolicy::RejectDuplicate,
-            #[allow(deprecated)]
-            Self::TerminateIfRunning => WorkflowIdReusePolicy::TerminateIfRunning,
-        }
-    }
-}
-
-#[derive(NifUnitEnum, Clone)]
 pub enum SdkWorkflowIdConflictPolicy {
     Unspecified,
     Fail,
@@ -3340,10 +3871,10 @@ impl TemporalSerializable for SdkWorkflowArguments {
         &self,
         ctx: &SerializationContext<'_>,
     ) -> Result<Vec<Payload>, PayloadConversionError> {
-        let mut payloads = vec![Payload::default(); self.args.len()];
-        for (idx, arg) in self.args.iter().enumerate() {
+        let mut payloads = vec![];
+        for (_idx, arg) in self.args.iter().enumerate() {
             match ctx.converter.to_payload(ctx, arg) {
-                Ok(payload) => payloads[idx] = payload,
+                Ok(payload) => payloads.push(payload),
                 Err(err) => return Err(err),
             };
         }
@@ -3375,7 +3906,7 @@ impl TemporalSerializable for SdkWorkflowInput {
                 metadata.insert("encoding".to_owned(), "json/plain".as_bytes().to_vec());
 
                 Ok(SdkPayload {
-                    metadata: metadata,
+                    metadata,
                     data: val.as_bytes().to_vec(),
                     external_payloads: Vec::new(),
                 }

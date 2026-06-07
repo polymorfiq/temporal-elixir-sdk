@@ -4,7 +4,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandVariant do
   @type t ::
           {:start_timer, Data.WorkflowCommandStartTimer.t()}
           | {:schedule_activity, Data.WorkflowCommandScheduleActivity.t()}
-          | {:respond_to_query, Data.WorkflowCommandRespondToQuery.t()}
+          | {:respond_to_query, Data.WorkflowCommandQueryResult.t()}
           | {:request_cancel_activity, Data.WorkflowCommandRequestCancelActivity.t()}
           | {:cancel_timer, Data.WorkflowCommandCancelTimer.t()}
           | {:complete_workflow_execution, Data.WorkflowCommandCompleteWorkflowExecution.t()}
@@ -25,7 +25,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandVariant do
           | {:request_cancel_local_activity, Data.WorkflowCommandRequestCancelLocalActivity.t()}
           | {:upsert_workflow_search_attributes,
              Data.WorkflowCommandUpsertWorkflowSearchAttributes.t()}
-          | {:modify_worflow_properties, Data.WorkflowCommandModifyWorkflowProperties.t()}
+          | {:modify_workflow_properties, Data.WorkflowCommandModifyWorkflowProperties.t()}
           | {:update_response, Data.WorkflowCommandUpdateResponse.t()}
           | {:schedule_nexus_operation, Data.WorkflowCommandScheduleNexusOperation.t()}
           | {:request_cancel_nexus_operation, Data.WorkflowCommandRequestCancelNexusOperation.t()}
@@ -33,7 +33,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandVariant do
   @type opts() :: [
           {:start_timer, Data.WorkflowCommandStartTimer.opts()}
           | {:schedule_activity, Data.WorkflowCommandScheduleActivity.opts()}
-          | {:respond_to_query, Data.WorkflowCommandRespondToQuery.opts()}
+          | {:respond_to_query, Data.WorkflowCommandQueryResult.opts()}
           | {:request_cancel_activity, Data.WorkflowCommandRequestCancelActivity.opts()}
           | {:cancel_timer, Data.WorkflowCommandCancelTimer.opts()}
           | {:complete_workflow_execution, Data.WorkflowCommandCompleteWorkflowExecution.opts()}
@@ -56,7 +56,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandVariant do
              Data.WorkflowCommandRequestCancelLocalActivity.opts()}
           | {:upsert_workflow_search_attributes,
              Data.WorkflowCommandUpsertWorkflowSearchAttributes.opts()}
-          | {:modify_worflow_properties, Data.WorkflowCommandModifyWorkflowProperties.opts()}
+          | {:modify_workflow_properties, Data.WorkflowCommandModifyWorkflowProperties.opts()}
           | {:update_response, Data.WorkflowCommandUpdateResponse.opts()}
           | {:schedule_nexus_operation, Data.WorkflowCommandScheduleNexusOperation.opts()}
           | {:request_cancel_nexus_operation,
@@ -64,67 +64,85 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandVariant do
         ]
 
   @spec with_opts!(opts()) :: t()
-  #  def with_opts!({:start_timer, opts}), do: Data.WorkflowCommandStartTimer.with_opts!(opts)
-  #
-  #  def with_opts!({:respond_to_query, opts}),
-  #    do: Data.WorkflowCommandRespondToQuery.with_opts!(opts)
-  #
-  #  def with_opts!({:request_cancel_activity, opts}),
-  #    do: Data.WorkflowCommandRequestCancelActivity.with_opts!(opts)
-  #
-  #  def with_opts!({:cancel_timer, opts}),
-  #      do: Data.WorkflowCommandCancelTimer.with_opts!(opts)
+  def with_opts!({:start_timer, opts}),
+    do: {:start_timer, Data.WorkflowCommandStartTimer.with_opts!(opts)}
+
+  def with_opts!({:respond_to_query, opts}),
+    do: {:respond_to_query, Data.WorkflowCommandQueryResult.with_opts!(opts)}
+
+  def with_opts!({:request_cancel_activity, opts}),
+    do: {:request_cancel_activity, Data.WorkflowCommandRequestCancelActivity.with_opts!(opts)}
+
+  def with_opts!({:cancel_timer, opts}),
+    do: {:cancel_timer, Data.WorkflowCommandCancelTimer.with_opts!(opts)}
 
   def with_opts!({:complete_workflow_execution, opts}),
     do:
       {:complete_workflow_execution,
        Data.WorkflowCommandCompleteWorkflowExecution.with_opts!(opts)}
 
-  #  def with_opts!({:fail_workflow_execution, opts}),
-  #      do: Data.WorkflowCommandFailWorkflowExecution.with_opts!(opts)
-  #
-  #  def with_opts!({:continue_as_new_workflow_execution, opts}),
-  #      do: Data.WorkflowCommandContinueAsNewWorkflowExecution.with_opts!(opts)
-  #
-  #  def with_opts!({:cancel_workflow_execution, opts}),
-  #      do: Data.WorkflowCommandCancelWorkflowExecution.with_opts!(opts)
-  #
-  #  def with_opts!({:set_patch_marker, opts}),
-  #      do: Data.WorkflowCommandSetPatchMarker.with_opts!(opts)
-  #
-  #  def with_opts!({:start_child_workflow_execution, opts}),
-  #      do: Data.WorkflowCommandStartChildWorkflowExecution.with_opts!(opts)
-  #
-  #  def with_opts!({:cancel_child_workflow_execution, opts}),
-  #      do: Data.WorkflowCommandCancelChildWorkflowExecution.with_opts!(opts)
-  #
-  #  def with_opts!({:request_cancel_external_workflow_execution, opts}),
-  #      do: Data.WorkflowCommandRequestCancelExternalWorkflowExecution.with_opts!(opts)
-  #
-  #  def with_opts!({:signal_external_workflow_execution, opts}),
-  #      do: Data.WorkflowCommandSignalExternalWorkflowExecution.with_opts!(opts)
-  #
-  #  def with_opts!({:cancel_signal_workflow, opts}),
-  #      do: Data.WorkflowCommandCancelSignalWorkflow.with_opts!(opts)
-  #
-  #  def with_opts!({:schedule_local_activity, opts}),
-  #      do: Data.WorkflowCommandScheduleLocalActivity.with_opts!(opts)
-  #
-  #  def with_opts!({:request_cancel_local_activity, opts}),
-  #      do: Data.WorkflowCommandRequestCancelLocalActivity.with_opts!(opts)
-  #
-  #  def with_opts!({:upsert_workflow_search_attributes, opts}),
-  #      do: Data.WorkflowCommandUpsertWorkflowSearchAttributes.with_opts!(opts)
-  #
-  #  def with_opts!({:modify_worflow_properties, opts}),
-  #      do: Data.WorkflowCommandModifyWorkflowProperties.with_opts!(opts)
-  #
-  #  def with_opts!({:update_response, opts}),
-  #      do: Data.WorkflowCommandUpdateResponse.with_opts!(opts)
-  #
-  #  def with_opts!({:schedule_nexus_operation, opts}),
-  #      do: Data.WorkflowCommandScheduleNexusOperation.with_opts!(opts)
-  #
-  #  def with_opts!({:request_cancel_nexus_operation, opts}),
-  #      do: Data.WorkflowCommandRequestCancelNexusOperation.with_opts!(opts)
+  def with_opts!({:fail_workflow_execution, opts}),
+    do: {:fail_workflow_execution, Data.WorkflowCommandFailWorkflowExecution.with_opts!(opts)}
+
+  def with_opts!({:continue_as_new_workflow_execution, opts}),
+    do:
+      {:continue_as_new_workflow_execution,
+       Data.WorkflowCommandContinueAsNewWorkflowExecution.with_opts!(opts)}
+
+  def with_opts!({:cancel_workflow_execution, opts}),
+    do: {:cancel_workflow_execution, Data.WorkflowCommandCancelWorkflowExecution.with_opts!(opts)}
+
+  def with_opts!({:set_patch_marker, opts}),
+    do: {:set_patch_marker, Data.WorkflowCommandSetPatchMarker.with_opts!(opts)}
+
+  def with_opts!({:start_child_workflow_execution, opts}),
+    do:
+      {:start_child_workflow_execution,
+       Data.WorkflowCommandStartChildWorkflowExecution.with_opts!(opts)}
+
+  def with_opts!({:cancel_child_workflow_execution, opts}),
+    do:
+      {:cancel_child_workflow_execution,
+       Data.WorkflowCommandCancelChildWorkflowExecution.with_opts!(opts)}
+
+  def with_opts!({:request_cancel_external_workflow_execution, opts}),
+    do:
+      {:request_cancel_external_workflow_execution,
+       Data.WorkflowCommandRequestCancelExternalWorkflowExecution.with_opts!(opts)}
+
+  def with_opts!({:signal_external_workflow_execution, opts}),
+    do:
+      {:signal_external_workflow_execution,
+       Data.WorkflowCommandSignalExternalWorkflowExecution.with_opts!(opts)}
+
+  def with_opts!({:cancel_signal_workflow, opts}),
+    do: {:cancel_signal_workflow, Data.WorkflowCommandCancelSignalWorkflow.with_opts!(opts)}
+
+  def with_opts!({:schedule_local_activity, opts}),
+    do: {:schedule_local_activity, Data.WorkflowCommandScheduleLocalActivity.with_opts!(opts)}
+
+  def with_opts!({:request_cancel_local_activity, opts}),
+    do:
+      {:request_cancel_local_activity,
+       Data.WorkflowCommandRequestCancelLocalActivity.with_opts!(opts)}
+
+  def with_opts!({:upsert_workflow_search_attributes, opts}),
+    do:
+      {:upsert_workflow_search_attributes,
+       Data.WorkflowCommandUpsertWorkflowSearchAttributes.with_opts!(opts)}
+
+  def with_opts!({:modify_workflow_properties, opts}),
+    do:
+      {:modify_workflow_properties, Data.WorkflowCommandModifyWorkflowProperties.with_opts!(opts)}
+
+  def with_opts!({:update_response, opts}),
+    do: {:update_response, Data.WorkflowCommandUpdateResponse.with_opts!(opts)}
+
+  def with_opts!({:schedule_nexus_operation, opts}),
+    do: {:schedule_nexus_operation, Data.WorkflowCommandScheduleNexusOperation.with_opts!(opts)}
+
+  def with_opts!({:request_cancel_nexus_operation, opts}),
+    do:
+      {:request_cancel_nexus_operation,
+       Data.WorkflowCommandRequestCancelNexusOperation.with_opts!(opts)}
 end

@@ -7,7 +7,7 @@ defmodule Temporal.CoreSdk.Data.ActivationDoUpdate do
           id: String.t(),
           protocol_instance_id: String.t(),
           name: String.t(),
-          input: [Data.ActivationPayload.t()],
+          input: [Data.Payload.t()],
           headers: map(),
           meta: Data.UpdateMeta.t() | nil,
           run_validator: bool()

@@ -4,6 +4,6 @@ defmodule Temporal.CoreSdk.Data.WorkflowResetFailureInfo do
   alias Temporal.CoreSdk.Data
 
   @type t :: %__MODULE__{
-          last_heartbeat_details: Data.ActivationPayloads.t() | nil
+          last_heartbeat_details: Data.Payload.t() | nil
         }
 end

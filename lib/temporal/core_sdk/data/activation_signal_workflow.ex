@@ -5,7 +5,7 @@ defmodule Temporal.CoreSdk.Data.ActivationSignalWorkflow do
 
   @type t :: %__MODULE__{
           signal_name: String.t(),
-          input: [Data.ActivationPayload.t()],
+          input: [Data.Payload.t()],
           identity: String.t(),
           headers: map()
         }

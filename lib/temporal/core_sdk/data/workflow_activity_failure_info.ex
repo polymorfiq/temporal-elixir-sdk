@@ -4,11 +4,21 @@ defmodule Temporal.CoreSdk.Data.WorkflowActivityFailureInfo do
     :started_event_id,
     :identity,
     :activity_id,
-    :retry_state,
+    retry_state: :unspecified,
     activity_type: nil
   ]
 
   alias Temporal.CoreSdk.Data
+
+  @type retry_state ::
+          :unspecified
+          | :in_progress
+          | :non_retryable_failure
+          | :timeout
+          | :maximum_attempts_reached
+          | :retry_policy_not_set
+          | :internal_server_error
+          | :cancel_requested
 
   @type t :: %__MODULE__{
           scheduled_event_id: integer(),

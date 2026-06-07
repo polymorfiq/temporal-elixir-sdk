@@ -4,6 +4,6 @@ defmodule Temporal.CoreSdk.Data.WorkflowChildExecutionCompletedStatus do
   alias Temporal.CoreSdk.Data
 
   @type t :: %__MODULE__{
-          result: Data.ActivationPayload.t() | nil
+          result: Data.Payload.t() | nil
         }
 end

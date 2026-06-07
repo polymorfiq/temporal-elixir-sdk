@@ -32,7 +32,7 @@ defmodule Temporal.CoreSdk.Data.ActivationInitializeWorkflow do
   @type t :: %__MODULE__{
           workflow_type: String.t(),
           workflow_id: String.t(),
-          arguments: Data.ActivationPayload.t(),
+          arguments: Data.Payload.t(),
           randomness_seed: pos_integer(),
           headers: map(),
           identity: String.t(),
@@ -43,7 +43,7 @@ defmodule Temporal.CoreSdk.Data.ActivationInitializeWorkflow do
           continued_from_execution_run_id: String.t(),
           continued_initiator: integer(),
           continued_failure: Data.WorkflowFailure.t() | nil,
-          last_completion_result: Data.ActivationPayloads.t() | nil,
+          last_completion_result: Data.Payload.t() | nil,
           first_execution_run_id: String.t(),
           retry_policy: Data.RetryPolicy.t() | nil,
           attempt: integer(),
