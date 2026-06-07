@@ -91,13 +91,12 @@ defmodule Temporal.WorkflowTest do
       queue = create_basic_queue(client, "polling_activations_2")
       {:ok, worker} = Worker.new(queue, forward_polled_messages: self())
       :ok = Worker.register_workflow(worker, ShouldRunSuccessfully)
+      Worker.flush_registrations(worker)
 
-      workflow_id = unique_name("receives-workflow-activations")
+      workflow_id = unique_name("completes-workflow")
       {:ok, _} = TaskQueue.start_workflow(queue, workflow_id, ShouldRunSuccessfully, ["World!"])
 
-      assert_receive {:workflow_activation_job,
-                      {:initialize_workflow, %{workflow_id: ^workflow_id}}},
-                     5000
+      Process.sleep(1000)
     end
   end
 

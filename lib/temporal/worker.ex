@@ -76,14 +76,17 @@ defmodule Temporal.Worker do
       child_started =
         DynamicSupervisor.start_child(
           workers_sup,
-          {WorkerSupervisor,
-           {
-             worker_id,
-             core_runtime,
-             core_client,
-             extra_opts ++ [config: worker_opts],
-             [name: reg_name]
-           }}
+          Supervisor.child_spec(
+            {WorkerSupervisor,
+             {
+               worker_id,
+               core_runtime,
+               core_client,
+               extra_opts ++ [config: worker_opts],
+               [name: reg_name]
+             }},
+            restart: :transient
+          )
         )
 
       with {:ok, _} <- child_started do
@@ -113,6 +116,12 @@ defmodule Temporal.Worker do
         true ->
           WorkerWorkflowManager.register(manager_pid, workflow_name, workflow_mod)
       end
+    end
+  end
+
+  def flush_registrations(worker) do
+    with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id) do
+      WorkerWorkflowManager.flush(manager_pid)
     end
   end
 end

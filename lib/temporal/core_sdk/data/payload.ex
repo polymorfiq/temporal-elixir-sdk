@@ -34,4 +34,31 @@ defmodule Temporal.CoreSdk.Data.Payload do
 
     payload
   end
+
+  @spec from_workflow_input(Data.WorkflowInput.t()) :: t()
+  def from_workflow_input({:integer, val}) when is_integer(val),
+    do: %__MODULE__{
+      data: String.to_charlist(Jason.encode!(val)),
+      metadata: %{"encoding" => String.to_charlist("json/plain")}
+    }
+
+  def from_workflow_input({:float, val}) when is_float(val),
+    do: %__MODULE__{
+      data: String.to_charlist(Jason.encode!(val)),
+      metadata: %{"encoding" => String.to_charlist("json/plain")}
+    }
+
+  def from_workflow_input({:string, val}) when is_binary(val),
+    do: %__MODULE__{
+      data: String.to_charlist(Jason.encode!(val)),
+      metadata: %{"encoding" => String.to_charlist("json/plain")}
+    }
+
+  def from_workflow_input({:json, val}) when is_binary(val),
+    do: %__MODULE__{
+      data: String.to_charlist(val),
+      metadata: %{"encoding" => String.to_charlist("json/plain")}
+    }
+
+  def from_workflow_input({:bytes, bytes}), do: %__MODULE__{data: bytes}
 end

@@ -24,4 +24,10 @@ defmodule Temporal.CoreSdk.Data.WorkflowFailureInfo do
           nexus_operation: Data.WorkflowNexusOperationFailureInfo.t() | nil,
           nexus_handler: Data.WorkflowNexusHandlerFailureInfo.t() | nil
         }
+
+  @type opts :: []
+
+  def with_opts!(_opts) do
+    raise "Not implemented!"
+  end
 end

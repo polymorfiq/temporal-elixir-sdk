@@ -119,12 +119,15 @@ defmodule Temporal.Client do
       child_started =
         DynamicSupervisor.start_child(
           clients_sup,
-          {ClientSupervisor,
-           {
-             runtime_core,
-             client_opts,
-             [name: reg_name]
-           }}
+          Supervisor.child_spec(
+            {ClientSupervisor,
+             {
+               runtime_core,
+               client_opts,
+               [name: reg_name]
+             }},
+            restart: :transient
+          )
         )
 
       with {:ok, _} <- child_started do

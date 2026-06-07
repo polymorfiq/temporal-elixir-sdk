@@ -24,7 +24,10 @@ defmodule Temporal.Runtime do
       child_started =
         DynamicSupervisor.start_child(
           Runtimes,
-          {RuntimeSupervisor, opts ++ [name: reg_name, runtime_id: runtime_id]}
+          Supervisor.child_spec(
+            {RuntimeSupervisor, opts ++ [name: reg_name, runtime_id: runtime_id]},
+            restart: :transient
+          )
         )
 
       with {:ok, _pid} <- child_started do
