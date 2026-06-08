@@ -33,8 +33,6 @@ defmodule Temporal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:uuid, "~> 1.1"},
-      {:timex, "~> 3.0"},
       {:rustler, "~> 0.38.0", runtime: false},
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:mock, "~> 0.3.0", only: :test}

@@ -3,6 +3,7 @@ defmodule Temporal.Client do
 
   alias Temporal.ClientRegistry
   alias Temporal.Constants
+  alias Temporal.Internal.Hash
   alias Temporal.Runtime
   alias Temporal.Supervisor.ClientSupervisor
   alias Temporal.Supervisor.RuntimeSupervisor
@@ -84,7 +85,7 @@ defmodule Temporal.Client do
 
     identity =
       Keyword.get_lazy(opts, :identity, fn ->
-        "#{UUID.uuid4()}@#{to_string(:net_adm.localhost())}"
+        "#{Hash.random_hash(16)}@#{to_string(:net_adm.localhost())}"
       end)
 
     client_opts =

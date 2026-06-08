@@ -3,6 +3,7 @@ defmodule Temporal.Worker do
 
   alias Temporal.Activity
   alias Temporal.Client
+  alias Temporal.Internal.Hash
   alias Temporal.TaskQueue
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.Supervisor.ClientSupervisor
@@ -30,7 +31,7 @@ defmodule Temporal.Worker do
     opts = task_queue.default_worker_opts ++ opts
     {extra_opts, core_opts} = Keyword.split(opts, [:forward_polled_messages])
 
-    worker_id = UUID.uuid4()
+    worker_id = Hash.random_hash(32)
     client = task_queue.client
 
     worker_opts =
