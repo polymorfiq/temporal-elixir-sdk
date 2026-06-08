@@ -27,16 +27,25 @@ I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more
 ## Starting a workflow
 
 ```elixir
+alias Temporal.{Client, Worker, TaskQueue, Workflow}
+
 # Connect to Temporal Server
-{:ok, client} = Temporal.Client.new("localhost:7233")
+{:ok, client} = Client.new("localhost:7233")
 
 # Start a worker on the Task Queue
-queue = Temporal.TaskQueue.new(client, "default")
-{:ok, worker} = Temporal.Worker.new(queue)
+queue = TaskQueue.new(client, "default")
+{:ok, worker} = Worker.new(queue)
 
 # Register relevant activities and workflows
-:ok = Temporal.Worker.register_workflow(worker, WorkflowWithActivities)
-:ok = Temporal.Worker.register_activity(worker, &WorkflowWithActivities.activity_1/2)
+:ok = Worker.register_workflow(worker, WorkflowWithActivities)
+:ok = Worker.register_activity(worker, &WorkflowWithActivities.activity_1/2)
+
+# Start workflow
+{:ok, handle} = TaskQueue.start_workflow(queue, "my-workflow", WorkflowWithActivities, ["World"])
+
+# "Received message: Hello, World!"
+{:ok, workflow_result} = Workflow.get(handle)
+IO.puts(workflow_result)
 
 # Define workflow and activities
 defmodule WorkflowWithActivities do
@@ -44,12 +53,14 @@ defmodule WorkflowWithActivities do
   alias Temporal.Workflow
 
   def execute(ctx, msg) do
-    {:ok, act1} =
+    {:ok, activity_handle} =
       Workflow.execute_activity(ctx, &activity_1/2, [msg],
         start_to_close_timeout: {1, :seconds}
       )
 
-    Workflow.get(ctx, act1)
+    {:ok, result} = Workflow.get(ctx, activity_handle)
+    
+    {:ok, "Received message: #{result}"}
   end
 
   def activity_1(_ctx, msg) do
