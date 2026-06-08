@@ -6,6 +6,8 @@
 
 Though, it's MIT Licensed so feel free to fork it and go crazy in making it production-ready!
 
+Here is a [repository of examples](https://github.com/polymorfiq/temporal-elixir-sdk-samples) for using the SDK, that will be expanded as I continue building out the features and building tests!
+
 # Installation
 
 ```elixir
