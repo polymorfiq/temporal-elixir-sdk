@@ -33,11 +33,11 @@ I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more
 # Start a worker on the Task Queue
 task_queue = Temporal.TaskQueue.new(client, "default")
 queue = create_basic_queue(client, "activities_1")
-{:ok, worker} = Worker.new(queue)
+{:ok, worker} = Temporal.Worker.new(queue)
 
 # Register relevant activities and workflows
-:ok = Worker.register_workflow(worker, WorkflowWithActivities)
-:ok = Worker.register_activity(worker, &WorkflowWithActivities.activity_1/2)
+:ok = Temporal.Worker.register_workflow(worker, WorkflowWithActivities)
+:ok = Temporal.Worker.register_activity(worker, &WorkflowWithActivities.activity_1/2)
 
 # Define workflow and activities
 defmodule WorkflowWithActivities do
