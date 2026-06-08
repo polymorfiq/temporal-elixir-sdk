@@ -5,6 +5,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
   alias Temporal.CoreSdk.Data.ActivityTaskCompletion
   alias Temporal.CoreSdk.Data.WorkflowInput
   alias Temporal.CoreSdk.Data.Payload
+  alias Temporal.Supervisor.ActivitySupervisor
 
   require Logger
   require Record
@@ -28,15 +29,17 @@ defmodule Temporal.Activity.ActivityProgressReporter do
     )
   end
 
-  def init(exec_ctx),
-    do:
-      {:ok,
-       progress_state(
-         activity_id: exec_ctx.activity_id,
-         task_token: exec_ctx.activity_task_token,
-         runtime: exec_ctx.runtime,
-         worker: exec_ctx.worker
-       )}
+  def init(exec_ctx) do
+    Process.set_label({:activity_progress_reporter, exec_ctx.activity_id})
+
+    {:ok,
+     progress_state(
+       activity_id: exec_ctx.activity_id,
+       task_token: exec_ctx.activity_task_token,
+       runtime: exec_ctx.runtime,
+       worker: exec_ctx.worker
+     )}
+  end
 
   @spec report_success(pid, term()) :: :ok | {:error, term()}
   def report_success(pid, result),
@@ -82,7 +85,14 @@ defmodule Temporal.Activity.ActivityProgressReporter do
 
     receive do
       {^child, resp} ->
-        {:reply, resp, state}
+        {:reply, resp, state, {:continue, :stop_activity}}
     end
+  end
+
+  def handle_continue(:stop_activity, state) do
+    activity_id = progress_state(state, :activity_id)
+    ActivitySupervisor.stop_activity(activity_id)
+
+    {:noreply, state}
   end
 end

@@ -11,13 +11,12 @@ defmodule Temporal.Supervisor.ClientSupervisor do
   @impl true
   def init({runtime_core, opts}) do
     identity = opts.identity
+    Process.set_label({:client_supervisor, identity})
 
     children = [
       {CoreClient, {runtime_core, opts, [name: via_registry({:core, identity})]}},
       {WorkerList, [name: via_registry({:workers, identity})]}
     ]
-
-    Process.set_label({:client_sup, identity})
 
     Supervisor.init(children, strategy: :one_for_all)
   end

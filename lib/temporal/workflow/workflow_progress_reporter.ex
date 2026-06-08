@@ -38,6 +38,8 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   end
 
   def init(exec_ctx) do
+    Process.set_label({:workflow_progress_reporter, exec_ctx.run_id})
+
     {:ok,
      progress_state(
        run_id: exec_ctx.run_id,
@@ -47,11 +49,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
        next_seq: 1,
        runtime: exec_ctx.runtime,
        worker: exec_ctx.worker
-     ), {:continue, :started}}
-  end
-
-  def handle_continue(:started, state) do
-    {:noreply, state}
+     )}
   end
 
   @spec schedule_activity(
@@ -150,7 +148,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         commands: [{:complete_workflow_execution, [result: output]}]
       )
 
-    {:reply, send_resp, state}
+    {:reply, send_resp, state, {:continue, :stop_workflow}}
   end
 
   @spec report_successful_completion(progress_state(), SuccessStatus.opts()) ::
@@ -220,5 +218,12 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
       {^child, state, resp} ->
         {state, resp}
     end
+  end
+
+  def handle_continue(:stop_workflow, state) do
+    run_id = progress_state(state, :run_id)
+    WorkflowSupervisor.stop_workflow(run_id)
+
+    {:noreply, state}
   end
 end

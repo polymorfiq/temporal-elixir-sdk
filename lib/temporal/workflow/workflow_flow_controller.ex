@@ -20,6 +20,7 @@ defmodule Temporal.Workflow.WorkflowFlowController do
   end
 
   def init(exec_ctx) do
+    Process.set_label({:workflow_flow_control, exec_ctx.run_id})
     {:ok, flow_state(id: exec_ctx.run_id, workflow_id: exec_ctx.workflow_id)}
   end
 

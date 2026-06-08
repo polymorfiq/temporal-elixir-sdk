@@ -17,6 +17,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
 
   @spec init(ExecutionContext.t()) :: {:ok, pid()} | {:error, term()}
   def init(exec_ctx) do
+    Process.set_label({:activity_manager, exec_ctx.worker_id})
     {:ok, activities_state(worker_id: exec_ctx.worker_id, exec_ctx: exec_ctx)}
   end
 
@@ -52,7 +53,6 @@ defmodule Temporal.Worker.WorkerActivityManager do
 
       true ->
         exec_ctx = activities_state(state, :exec_ctx)
-        reg_name = {:via, Registry, {ActivityRegistry, {:activity, start.activity_id}}}
 
         resp =
           with {:ok, activities_sup} <- WorkerSupervisor.activities_sup_for_id(exec_ctx.worker_id),
@@ -72,7 +72,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
                          activity_start: start,
                          activity_task_token: task.task_token
                      },
-                     [name: reg_name]
+                     [name: ActivitySupervisor.process_name(start.activity_id)]
                    }},
                   restart: :temporary
                 )
@@ -91,5 +91,10 @@ defmodule Temporal.Worker.WorkerActivityManager do
     cancel |> IO.inspect(label: "cancel-activity")
 
     {:reply, :ok, state}
+  end
+
+  @spec process_name(activity_id :: String.t()) :: {:via, atom(), term()}
+  def process_name(activity_id) do
+    {:via, Registry, {ActivityRegistry, {:activity, activity_id}}}
   end
 end

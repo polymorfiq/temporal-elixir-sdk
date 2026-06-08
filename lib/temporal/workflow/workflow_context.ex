@@ -13,6 +13,8 @@ defmodule Temporal.Workflow.WorkflowContext do
 
   @spec new(ExecutionContext.t()) :: t()
   def new(exec_ctx) do
+    Process.set_label({:workflow_context, exec_ctx.run_id})
+
     with {:ok, context_pid} <- WorkflowSupervisor.context_pid(exec_ctx.run_id),
          {:ok, reporter_pid} <- WorkflowSupervisor.progress_reporter_pid(exec_ctx.run_id),
          {:ok, flow_control_pid} <- WorkflowSupervisor.flow_control_pid(exec_ctx.run_id) do

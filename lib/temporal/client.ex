@@ -85,7 +85,7 @@ defmodule Temporal.Client do
 
     identity =
       Keyword.get_lazy(opts, :identity, fn ->
-        "#{Hash.random_hash(16)}@#{to_string(:net_adm.localhost())}"
+        "#{Hash.random_hash(8)}@#{to_string(:net_adm.localhost())}"
       end)
 
     client_opts =

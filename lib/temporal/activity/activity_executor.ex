@@ -25,6 +25,7 @@ defmodule Temporal.Activity.ActivityExecutor do
   end
 
   def init(exec_ctx) do
+    Process.set_label({:activity_executor, exec_ctx.activity_id})
     Process.flag(:trap_exit, true)
 
     {:ok,

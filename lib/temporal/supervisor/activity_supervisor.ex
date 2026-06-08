@@ -21,6 +21,8 @@ defmodule Temporal.Supervisor.ActivitySupervisor do
 
   @impl true
   def init(exec_ctx) do
+    Process.set_label({:activity_supervisor, exec_ctx.activity_id})
+
     children = [
       {ActivityContext, {exec_ctx, [name: via_registry({:context, exec_ctx.activity_id})]}},
       {ActivityProgressReporter,
@@ -31,6 +33,17 @@ defmodule Temporal.Supervisor.ActivitySupervisor do
     Supervisor.init(children, strategy: :one_for_all)
   end
 
+  @spec stop_activity(activity_id :: String.t()) :: :ok
+  def stop_activity(activity_id) do
+    if sup = GenServer.whereis(process_name(activity_id)) do
+      spawn(fn ->
+        Supervisor.stop(sup, :shutdown, :infinity)
+      end)
+    end
+
+    :ok
+  end
+
   @spec progress_reporter_pid(activity_id()) :: {:ok, term()} | {:error, term()}
   def progress_reporter_pid(activity_id) do
     if pid = GenServer.whereis(via_registry({:progress_reporter, activity_id})) do
@@ -39,6 +52,9 @@ defmodule Temporal.Supervisor.ActivitySupervisor do
       {:error, :progress_reporter_not_running}
     end
   end
+
+  @spec process_name(activity_id :: String.t()) :: {:via, atom(), term()}
+  def process_name(activity_id), do: via_registry({:activity, activity_id})
 
   defp via_registry(name), do: {:via, Registry, {ActivityRegistry, name}}
 end

@@ -1,10 +1,8 @@
 defmodule Temporal.Workflow.WorkflowExecutor do
   use GenServer
 
-  alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Workflow.WorkflowProgressReporter
-  alias Temporal.Worker.WorkerWorkflowManager
   alias Temporal.Workflow.WorkflowContext
 
   require Logger
@@ -28,6 +26,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
   end
 
   def init({exec_ctx, initialize}) do
+    Process.set_label({:workflow_executor, exec_ctx.run_id})
     Process.flag(:trap_exit, true)
 
     {:ok,
@@ -76,9 +75,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
   def handle_continue(:complete, state) do
     run_id = workflow_state(state, :id)
-    worker_id = workflow_state(state, :worker_id)
-    {:ok, manager} = WorkerSupervisor.workflow_manager_pid(worker_id)
-    WorkerWorkflowManager.stop_workflow_with_id(manager, run_id)
+    WorkflowSupervisor.stop_workflow(run_id)
 
     {:noreply, state}
   end

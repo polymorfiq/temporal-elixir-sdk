@@ -14,6 +14,8 @@ defmodule Temporal.Worker.NexusTaskPoller do
 
   @spec init({CoreRuntime.t(), CoreClient.t(), WorkerOpts.t()}) :: {:ok, pid()} | {:error, term()}
   def init(exec_ctx) do
+    Process.set_label({:nexus_task_poller, exec_ctx.worker_id})
+
     with {:ok, worker_pid} <- WorkerSupervisor.worker_pid(exec_ctx.worker_id),
          {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
       {:ok,
@@ -40,6 +42,7 @@ defmodule Temporal.Worker.NexusTaskPoller do
   end
 
   defp poll_and_inform_worker(state) do
+    worker_id = poll_state(state, :worker_id)
     runtime_core = poll_state(state, :core_runtime)
     worker_core = poll_state(state, :core_worker)
     worker_pid = poll_state(state, :worker_pid)
@@ -48,6 +51,8 @@ defmodule Temporal.Worker.NexusTaskPoller do
 
     child =
       spawn_link(fn ->
+        Process.set_label({:long_nexus_poll, worker_id})
+
         case CoreSdk._worker_poll_nexus_task(runtime_core.core, worker_core.core, self()) do
           :ok ->
             receive do

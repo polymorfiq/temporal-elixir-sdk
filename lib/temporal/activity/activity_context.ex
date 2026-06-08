@@ -24,6 +24,7 @@ defmodule Temporal.Activity.ActivityContext do
   end
 
   def init(exec_ctx) do
+    Process.set_label({:activity_context, exec_ctx.activity_id})
     {:ok, context_state(activity_id: exec_ctx.activity_id)}
   end
 end

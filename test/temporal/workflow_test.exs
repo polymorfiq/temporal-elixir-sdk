@@ -110,19 +110,19 @@ defmodule Temporal.WorkflowTest do
 
   describe "with activities" do
     defmodule WorkflowWithActivities do
-      use Temporal.Workflow, activities: [activity_1: 2]
+      use Temporal.Workflow, activities: [greet_activity: 2]
       alias Temporal.Workflow
 
       def execute(ctx, msg) do
         {:ok, act1} =
-          Workflow.execute_activity(ctx, &activity_1/2, [msg],
+          Workflow.execute_activity(ctx, &greet_activity/2, [msg],
             start_to_close_timeout: {1, :seconds}
           )
 
         Workflow.get(ctx, act1)
       end
 
-      def activity_1(_ctx, msg) do
+      def greet_activity(_ctx, msg) do
         {:ok, "Hello, #{msg}!"}
       end
     end

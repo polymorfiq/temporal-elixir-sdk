@@ -33,6 +33,7 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
   @impl true
   def init({exec_ctx, opts}) do
     worker_id = exec_ctx.worker_id
+    Process.set_label({:worker_supervisor, worker_id})
 
     children = [
       {CoreWorker, {exec_ctx, opts, [name: via_registry({:core, worker_id}), shutdown: 10_000]}},

@@ -28,7 +28,7 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
 
   @impl true
   def init({exec_ctx, initialize}) do
-    Process.set_label({:workflow_sup, exec_ctx.workflow_id})
+    Process.set_label({:workflow_supervisor, exec_ctx.workflow_id})
 
     run_id = exec_ctx.run_id
 
@@ -41,6 +41,17 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
+  end
+
+  @spec stop_workflow(run_id :: String.t()) :: :ok
+  def stop_workflow(run_id) do
+    if sup = GenServer.whereis(process_name(run_id)) do
+      spawn(fn ->
+        Supervisor.stop(sup, :shutdown, :infinity)
+      end)
+    end
+
+    :ok
   end
 
   @spec progress_reporter_pid(workflow_id()) :: {:ok, term()} | {:error, term()}
@@ -69,6 +80,9 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
       {:error, :flow_control_not_running}
     end
   end
+
+  @spec process_name(run_id :: String.t()) :: {:via, atom(), term()}
+  def process_name(run_id), do: via_registry({:workflow, run_id})
 
   defp via_registry(name), do: {:via, Registry, {WorkflowRegistry, name}}
 end

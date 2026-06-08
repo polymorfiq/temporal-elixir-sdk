@@ -2,7 +2,6 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   use GenServer
   alias Temporal.TaskQueue
   alias Temporal.Worker
-  alias Temporal.WorkflowRegistry
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Workflow.WorkflowProgressReporter
@@ -24,6 +23,8 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
   @spec init({String.t(), TaskQueue.t(), Worker.worker_opts()}) :: {:ok, pid()} | {:error, term()}
   def init({exec_ctx, opts}) do
+    Process.set_label({:workflow_manager, exec_ctx.worker_id})
+
     {:ok,
      manager_state(
        exec_ctx: exec_ctx,
@@ -38,22 +39,9 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
   def register(pid, name, module), do: GenServer.cast(pid, {:register, name, module})
 
-  def stop_workflow_with_id(pid, workflow_id),
-    do: GenServer.cast(pid, {:stop_workflow_id, workflow_id})
-
   def handle_cast({:register, name, module}, state) do
     registered = manager_state(state, :registered)
     {:noreply, manager_state(state, registered: Map.put(registered, name, module))}
-  end
-
-  def handle_cast({:stop_workflow_id, workflow_id}, state) do
-    if sup = GenServer.whereis(workflow_sup_id(workflow_id)) do
-      spawn(fn ->
-        Supervisor.stop(sup, :shutdown, :infinity)
-      end)
-    end
-
-    {:noreply, state}
   end
 
   def handle_call({:process_activation, activation}, _from, state) do
@@ -83,8 +71,6 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
     resp =
       if workflow_module = registered[initialize.workflow_type] do
-        reg_name = workflow_sup_id(initialize.workflow_id)
-
         with {:ok, worker} <- WorkerSupervisor.core_for_id(worker_id),
              {:ok, workflows_sup} <- WorkerSupervisor.workflows_sup_for_id(worker_id) do
           child_started =
@@ -101,7 +87,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
                        worker: worker
                    },
                    initialize,
-                   [name: reg_name]
+                   [name: WorkflowSupervisor.process_name(activation.run_id)]
                  }},
                 restart: :temporary
               )
@@ -127,11 +113,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
       "Removing from cache (#{job.reason} - #{job.message}): Workflow Run (#{activation.run_id})"
     )
 
-    if sup = GenServer.whereis(workflow_sup_id(activation.run_id)) do
-      spawn(fn ->
-        Supervisor.stop(sup, :shutdown, :infinity)
-      end)
-    end
+    WorkflowSupervisor.stop_workflow(activation.run_id)
 
     {:ok, state}
   end
@@ -156,7 +138,4 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
     {:ok, state}
   end
-
-  defp workflow_sup_id(workflow_id),
-    do: {:via, Registry, {WorkflowRegistry, {:workflow, workflow_id}}}
 end
