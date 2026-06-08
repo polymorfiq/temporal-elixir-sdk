@@ -4,11 +4,12 @@ use crate::common::{
 };
 use crate::core_worker::SdkWorkerDeploymentVersion;
 use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
-use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::RwLock;
 use temporalio_sdk_client::{Client, WorkflowHandle, WorkflowStartOptions, WorkflowStartSignal};
 use temporalio_sdk_common::data_converters::{
-    GenericPayloadConverter, PayloadConversionError, SerializationContext, TemporalSerializable,
+    GenericPayloadConverter, PayloadConversionError, SerializationContext, TemporalDeserializable,
+    TemporalSerializable,
 };
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_resolution::Status as ActivityResolutionStatus;
 use temporalio_sdk_common::protos::coresdk::child_workflow::child_workflow_result::Status as ChildWorkflowStatus;
@@ -29,11 +30,10 @@ use temporalio_sdk_common::protos::temporal::api::failure::v1::failure::FailureI
 use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::{HasWorkflowDefinition, WorkflowDefinition};
-use tokio::sync::Mutex;
 
 pub struct ElixirWorkflowHandle<W> {
     #[allow(unused)]
-    pub handle: Mutex<WorkflowHandle<Client, W>>,
+    pub handle: RwLock<WorkflowHandle<Client, W>>,
 }
 
 #[rustler::resource_impl]
@@ -708,14 +708,14 @@ impl Into<workflow_activation::ResolveNexusOperation> for SdkActivationResolveNe
 #[module = "Temporal.CoreSdk.Data.ActivationRemoveFromCache"]
 pub struct SdkActivationRemoveFromCache {
     pub message: String,
-    pub reason: i32,
+    pub reason: SdkCacheEvictionReason,
 }
 
 impl From<workflow_activation::RemoveFromCache> for SdkActivationRemoveFromCache {
     fn from(external: workflow_activation::RemoveFromCache) -> Self {
         Self {
             message: external.message,
-            reason: external.reason,
+            reason: external.reason.into(),
         }
     }
 }
@@ -724,7 +724,60 @@ impl Into<workflow_activation::RemoveFromCache> for SdkActivationRemoveFromCache
     fn into(self) -> workflow_activation::RemoveFromCache {
         workflow_activation::RemoveFromCache {
             message: self.message,
-            reason: self.reason,
+            reason: self.reason.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkCacheEvictionReason {
+    Unspecified = 0,
+    CacheFull = 1,
+    CacheMiss = 2,
+    Nondeterminism = 3,
+    LangFail = 4,
+    LangRequested = 5,
+    TaskNotFound = 6,
+    UnhandledCommand = 7,
+    Fatal = 8,
+    PaginationOrHistoryFetch = 9,
+    WorkflowExecutionEnding = 10,
+}
+
+impl Into<i32> for SdkCacheEvictionReason {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::CacheFull => 1,
+            Self::CacheMiss => 2,
+            Self::Nondeterminism => 3,
+            Self::LangFail => 4,
+            Self::LangRequested => 5,
+            Self::TaskNotFound => 6,
+            Self::UnhandledCommand => 7,
+            Self::Fatal => 8,
+            Self::PaginationOrHistoryFetch => 9,
+            Self::WorkflowExecutionEnding => 10,
+        }
+    }
+}
+
+impl From<i32> for SdkCacheEvictionReason {
+    fn from(intent: i32) -> SdkCacheEvictionReason {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::CacheFull,
+            2 => Self::CacheMiss,
+            3 => Self::Nondeterminism,
+            4 => Self::LangFail,
+            5 => Self::LangRequested,
+            6 => Self::TaskNotFound,
+            7 => Self::UnhandledCommand,
+            8 => Self::Fatal,
+            9 => Self::PaginationOrHistoryFetch,
+            10 => Self::WorkflowExecutionEnding,
+            _ => Self::Unspecified,
         }
     }
 }
@@ -1116,7 +1169,7 @@ impl From<i32> for SdkStartChildWorkflowExecutionFailedCause {
         match intent {
             0 => Self::Unspecified,
             1 => Self::WorkflowAlreadyExists,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -1597,7 +1650,7 @@ impl From<i32> for SdkApplicationErrorCategory {
         match intent {
             0 => Self::Unspecified,
             1 => Self::Benign,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -1657,7 +1710,7 @@ impl From<i32> for SdkTimeoutType {
             2 => Self::ScheduleToStart,
             3 => Self::ScheduleToClose,
             4 => Self::Heartbeat,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -1829,7 +1882,7 @@ impl From<i32> for SdkRetryState {
             5 => Self::RetryPolicyNotSet,
             6 => Self::InternalServerError,
             7 => Self::CancelRequested,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -2036,7 +2089,7 @@ impl From<i32> for SdkNexusHandlerErrorRetryBehavior {
             0 => Self::Unspecified,
             1 => Self::Retryable,
             2 => Self::NonRetryable,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -2131,7 +2184,7 @@ impl Into<workflow_completion::Success> for SdkWorkflowActivationCompletionSucce
 pub enum SdkVersioningBehavior {
     Unspecified = 0,
     Pinned = 1,
-    AutoUpgrade = 2
+    AutoUpgrade = 2,
 }
 
 impl Into<i32> for SdkVersioningBehavior {
@@ -2139,7 +2192,7 @@ impl Into<i32> for SdkVersioningBehavior {
         match self {
             Self::Unspecified => 0,
             Self::Pinned => 1,
-            Self::AutoUpgrade => 2
+            Self::AutoUpgrade => 2,
         }
     }
 }
@@ -2150,7 +2203,7 @@ impl From<i32> for SdkVersioningBehavior {
             0 => Self::Unspecified,
             1 => Self::Pinned,
             2 => Self::AutoUpgrade,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -2220,7 +2273,7 @@ pub enum SdkWorkflowTaskFailedCause {
     BadRequestCancelNexusOperationAttributes = 34,
     FeatureDisabled = 35,
     GrpcMessageTooLarge = 36,
-    PayloadsTooLarge = 37
+    PayloadsTooLarge = 37,
 }
 
 impl Into<i32> for SdkWorkflowTaskFailedCause {
@@ -2263,7 +2316,7 @@ impl Into<i32> for SdkWorkflowTaskFailedCause {
             Self::BadRequestCancelNexusOperationAttributes => 34,
             Self::FeatureDisabled => 35,
             Self::GrpcMessageTooLarge => 36,
-            Self::PayloadsTooLarge => 37
+            Self::PayloadsTooLarge => 37,
         }
     }
 }
@@ -2309,7 +2362,7 @@ impl From<i32> for SdkWorkflowTaskFailedCause {
             35 => Self::FeatureDisabled,
             36 => Self::GrpcMessageTooLarge,
             37 => Self::PayloadsTooLarge,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -2758,7 +2811,7 @@ pub struct SdkWorkflowCommandContinueAsNewWorkflowExecution {
 pub enum SdkContinueAsNewVersioningBehavior {
     Unspecified = 0,
     AutoUpgrade = 1,
-    UseRampVersion = 2
+    UseRampVersion = 2,
 }
 
 impl Into<i32> for SdkContinueAsNewVersioningBehavior {
@@ -2766,7 +2819,7 @@ impl Into<i32> for SdkContinueAsNewVersioningBehavior {
         match self {
             Self::Unspecified => 0,
             Self::AutoUpgrade => 1,
-            Self::UseRampVersion => 2
+            Self::UseRampVersion => 2,
         }
     }
 }
@@ -2777,7 +2830,7 @@ impl From<i32> for SdkContinueAsNewVersioningBehavior {
             0 => Self::Unspecified,
             1 => Self::AutoUpgrade,
             2 => Self::UseRampVersion,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -2992,7 +3045,7 @@ impl Into<workflow_commands::StartChildWorkflowExecution>
 pub enum SdkVersioningIntent {
     Unspecified = 0,
     Compatible = 1,
-    Default = 2
+    Default = 2,
 }
 
 impl Into<i32> for SdkVersioningIntent {
@@ -3000,7 +3053,7 @@ impl Into<i32> for SdkVersioningIntent {
         match self {
             Self::Unspecified => 0,
             Self::Compatible => 1,
-            Self::Default => 2
+            Self::Default => 2,
         }
     }
 }
@@ -3011,7 +3064,7 @@ impl From<i32> for SdkVersioningIntent {
             0 => Self::Unspecified,
             1 => Self::Compatible,
             2 => Self::Default,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -3022,7 +3075,7 @@ pub enum SdkChildWorkflowCancellationType {
     Abandon = 0,
     TryCancel = 1,
     WaitCancellationCompleted = 2,
-    WaitCancellationRequested = 3
+    WaitCancellationRequested = 3,
 }
 
 impl Into<i32> for SdkChildWorkflowCancellationType {
@@ -3031,7 +3084,7 @@ impl Into<i32> for SdkChildWorkflowCancellationType {
             Self::Abandon => 0,
             Self::TryCancel => 1,
             Self::WaitCancellationCompleted => 2,
-            Self::WaitCancellationRequested => 3
+            Self::WaitCancellationRequested => 3,
         }
     }
 }
@@ -3043,7 +3096,7 @@ impl From<i32> for SdkChildWorkflowCancellationType {
             1 => Self::TryCancel,
             2 => Self::WaitCancellationCompleted,
             3 => Self::WaitCancellationRequested,
-            _ => Self::Abandon
+            _ => Self::Abandon,
         }
     }
 }
@@ -3062,7 +3115,7 @@ impl Into<i32> for SdkChildWorkflowParentClosePolicy {
             Self::Unspecified => 0,
             Self::Terminate => 1,
             Self::Abandon => 2,
-            Self::RequestCancel => 2
+            Self::RequestCancel => 2,
         }
     }
 }
@@ -3074,7 +3127,7 @@ impl From<i32> for SdkChildWorkflowParentClosePolicy {
             1 => Self::Terminate,
             2 => Self::Abandon,
             3 => Self::RequestCancel,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -3086,7 +3139,7 @@ pub enum SdkWorkflowIdReusePolicy {
     AllowDuplicate = 1,
     AllowDuplicateFailedOnly = 2,
     RejectDuplicate = 3,
-    TerminateIfRunning = 4
+    TerminateIfRunning = 4,
 }
 
 impl Into<i32> for SdkWorkflowIdReusePolicy {
@@ -3096,7 +3149,7 @@ impl Into<i32> for SdkWorkflowIdReusePolicy {
             Self::AllowDuplicate => 1,
             Self::AllowDuplicateFailedOnly => 2,
             Self::RejectDuplicate => 3,
-            Self::TerminateIfRunning => 4
+            Self::TerminateIfRunning => 4,
         }
     }
 }
@@ -3109,7 +3162,7 @@ impl From<i32> for SdkWorkflowIdReusePolicy {
             2 => Self::AllowDuplicateFailedOnly,
             3 => Self::RejectDuplicate,
             4 => Self::TerminateIfRunning,
-            _ => Self::Unspecified
+            _ => Self::Unspecified,
         }
     }
 }
@@ -3288,7 +3341,7 @@ pub struct SdkWorkflowCommandScheduleLocalActivity {
 pub enum SdkActivityCancellationType {
     TryCancel = 0,
     WaitCancellationCompleted = 1,
-    Abandon = 2
+    Abandon = 2,
 }
 
 impl Into<i32> for SdkActivityCancellationType {
@@ -3296,7 +3349,7 @@ impl Into<i32> for SdkActivityCancellationType {
         match self {
             Self::TryCancel => 0,
             Self::WaitCancellationCompleted => 1,
-            Self::Abandon => 2
+            Self::Abandon => 2,
         }
     }
 }
@@ -3307,7 +3360,7 @@ impl From<i32> for SdkActivityCancellationType {
             0 => Self::TryCancel,
             1 => Self::WaitCancellationCompleted,
             2 => Self::Abandon,
-            _ => Self::TryCancel
+            _ => Self::TryCancel,
         }
     }
 }
@@ -3570,7 +3623,7 @@ impl From<i32> for SdkNexusOperationCancellationType {
             1 => Self::Abandon,
             2 => Self::TryCancel,
             3 => Self::WaitCancellationRequested,
-            _ => Self::WaitCancellationCompleted
+            _ => Self::WaitCancellationCompleted,
         }
     }
 }
@@ -3860,10 +3913,27 @@ impl HasWorkflowDefinition for SdkWorkflowDefinition {
     type Run = Self;
 }
 
-#[derive(NifStruct, Deserialize)]
+#[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.WorkflowArguments"]
 pub struct SdkWorkflowArguments {
     pub args: Vec<SdkWorkflowInput>,
+}
+
+impl TemporalDeserializable for SdkWorkflowArguments {
+    fn from_payloads(
+        ctx: &SerializationContext<'_>,
+        payloads: Vec<Payload>,
+    ) -> Result<Self, PayloadConversionError> {
+        let mut args = vec![];
+        for (_idx, payload) in payloads.iter().enumerate() {
+            match SdkWorkflowInput::from_payload(ctx, payload.clone()) {
+                Ok(input) => args.push(input),
+                Err(err) => return Err(err),
+            };
+        }
+
+        Ok(Self { args: args })
+    }
 }
 
 impl TemporalSerializable for SdkWorkflowArguments {
@@ -3883,13 +3953,49 @@ impl TemporalSerializable for SdkWorkflowArguments {
     }
 }
 
-#[derive(NifTaggedEnum, Deserialize, Clone)]
+#[derive(NifTaggedEnum, Clone)]
 pub enum SdkWorkflowInput {
     Integer(i64),
     Float(f64),
     String(String),
     JSON(String),
     Bytes(Vec<u8>),
+}
+
+impl TemporalDeserializable for SdkWorkflowInput {
+    fn from_payload(
+        _ctx: &SerializationContext<'_>,
+        payload: Payload,
+    ) -> Result<Self, PayloadConversionError> {
+        let encoding = match payload.metadata.get("encoding") {
+            Some(encoding) => {
+                String::from_utf8(encoding.clone()).expect("Encoding of payload was not UTF8")
+            }
+            None => String::from("bytes/plain"),
+        };
+
+        match encoding.as_str() {
+            "json/plain" => {
+                let json_str = String::from_utf8(payload.data).expect("JSON payload was not UTF8");
+                let v: serde_json::Value =
+                    serde_json::from_str(json_str.as_str()).expect("Could not decode JSON");
+
+                if let Some(float_val) = v.as_f64() {
+                    Ok(Self::Float(float_val))
+                } else if let Some(int_val) = v.as_i64() {
+                    Ok(Self::Integer(int_val))
+                } else if let Some(str_val) = v.as_str() {
+                    Ok(Self::String(String::from(str_val)))
+                } else {
+                    Ok(Self::JSON(json_str))
+                }
+            }
+
+            "bytes/plain" => Ok(Self::Bytes(payload.data)),
+
+            _ => Err(PayloadConversionError::WrongEncoding),
+        }
+    }
 }
 
 impl TemporalSerializable for SdkWorkflowInput {

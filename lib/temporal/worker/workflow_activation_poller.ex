@@ -2,9 +2,9 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
   use GenServer
 
   alias Temporal.CoreSdk
-  alias Temporal.CoreSdk.CoreWorker
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Worker.WorkerWorkflowManager
+  alias Temporal.Supervisor.ExecutionContext
 
   require Logger
   require Record
@@ -17,23 +17,22 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     :core_runtime
   ])
 
-  def start_link({worker_id, server_opts}) do
-    GenServer.start_link(__MODULE__, worker_id, server_opts)
+  def start_link({exec_ctx, server_opts}) do
+    GenServer.start_link(__MODULE__, exec_ctx, server_opts)
   end
 
-  @spec init({CoreRuntime.t(), CoreClient.t(), WorkerOpts.t()}) :: {:ok, pid()} | {:error, term()}
-  def init(worker_id) do
-    with {:ok, worker_pid} <- WorkerSupervisor.worker_pid(worker_id),
-         {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker_id),
-         {:ok, core_worker} <- CoreWorker.get_core(worker_pid),
-         {:ok, core_runtime} <- CoreWorker.get_runtime(worker_pid) do
+  @spec init(ExecutionContext.t()) :: {:ok, pid()} | {:error, term()}
+  def init(exec_ctx) do
+    with {:ok, worker_pid} <- WorkerSupervisor.worker_pid(exec_ctx.worker_id),
+         {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(exec_ctx.worker_id),
+         {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
       {:ok,
        poll_state(
-         worker_id: worker_id,
+         worker_id: exec_ctx.worker_id,
          worker_pid: worker_pid,
          manager_pid: manager_pid,
-         core_worker: core_worker,
-         core_runtime: core_runtime
+         core_worker: worker,
+         core_runtime: exec_ctx.runtime
        ), {:continue, :poll_for_activations}}
     end
   end
@@ -82,12 +81,7 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     poll_resp =
       receive do
         {^child, {:ok, activation}} ->
-          Enum.reduce(activation.jobs, :ok, fn job, curr_state ->
-            with :ok <- curr_state,
-                 :ok <- WorkerWorkflowManager.process_activation_job(manager_pid, job.variant) do
-              :ok
-            end
-          end)
+          WorkerWorkflowManager.process_activation(manager_pid, activation)
 
         {^child, {:error, err}} ->
           send(worker_pid, {:workflow_activation_error, err})

@@ -3,6 +3,7 @@ defmodule Temporal.WorkflowTest do
   doctest Temporal.Workflow
   alias Temporal.Client
   alias Temporal.TaskQueue
+  alias Temporal.Workflow
   alias Temporal.Worker
 
   setup_all [:setup_create_task_queue]
@@ -83,7 +84,7 @@ defmodule Temporal.WorkflowTest do
       {:ok, _} = TaskQueue.start_workflow(queue, workflow_id, ShouldRunSuccessfully, ["World!"])
 
       assert_receive {:workflow_activation_job,
-                      {:initialize_workflow, %{workflow_id: ^workflow_id}}},
+                      {:initialize_workflow, %{workflow_id: ^workflow_id}}, _},
                      5000
     end
 
@@ -94,38 +95,62 @@ defmodule Temporal.WorkflowTest do
       Worker.flush_registrations(worker)
 
       workflow_id = unique_name("completes-workflow")
-      {:ok, _} = TaskQueue.start_workflow(queue, workflow_id, ShouldRunSuccessfully, ["World!"])
+      {:ok, handle} = Workflow.start(queue, workflow_id, ShouldRunSuccessfully, ["World!"])
 
-      raise "TODO"
+      parent = self()
+
+      child =
+        spawn_link(fn ->
+          result = Workflow.get(handle)
+          send(parent, {self(), result})
+        end)
+
+      assert_receive {^child, {:ok, "Hello, World!!"}}, 5000
     end
   end
 
   describe "with activities" do
     defmodule WorkflowWithActivities do
       use Temporal.Workflow
-
-      alias Temporal.{Activity, Workflow}
+      alias Temporal.Workflow
 
       def execute(ctx, msg) do
-        act1 = Workflow.execute_activity(ctx, &activity_1/2)
-        {:ok, resp} = Activity.get_response(ctx, act1)
+        {:ok, act1} =
+          Workflow.execute_activity(ctx, &activity_1/2, [msg],
+            start_to_close_timeout: {1, :seconds}
+          )
+
+        Process.sleep(5_000)
+        {:ok, resp} = Workflow.get(ctx, act1)
 
         {:ok, resp}
       end
 
-      def activity_1(ctx, msg) do
+      def activity_1(_ctx, msg) do
         {:ok, "Hello, #{msg}!"}
       end
     end
 
     test "executes correct activity and gets response", %{client: client} do
       queue = create_basic_queue(client, "activities_1")
-      {:ok, _} = Worker.new(queue, forward_polled_messages: self())
+      {:ok, worker} = Worker.new(queue, forward_polled_messages: self())
+      :ok = Worker.register_workflow(worker, WorkflowWithActivities)
+      Worker.flush_registrations(worker)
 
       workflow_id = unique_name("workflow-with-activities")
-      {:ok, _} = TaskQueue.start_workflow(queue, workflow_id, WorkflowWithActivities, ["World!"])
 
-      raise "TODO"
+      {:ok, handle} =
+        TaskQueue.start_workflow(queue, workflow_id, WorkflowWithActivities, ["World!"])
+
+      parent = self()
+
+      child =
+        spawn_link(fn ->
+          result = Workflow.get(handle)
+          send(parent, {self(), result})
+        end)
+
+      assert_receive {^child, {:ok, "Hello, World!!"}}, 5000
     end
   end
 

@@ -1,13 +1,25 @@
 defmodule Temporal.Workflow do
+  alias Temporal.Activity.ActivityExecHandle
+  alias Temporal.Client
   alias Temporal.CoreSdk
-  alias Temporal.Workflows.WorkflowExecHandle
   alias Temporal.CoreSdk.Data.WorkflowGetResultOptions
+  alias Temporal.CoreSdk.Data.WorkflowStartOptions
+  alias Temporal.CoreSdk.Data.WorkflowArguments
+  alias Temporal.TaskQueue
+  alias Temporal.Workflows.WorkflowExecHandle
+  alias Temporal.Workflow.WorkflowContext
+  alias Temporal.Workflow.WorkflowProgressReporter
+  alias Temporal.Supervisor.WorkflowSupervisor
 
   @type workflow_exec_handle() :: WorkflowExecHandle.t()
   @type get_results_opts() :: [
           {:follow_runs, bool()},
           {:timeout, {pos_integer(), :second} | {pos_integer(), :ms}}
         ]
+  @type activity_exec_opts ::
+          [{:name, String.t()}] | WorkflowProgressReporter.schedule_activity_opts()
+
+  @type exec_handle() :: WorkflowExecHandle.t() | ActivityExecHandle.t()
 
   @watch_result_msg :workflow_result
 
@@ -19,9 +31,8 @@ defmodule Temporal.Workflow do
   @spec result(workflow_exec_handle(), get_results_opts()) ::
           {:ok, WorkflowArguments.t()} | {:error, term()}
   def result(%WorkflowExecHandle{} = handle, opts \\ []) do
-    with {:ok, opts} <- Keyword.validate(opts, [:follow_runs, :timeout]) do
-      runtime = handle.client.runtime
-
+    with {:ok, opts} <- Keyword.validate(opts, [:follow_runs, :timeout]),
+         {:ok, runtime} <- Client.core_runtime(handle.client) do
       get_result_opts = %WorkflowGetResultOptions{
         follow_runs: Keyword.get(opts, :follow_runs, true)
       }
@@ -31,13 +42,13 @@ defmodule Temporal.Workflow do
       {pid, ref} =
         spawn_monitor(fn ->
           CoreSdk._workflow_handle_get_result(
-            runtime.runtime,
+            runtime.core,
             handle.handle,
             get_result_opts,
             self()
           )
           |> case do
-            {:ok, _} -> :ok
+            :ok -> :ok
             {:error, err} -> raise "Could not get workflow result from Core SDK: #{inspect(err)}"
           end
 
@@ -53,11 +64,11 @@ defmodule Temporal.Workflow do
       timeout = Keyword.get(opts, :timeout, :infinity)
 
       receive do
-        {^pid, response} ->
-          response
+        {^pid, {:ok, %WorkflowArguments{} = args}} ->
+          WorkflowArguments.to_workflow_result(args)
 
-        {:DOWN, ^ref, :process, ^pid, reason} ->
-          {:error, reason}
+        {:DOWN, ^ref, :process, ^pid, %RuntimeError{} = rt_err} ->
+          {:error, rt_err}
       after
         timeout ->
           {:error, :timeout}
@@ -73,5 +84,84 @@ defmodule Temporal.Workflow do
     spawn_link(fn ->
       send(parent, {@watch_result_msg, handle, result(handle, opts)})
     end)
+  end
+
+  @spec execute_activity(WorkflowContext.t(), term(), [term()], activity_exec_opts()) ::
+          {:ok, ActivityExecHandle.t()} | {:error, term()}
+  def execute_activity(%WorkflowContext{} = ctx, activity_type, args \\ [], opts \\ []) do
+    activity_id = UUID.uuid4()
+
+    args =
+      if is_list(args) do
+        args
+      else
+        [args]
+      end
+
+    parsed_activity =
+      cond do
+        is_binary(activity_type) ->
+          {:ok, activity_type}
+
+        is_function(activity_type) ->
+          {:name, function_name} = Function.info(activity_type, :name)
+          {:arity, arity} = Function.info(activity_type, :arity)
+
+          if arity == Enum.count(args) + 1 do
+            {:ok, to_string(function_name)}
+          else
+            {:error, "Wrong number of arguments passed to activity (#{function_name}/#{arity})"}
+          end
+
+        is_atom(activity_type) ->
+          {:ok, "#{activity_type}"}
+      end
+
+    with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(ctx.run_id),
+         {:ok, activity_type} <- parsed_activity do
+      activity_type = if given_name = opts[:name], do: given_name, else: activity_type
+
+      with :ok <-
+             WorkflowProgressReporter.schedule_activity(
+               reporter,
+               activity_id,
+               activity_type,
+               args,
+               opts
+             ) do
+        {:ok,
+         %ActivityExecHandle{
+           activity_id: activity_id,
+           activity_type: activity_type,
+           run_id: ctx.run_id,
+           workflow_id: ctx.workflow_id
+         }}
+      end
+    end
+  end
+
+  @spec start(
+          TaskQueue.t(),
+          workflow_id :: String.t(),
+          workflow_name :: WorkflowName.t(),
+          inputs :: [term()],
+          opts :: WorkflowStartOptions.opts()
+        ) :: {:ok, WorkflowExecHandle.t()} | {:error, term()}
+  def start(queue, workflow_id, workflow_name, inputs, opts \\ []) do
+    TaskQueue.start_workflow(queue, workflow_id, workflow_name, inputs, opts)
+  end
+
+  @spec get(exec_handle()) :: {:ok, term()} | {:error, term()}
+  def get(%WorkflowExecHandle{} = handle), do: result(handle)
+
+  def get(%ActivityExecHandle{} = _activity) do
+    {:error, :not_implemented}
+  end
+
+  @spec get(WorkflowContext.t(), exec_handle()) :: {:ok, term()} | {:error, term()}
+  def get(%WorkflowContext{} = _ctx, %WorkflowExecHandle{} = handle), do: handle
+
+  def get(%WorkflowContext{} = _ctx, %ActivityExecHandle{} = _activity) do
+    {:error, :not_implemented}
   end
 end

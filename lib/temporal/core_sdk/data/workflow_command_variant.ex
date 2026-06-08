@@ -67,6 +67,9 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandVariant do
   def with_opts!({:start_timer, opts}),
     do: {:start_timer, Data.WorkflowCommandStartTimer.with_opts!(opts)}
 
+  def with_opts!({:schedule_activity, opts}),
+    do: {:schedule_activity, Data.WorkflowCommandScheduleActivity.with_opts!(opts)}
+
   def with_opts!({:respond_to_query, opts}),
     do: {:respond_to_query, Data.WorkflowCommandQueryResult.with_opts!(opts)}
 

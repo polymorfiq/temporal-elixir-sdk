@@ -22,9 +22,12 @@ use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
 use temporalio_sdk_common::worker::{
     WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes,
 };
-use temporalio_sdk_core::{init_worker, CoreRuntime, PollError, PollerBehavior, ResourceBasedSlotsOptions, ResourceSlotOptions, RuntimeOptions, SlotKind, SlotSupplierOptions, TokioRuntimeBuilder, TunerHolder, TunerHolderOptions, WorkerConfig, WorkerVersioningStrategy, WorkflowErrorType};
+use temporalio_sdk_core::{
+    init_worker, CoreRuntime, PollError, PollerBehavior, ResourceBasedSlotsOptions,
+    ResourceSlotOptions, RuntimeOptions, SlotKind, SlotSupplierOptions, TokioRuntimeBuilder,
+    TunerHolder, TunerHolderOptions, WorkerConfig, WorkerVersioningStrategy, WorkflowErrorType,
+};
 use tokio::runtime::Runtime;
-use tokio::sync::Mutex;
 use tracing::{error, warn};
 use url::Url;
 
@@ -177,7 +180,11 @@ fn _create_client(
         })
         .build();
 
-    let handle = runtime.core.read().unwrap().tokio_handle();
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match Connection::connect(opts).await {
@@ -324,7 +331,7 @@ fn _create_worker(
 
     match config {
         Ok(config) => {
-            let core_runtime = runtime.core.read().unwrap().clone();
+            let core_runtime = runtime.core.read().expect("Invalid runtime handle").clone();
             let handle = core_runtime.tokio_handle();
             handle.spawn(async move {
                 let initialized = init_worker(
@@ -450,7 +457,11 @@ fn _validate_worker(
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
 ) -> Result<bool, String> {
-    let handle = runtime.core.read().unwrap().tokio_handle();
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -481,7 +492,11 @@ fn _worker_poll_activity_task(
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
-    let handle = runtime.core.read().unwrap().tokio_handle();
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -513,7 +528,11 @@ fn _worker_poll_nexus_task(
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
-    let handle = runtime.core.read().unwrap().tokio_handle();
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -546,7 +565,11 @@ fn _worker_complete_workflow_activation(
     completion: SdkWorkflowActivationCompletion,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
-    let handle = runtime.core.read().unwrap().tokio_handle();
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -555,8 +578,8 @@ fn _worker_complete_workflow_activation(
                     .complete_workflow_activation(completion.into())
                     .await;
 
-                let msg: Result<bool, String> = match completion_result {
-                    Ok(()) => Ok(true),
+                let msg: Result<Atom, String> = match completion_result {
+                    Ok(()) => Ok(atoms::ok()),
                     Err(error) => Err(format!("Error completing workflows activation: {}", error)),
                 };
 
@@ -581,7 +604,11 @@ fn _worker_complete_activity_task(
     completion: SdkActivityTaskCompletion,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
-    let handle = runtime.core.read().unwrap().tokio_handle();
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -613,7 +640,11 @@ fn _worker_poll_workflow_activation(
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
-    let handle = runtime.core.read().unwrap().tokio_handle();
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -705,7 +736,11 @@ fn _client_start_workflow(
     options: SdkWorkflowStartOptions,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
-    let handle = runtime.core.read().unwrap().tokio_handle();
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         let started = client
@@ -715,7 +750,7 @@ fn _client_start_workflow(
 
         let msg = match started {
             Ok(handle) => Ok(ResourceArc::new(ElixirWorkflowHandle {
-                handle: Mutex::new(handle),
+                handle: RwLock::new(handle),
             })),
             Err(error) => Err(format!("Error starting workflow - {}", error)),
         };
@@ -733,19 +768,24 @@ fn _workflow_handle_get_result(
     options: SdkWorkflowGetResultOptions,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
-    let handle = runtime.core.read().unwrap().tokio_handle();
-    handle.block_on(async move {
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
+
+    let wf_handle = workflow_handle
+        .handle
+        .read()
+        .expect("Invalid workflow handle")
+        .clone();
+    handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
-        let result = workflow_handle
-            .handle
-            .lock()
-            .await
-            .get_result(options.into())
-            .await;
+        let result = wf_handle.get_result(options.into()).await;
 
         let msg = match result {
             Ok(outputs) => Ok(outputs),
-            Err(error) => Err(format!("Error getting workflow results: {}", error)),
+            Err(error) => Err(format!("Error getting workflow results - {}", error)),
         };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);

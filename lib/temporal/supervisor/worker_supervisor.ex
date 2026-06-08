@@ -6,35 +6,43 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
   alias Temporal.CoreSdk.CoreClient
   alias Temporal.CoreSdk.CoreWorker
   alias Temporal.Supervisor.WorkflowList
+  alias Temporal.TaskQueue
   alias Temporal.Worker.WorkflowActivationPoller
   alias Temporal.Worker.ActivityTaskPoller
   alias Temporal.Worker.NexusTaskPoller
+  alias Temporal.Worker.WorkerActivityManager
   alias Temporal.Worker.WorkerWorkflowManager
   alias Temporal.Worker
 
   @type worker_id :: String.t()
 
   @spec start_link(
-          {worker_id(), CoreRuntime.t(), CoreClient.t(), Worker.worker_opts(), keyword()}
+          {worker_id(), TaskQueue.t(), CoreRuntime.t(), CoreClient.t(), Worker.worker_opts(),
+           keyword()}
         ) ::
           {:ok, pid()} | {:error, term()}
-  def start_link({worker_id, runtime_core, client_core, opts, server_opts}) do
-    Supervisor.start_link(__MODULE__, {worker_id, runtime_core, client_core, opts}, server_opts)
+  def start_link({exec_ctx, opts, server_opts}) do
+    Supervisor.start_link(
+      __MODULE__,
+      {exec_ctx, opts},
+      server_opts
+    )
   end
 
   @impl true
-  def init({worker_id, runtime_core, client_core, opts}) do
+  def init({exec_ctx, opts}) do
+    worker_id = exec_ctx.worker_id
+
     children = [
-      {CoreWorker,
-       {worker_id, runtime_core, client_core, opts,
-        [name: via_registry({:core, worker_id}), shutdown: 10_000]}},
+      {CoreWorker, {exec_ctx, opts, [name: via_registry({:core, worker_id}), shutdown: 10_000]}},
       {WorkflowList, [name: via_registry({:workflows, worker_id})]},
       {WorkerWorkflowManager,
-       {worker_id, opts, [name: via_registry({:workflow_manager, worker_id})]}},
+       {exec_ctx, opts, [name: via_registry({:workflow_manager, worker_id})]}},
+      {WorkerActivityManager, {exec_ctx, [name: via_registry({:activity_manager, worker_id})]}},
       {WorkflowActivationPoller,
-       {worker_id, [name: via_registry({:workflow_activation_poller, worker_id})]}},
-      {ActivityTaskPoller, {worker_id, [name: via_registry({:activity_task_poller, worker_id})]}},
-      {NexusTaskPoller, {worker_id, [name: via_registry({:nexus_operation_poller, worker_id})]}}
+       {exec_ctx, [name: via_registry({:workflow_activation_poller, worker_id})]}},
+      {ActivityTaskPoller, {exec_ctx, [name: via_registry({:activity_task_poller, worker_id})]}},
+      {NexusTaskPoller, {exec_ctx, [name: via_registry({:nexus_operation_poller, worker_id})]}}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)

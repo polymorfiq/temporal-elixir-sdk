@@ -5,6 +5,7 @@ defmodule Temporal.Worker do
   alias Temporal.TaskQueue
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.Supervisor.ClientSupervisor
+  alias Temporal.Supervisor.ExecutionContext
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.WorkerRegistry
   alias Temporal.Workflows.WorkflowName
@@ -73,15 +74,21 @@ defmodule Temporal.Worker do
          {:ok, workers_sup} <- ClientSupervisor.workers_sup_for_identity(client.identity) do
       reg_name = {:via, Registry, {WorkerRegistry, {:worker, worker_id}}}
 
+      exec_ctx = %ExecutionContext{
+        namespace: client.namespace,
+        worker_id: worker_id,
+        task_queue: task_queue,
+        runtime: core_runtime,
+        client: core_client
+      }
+
       child_started =
         DynamicSupervisor.start_child(
           workers_sup,
           Supervisor.child_spec(
             {WorkerSupervisor,
              {
-               worker_id,
-               core_runtime,
-               core_client,
+               exec_ctx,
                extra_opts ++ [config: worker_opts],
                [name: reg_name]
              }},

@@ -1,5 +1,6 @@
 defmodule Temporal.Worker.WorkerWorkflowManager do
   use GenServer
+  alias Temporal.TaskQueue
   alias Temporal.Worker
   alias Temporal.WorkflowRegistry
   alias Temporal.Supervisor.WorkflowSupervisor
@@ -7,18 +8,33 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
   require Logger
   require Record
-  Record.defrecordp(:manager_state, [:id, registered: %{}, forward_polled_pid: nil])
 
-  def start_link({worker_id, opts, server_opts}) do
-    GenServer.start_link(__MODULE__, {worker_id, opts}, server_opts)
+  Record.defrecordp(:manager_state, [
+    :id,
+    :task_queue,
+    :exec_ctx,
+    registered: %{},
+    forward_polled_pid: nil
+  ])
+
+  def start_link({exec_ctx, opts, server_opts}) do
+    GenServer.start_link(__MODULE__, {exec_ctx, opts}, server_opts)
   end
 
-  @spec init({String.t(), Worker.worker_opts()}) :: {:ok, pid()} | {:error, term()}
-  def init({worker_id, opts}) do
-    {:ok, manager_state(id: worker_id, forward_polled_pid: opts[:forward_polled_messages])}
+  @spec init({String.t(), TaskQueue.t(), Worker.worker_opts()}) :: {:ok, pid()} | {:error, term()}
+  def init({exec_ctx, opts}) do
+    {:ok,
+     manager_state(
+       exec_ctx: exec_ctx,
+       id: exec_ctx.worker_id,
+       task_queue: exec_ctx.task_queue,
+       forward_polled_pid: opts[:forward_polled_messages]
+     )}
   end
 
-  def process_activation_job(pid, job), do: GenServer.call(pid, {:job, job}, :infinity)
+  def process_activation(pid, activation),
+    do: GenServer.call(pid, {:process_activation, activation}, :infinity)
+
   def flush(pid), do: GenServer.call(pid, :flush, :infinity)
   def register(pid, name, module), do: GenServer.cast(pid, {:register, name, module})
 
@@ -42,17 +58,28 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
   def handle_call(:flush, _from, state), do: {:reply, :ok, state}
 
-  def handle_call({:job, job}, _from, state) do
+  def handle_call({:process_activation, activation}, _from, state) do
     if forward_to = manager_state(state, :forward_polled_pid) do
-      send(forward_to, {:workflow_activation_job, job})
+      Enum.each(activation.jobs, fn job ->
+        send(forward_to, {:workflow_activation_job, job.variant, activation})
+      end)
     end
 
-    {resp, state} = handle_activation_job(job, state)
+    processed =
+      Enum.reduce(activation.jobs, {:ok, state}, fn job, curr ->
+        with {:ok, curr_state} <- curr,
+             {:ok, new_state} <- handle_activation_job(job.variant, activation, curr_state) do
+          {:ok, new_state}
+        end
+      end)
 
-    {:reply, resp, state}
+    with {:ok, state} <- processed do
+      {:reply, :ok, state}
+    end
   end
 
-  def handle_activation_job({:initialize_workflow, initialize}, state) do
+  def handle_activation_job({:initialize_workflow, initialize}, activation, state) do
+    exec_ctx = manager_state(state, :exec_ctx)
     worker_id = manager_state(state, :id)
     registered = manager_state(state, :registered)
 
@@ -60,16 +87,21 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
       if workflow_module = registered[initialize.workflow_type] do
         reg_name = workflow_sup_id(initialize.workflow_id)
 
-        with {:ok, workflows_sup} <- WorkerSupervisor.workflows_sup_for_id(worker_id) do
+        with {:ok, worker} <- WorkerSupervisor.core_for_id(worker_id),
+             {:ok, workflows_sup} <- WorkerSupervisor.workflows_sup_for_id(worker_id) do
           child_started =
             DynamicSupervisor.start_child(
               workflows_sup,
               Supervisor.child_spec(
                 {WorkflowSupervisor,
                  {
-                   initialize.workflow_id,
-                   workflow_module,
-                   manager_state(state, :id),
+                   %{
+                     exec_ctx
+                     | workflow_id: initialize.workflow_id,
+                       run_id: activation.run_id,
+                       workflow_module: workflow_module,
+                       worker: worker
+                   },
                    initialize,
                    [name: reg_name]
                  }},
@@ -92,9 +124,23 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     {resp, state}
   end
 
-  def handle_activation_job({variant, _job}, state) do
+  def handle_activation_job({:remove_from_cache, job}, activation, state) do
+    Logger.info(
+      "Removing from cache (#{job.reason} - #{job.message}): Workflow Run (#{activation.run_id})"
+    )
+
+    if sup = GenServer.whereis(workflow_sup_id(activation.run_id)) do
+      spawn(fn ->
+        Supervisor.stop(sup, :shutdown, :infinity)
+      end)
+    end
+
+    {:ok, state}
+  end
+
+  def handle_activation_job({variant, job}, activation, state) do
     Logger.error(
-      "Worker Workflow Manager received unknown workflow activation: #{inspect(variant)}"
+      "Worker Workflow Manager received unknown workflow activation for (Run ID: #{activation.run_id}): #{inspect(variant)} - #{inspect(job)}"
     )
 
     {:ok, state}

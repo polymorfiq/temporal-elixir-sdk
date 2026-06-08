@@ -4,9 +4,9 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreRuntime
-  alias Temporal.CoreSdk.CoreClient
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
+  alias Temporal.Supervisor.ExecutionContext
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Worker.WorkerWorkflowManager
 
@@ -31,24 +31,24 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   @type worker_opts :: [{:config, WorkerOpts.t()} | {:forward_polled_messages, pid()}]
 
-  @spec start_link({worker_id(), CoreRuntime.t(), CoreClient.t(), worker_opts(), keyword()}) ::
+  @spec start_link({ExecutionContext.t(), worker_opts(), keyword()}) ::
           {:ok, pid()} | {:error, term()}
-  def start_link({worker_id, runtime, client, opts, server_opts}) do
+  def start_link({exec_ctx, opts, server_opts}) do
     config = Keyword.fetch!(opts, :config)
 
-    GenServer.start_link(__MODULE__, {worker_id, runtime, client, config, opts}, server_opts)
+    GenServer.start_link(__MODULE__, {exec_ctx, config, opts}, server_opts)
   end
 
   @impl true
-  @spec init({worker_id(), CoreRuntime.t(), CoreClient.t(), WorkerOpts.t(), worker_opts()}) ::
+  @spec init({ExecutionContext.t(), WorkerOpts.t(), worker_opts()}) ::
           {:ok, t()} | {:error, term()}
-  def init({worker_id, runtime, client, config, opts}) do
+  def init({exec_ctx, config, opts}) do
     Process.flag(:trap_exit, true)
     parent = self()
 
     {pid, ref} =
       spawn_monitor(fn ->
-        CoreSdk._create_worker(runtime.core, client.core, config, self())
+        CoreSdk._create_worker(exec_ctx.runtime.core, exec_ctx.client.core, config, self())
         |> case do
           {:ok, _} -> :ok
           {:error, err} -> raise "Could initialize worker from Core SDK: #{inspect(err)}"
@@ -72,19 +72,18 @@ defmodule Temporal.CoreSdk.CoreWorker do
           {:error, reason}
       end
 
-    Process.set_label({:worker, worker_id})
+    Process.set_label({:worker, exec_ctx.worker_id})
 
-    with {:ok, core} <- worker_resp,
-         :ok <- validate(core, runtime) do
+    with {:ok, core} <- worker_resp, :ok <- validate(core, exec_ctx.runtime) do
       {:ok,
        server_state(
-         id: worker_id,
+         id: exec_ctx.worker_id,
          core: core,
          task_queue: config.task_queue,
-         namespace: config.namespace,
+         namespace: exec_ctx.namespace,
          identity_override: config.identity_override,
-         runtime: runtime,
-         client: client,
+         runtime: exec_ctx.runtime,
+         client: exec_ctx.client,
          forward_polled_pid: Keyword.get(opts, :forward_polled_messages)
        )}
     end
@@ -143,13 +142,13 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   @impl true
   def handle_call({:process_workflow_activation, activation}, _from, state) do
-    forward_to = server_state(state, :forward_polled_pid)
-
-    state =
-      Enum.reduce(activation.jobs, state, fn job, curr_state ->
-        if forward_to, do: send(forward_to, {:workflow_activation_job, job.variant})
-        process_activation_job(job.variant, curr_state)
+    if forward_to = server_state(state, :forward_polled_pid) do
+      Enum.each(activation.jobs, fn job ->
+        send(forward_to, {:workflow_activation_job, job.variant, activation})
       end)
+    end
+
+    process_activation(activation, state)
 
     {:reply, :ok, state}
   end
@@ -184,12 +183,10 @@ defmodule Temporal.CoreSdk.CoreWorker do
   def handle_info({:DOWN, _ref, :process, _pid, :normal}, state),
     do: {:noreply, state}
 
-  defp process_activation_job(job, state) do
+  defp process_activation(activation, state) do
     worker_id = server_state(state, :id)
     workflow_manager_pid = WorkerSupervisor.workflow_manager_pid(worker_id)
-    WorkerWorkflowManager.process_activation_job(workflow_manager_pid, job)
-
-    state
+    WorkerWorkflowManager.process_activation(workflow_manager_pid, activation)
   end
 
   @impl true
