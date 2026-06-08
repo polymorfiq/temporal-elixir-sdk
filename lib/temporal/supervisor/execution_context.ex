@@ -9,7 +9,12 @@ defmodule Temporal.Supervisor.ExecutionContext do
             runtime: nil,
             client: nil,
             worker: nil,
-            workflow_module: nil
+            workflow_module: nil,
+            activity_id: nil,
+            activity_type: nil,
+            activity_fn: nil,
+            activity_start: nil,
+            activity_task_token: nil
 
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.CoreClient
@@ -24,6 +29,11 @@ defmodule Temporal.Supervisor.ExecutionContext do
           runtime: CoreRuntime.t() | nil,
           client: CoreClient.t() | nil,
           worker: CoreWorker.t() | nil,
-          workflow_module: module() | nil
+          workflow_module: module() | nil,
+          activity_id: String.t() | nil,
+          activity_type: String.t() | nil,
+          activity_fn: function() | nil,
+          activity_start: term() | nil,
+          activity_task_token: [byte()] | nil
         }
 end

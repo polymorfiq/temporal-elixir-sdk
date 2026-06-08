@@ -23,7 +23,18 @@ defmodule Temporal.Workflow.WorkflowFlowController do
     {:ok, flow_state(id: exec_ctx.run_id, workflow_id: exec_ctx.workflow_id)}
   end
 
-  def handle_cast({:received_activity_result, activity_id, result}, _from, state) do
+  @spec activity_task_resolved(
+          pid(),
+          activity_id :: String.t(),
+          result :: :ok | {:ok, term()} | {:error, term()}
+        ) :: :ok
+  def activity_task_resolved(pid, activity_id, result),
+    do: GenServer.cast(pid, {:activity_task_resolved, activity_id, result})
+
+  def await_activity_result(pid, activity_id),
+    do: GenServer.call(pid, {:await_activity_result, activity_id}, :infinity)
+
+  def handle_cast({:activity_task_resolved, activity_id, result}, state) do
     awaiting = flow_state(state, :awaiting_activities)
 
     awaiting =

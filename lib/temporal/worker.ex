@@ -1,6 +1,7 @@
 defmodule Temporal.Worker do
   defstruct [:id, :task_queue]
 
+  alias Temporal.Activity
   alias Temporal.Client
   alias Temporal.TaskQueue
   alias Temporal.CoreSdk.Data.WorkerOpts
@@ -10,11 +11,13 @@ defmodule Temporal.Worker do
   alias Temporal.WorkerRegistry
   alias Temporal.Workflows.WorkflowName
   alias Temporal.Worker.WorkerWorkflowManager
+  alias Temporal.Worker.WorkerActivityManager
 
   @type t :: %__MODULE__{id: String.t(), task_queue: TaskQueue.t()}
   @type worker_opts :: WorkerOpts.opts() | extra_opts()
   @type extra_opts :: [{:forward_polled_messages, pid()}]
   @type task_queue :: String.t()
+  @type activity_type :: String.t()
   @type register_workflow_opts :: [{:name, WorkflowName.t()}]
 
   @spec new(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}
@@ -126,9 +129,24 @@ defmodule Temporal.Worker do
     end
   end
 
+  @spec register_activity(t(), activity :: function(), keyword()) :: :ok | {:error, term()}
+  def register_activity(worker, activity_fn, opts \\ []) do
+    activity_type =
+      Keyword.get_lazy(opts, :name, fn ->
+        Activity.name_for_type(activity_fn)
+      end)
+
+    with {:ok, manager_pid} <- WorkerSupervisor.activity_manager_pid(worker.id) do
+      WorkerActivityManager.register(manager_pid, activity_type, activity_fn)
+    end
+  end
+
   def flush_registrations(worker) do
-    with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id) do
-      WorkerWorkflowManager.flush(manager_pid)
+    with {:ok, wf_manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id),
+         {:ok, activity_manager} <- WorkerSupervisor.activity_manager_pid(worker.id),
+         :ok <- WorkerWorkflowManager.flush(wf_manager_pid),
+         :ok <- WorkerActivityManager.flush(activity_manager) do
+      :ok
     end
   end
 end

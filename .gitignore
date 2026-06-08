@@ -34,4 +34,4 @@ temporal-*.tar
 /projectFilesBackup
 *.iml
 
-config/dev.exs
+config/*.local.exs

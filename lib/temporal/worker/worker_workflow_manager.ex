@@ -5,6 +5,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   alias Temporal.WorkflowRegistry
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Supervisor.WorkerSupervisor
+  alias Temporal.Workflow.WorkflowProgressReporter
 
   require Logger
   require Record
@@ -105,7 +106,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
                    initialize,
                    [name: reg_name]
                  }},
-                restart: :transient
+                restart: :temporary
               )
             )
 
@@ -133,6 +134,19 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
       spawn(fn ->
         Supervisor.stop(sup, :shutdown, :infinity)
       end)
+    end
+
+    {:ok, state}
+  end
+
+  def handle_activation_job({:resolve_activity, job}, activation, state) do
+    with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(activation.run_id) do
+      WorkflowProgressReporter.resolve_activity(reporter, job.seq, job.result.status)
+    else
+      {:error, err} ->
+        Logger.error(
+          "Resolve Activity failed (ID: #{activation.workflow_id}, Run ID: #{activation.run_id}) - #{inspect(err)}"
+        )
     end
 
     {:ok, state}

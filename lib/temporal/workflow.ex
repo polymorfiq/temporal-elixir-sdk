@@ -1,4 +1,5 @@
 defmodule Temporal.Workflow do
+  alias Temporal.Activity
   alias Temporal.Activity.ActivityExecHandle
   alias Temporal.Client
   alias Temporal.CoreSdk
@@ -8,6 +9,7 @@ defmodule Temporal.Workflow do
   alias Temporal.TaskQueue
   alias Temporal.Workflows.WorkflowExecHandle
   alias Temporal.Workflow.WorkflowContext
+  alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Supervisor.WorkflowSupervisor
 
@@ -98,17 +100,17 @@ defmodule Temporal.Workflow do
         [args]
       end
 
-    parsed_activity =
+    activity_valid =
       cond do
         is_binary(activity_type) ->
-          {:ok, activity_type}
+          :ok
 
         is_function(activity_type) ->
           {:name, function_name} = Function.info(activity_type, :name)
           {:arity, arity} = Function.info(activity_type, :arity)
 
           if arity == Enum.count(args) + 1 do
-            {:ok, to_string(function_name)}
+            :ok
           else
             {:error, "Wrong number of arguments passed to activity (#{function_name}/#{arity})"}
           end
@@ -118,8 +120,11 @@ defmodule Temporal.Workflow do
       end
 
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(ctx.run_id),
-         {:ok, activity_type} <- parsed_activity do
-      activity_type = if given_name = opts[:name], do: given_name, else: activity_type
+         :ok <- activity_valid do
+      activity_type =
+        Keyword.get_lazy(opts, :name, fn ->
+          Activity.name_for_type(activity_type)
+        end)
 
       with :ok <-
              WorkflowProgressReporter.schedule_activity(
@@ -152,16 +157,22 @@ defmodule Temporal.Workflow do
   end
 
   @spec get(exec_handle()) :: {:ok, term()} | {:error, term()}
-  def get(%WorkflowExecHandle{} = handle), do: result(handle)
+  def get(%WorkflowExecHandle{} = handle) do
+    result(handle)
+  end
 
-  def get(%ActivityExecHandle{} = _activity) do
-    {:error, :not_implemented}
+  def get(%ActivityExecHandle{} = activity) do
+    with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(activity.run_id) do
+      WorkflowFlowController.await_activity_result(flow_control, activity.activity_id)
+    end
   end
 
   @spec get(WorkflowContext.t(), exec_handle()) :: {:ok, term()} | {:error, term()}
   def get(%WorkflowContext{} = _ctx, %WorkflowExecHandle{} = handle), do: handle
 
-  def get(%WorkflowContext{} = _ctx, %ActivityExecHandle{} = _activity) do
-    {:error, :not_implemented}
+  def get(%WorkflowContext{} = ctx, %ActivityExecHandle{} = activity) do
+    with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(ctx.run_id) do
+      WorkflowFlowController.await_activity_result(flow_control, activity.activity_id)
+    end
   end
 end

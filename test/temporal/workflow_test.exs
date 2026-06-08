@@ -120,10 +120,7 @@ defmodule Temporal.WorkflowTest do
             start_to_close_timeout: {1, :seconds}
           )
 
-        Process.sleep(5_000)
-        {:ok, resp} = Workflow.get(ctx, act1)
-
-        {:ok, resp}
+        Workflow.get(ctx, act1)
       end
 
       def activity_1(_ctx, msg) do
@@ -135,6 +132,7 @@ defmodule Temporal.WorkflowTest do
       queue = create_basic_queue(client, "activities_1")
       {:ok, worker} = Worker.new(queue, forward_polled_messages: self())
       :ok = Worker.register_workflow(worker, WorkflowWithActivities)
+      :ok = Worker.register_activity(worker, &WorkflowWithActivities.activity_1/2)
       Worker.flush_registrations(worker)
 
       workflow_id = unique_name("workflow-with-activities")

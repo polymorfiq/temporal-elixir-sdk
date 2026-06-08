@@ -35,6 +35,13 @@ defmodule Temporal.CoreSdk.Data.Payload do
     payload
   end
 
+  @spec to_value(t()) :: term()
+  def to_value(%{metadata: %{"encoding" => ~c"json/plain"}} = payload),
+    do: Jason.decode!(to_string(payload.data))
+
+  def to_value(payload),
+    do: :binary.list_to_bin(payload.data)
+
   @spec from_workflow_input(Data.WorkflowInput.t()) :: t()
   def from_workflow_input({:integer, val}) when is_integer(val),
     do: %__MODULE__{

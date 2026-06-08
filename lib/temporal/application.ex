@@ -12,6 +12,7 @@ defmodule Temporal.Application do
       {Registry, keys: :unique, name: Temporal.ClientRegistry},
       {Registry, keys: :unique, name: Temporal.WorkerRegistry},
       {Registry, keys: :unique, name: Temporal.WorkflowRegistry},
+      {Registry, keys: :unique, name: Temporal.ActivityRegistry},
       {Temporal.Supervisor.RuntimeList, [name: Temporal.Runtimes]}
     ]
 

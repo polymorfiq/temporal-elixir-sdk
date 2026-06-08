@@ -1,6 +1,6 @@
 use crate::common::{SdkDuration, SdkPayload, SdkPriority, SdkRetryPolicy, SdkTimestamp};
 use crate::core_workflows::{SdkWorkflowExecution, SdkWorkflowFailure};
-use rustler::{NifStruct, NifTaggedEnum};
+use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum};
 use std::collections::HashMap;
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_execution_result::Status as ActivityExecutionStatus;
 use temporalio_sdk_common::protos::coresdk::activity_task;
@@ -153,14 +153,14 @@ impl Into<activity_task::Start> for SdkActivityTaskStart {
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityTaskCancel"]
 pub struct SdkActivityTaskCancel {
-    pub reason: i32,
+    pub reason: SdkActivityTaskCancelReason,
     pub details: Option<SdkActivityCancellationDetails>,
 }
 
 impl From<activity_task::Cancel> for SdkActivityTaskCancel {
     fn from(external: activity_task::Cancel) -> Self {
         Self {
-            reason: external.reason,
+            reason: external.reason.into(),
             details: external.details.try_into_or_none(),
         }
     }
@@ -169,8 +169,46 @@ impl From<activity_task::Cancel> for SdkActivityTaskCancel {
 impl Into<activity_task::Cancel> for SdkActivityTaskCancel {
     fn into(self) -> activity_task::Cancel {
         activity_task::Cancel {
-            reason: self.reason,
+            reason: self.reason.into(),
             details: self.details.try_into_or_none(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkActivityTaskCancelReason {
+    NotFound = 0,
+    Cancelled = 1,
+    TimedOut = 2,
+    WorkerShutdown = 3,
+    Paused = 4,
+    Reset = 5,
+}
+
+impl Into<i32> for SdkActivityTaskCancelReason {
+    fn into(self) -> i32 {
+        match self {
+            Self::NotFound => 0,
+            Self::Cancelled => 1,
+            Self::TimedOut => 2,
+            Self::WorkerShutdown => 3,
+            Self::Paused => 4,
+            Self::Reset => 5,
+        }
+    }
+}
+
+impl From<i32> for SdkActivityTaskCancelReason {
+    fn from(intent: i32) -> SdkActivityTaskCancelReason {
+        match intent {
+            0 => Self::NotFound,
+            1 => Self::Cancelled,
+            2 => Self::TimedOut,
+            3 => Self::WorkerShutdown,
+            4 => Self::Paused,
+            5 => Self::Reset,
+            _ => Self::NotFound,
         }
     }
 }

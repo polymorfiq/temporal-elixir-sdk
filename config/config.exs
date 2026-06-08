@@ -1,5 +1,5 @@
 import Config
 
-if File.exists?("config/dev.exs") do
-  import_config "dev.exs"
+if File.exists?("config/#{config_env()}.local.exs") do
+  import_config "#{config_env()}.local.exs"
 end

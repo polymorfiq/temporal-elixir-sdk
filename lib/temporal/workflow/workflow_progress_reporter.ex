@@ -2,11 +2,14 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   use GenServer
 
   alias Temporal.CoreSdk
+  alias Temporal.CoreSdk.Data.ActivityResolutionStatus
   alias Temporal.CoreSdk.Data.Payload
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletion
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletionSuccessStatus, as: SuccessStatus
   alias Temporal.CoreSdk.Data.WorkflowCommandScheduleActivity
   alias Temporal.CoreSdk.Data.WorkflowInput
+  alias Temporal.Supervisor.WorkflowSupervisor
+  alias Temporal.Workflow.WorkflowFlowController
 
   require Logger
   require Record
@@ -18,7 +21,8 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     :task_queue,
     :next_seq,
     :runtime,
-    :worker
+    :worker,
+    sequences: %{}
   ])
 
   @type progress_state() :: term()
@@ -65,6 +69,14 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         :infinity
       )
 
+  @spec resolve_activity(
+          pid(),
+          activity_seq_num :: integer(),
+          status :: ActivityResolutionStatus.t()
+        ) :: :ok | {:error, term()}
+  def resolve_activity(reporter, seq_num, status),
+    do: GenServer.call(reporter, {:resolve_activity, seq_num, status}, :infinity)
+
   def report_completed_success(reporter, result) do
     output = WorkflowInput.with_opts!(result) |> Payload.from_workflow_input()
     GenServer.call(reporter, {:report_completed_success, output}, :infinity)
@@ -95,6 +107,43 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     {:reply, send_resp, state}
   end
 
+  def handle_call({:resolve_activity, seq_num, result}, _from, state) do
+    sequences = progress_state(state, :sequences)
+    run_id = progress_state(state, :run_id)
+
+    output =
+      case result do
+        {:completed, completed} ->
+          {:ok, completed.result |> Payload.to_value()}
+
+        {:failed, failure} ->
+          {:error, failure.failure.message}
+
+        {:cancelled, failure} ->
+          {:error, {:cancelled, failure.failure.message}}
+
+        {:will_complete_async, _} ->
+          :ok
+      end
+
+    resp =
+      case sequences[seq_num] do
+        {:activity, activity_id} ->
+          with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(run_id) do
+            WorkflowFlowController.activity_task_resolved(flow_control, activity_id, output)
+          end
+
+        found ->
+          Logger.error(
+            "Expected to resolve activity (Seq: #{seq_num}) but found #{inspect(found)}"
+          )
+
+          {:error, "Expected activity but found #{inspect(found)}"}
+      end
+
+    {:reply, resp, state}
+  end
+
   def handle_call({:report_completed_success, output}, _from, state) do
     {state, send_resp} =
       report_successful_completion(state,
@@ -117,6 +166,19 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         else
           {next_seq, cmds ++ [{cmd_variant, cmd_opts}]}
         end
+      end)
+
+    state =
+      Enum.reduce(commands, state, fn
+        {:schedule_activity, activity}, state ->
+          sequences = progress_state(state, :sequences)
+
+          progress_state(state,
+            sequences: Map.put(sequences, activity[:seq], {:activity, activity[:activity_id]})
+          )
+
+        _, state ->
+          state
       end)
 
     completion = Keyword.put(completion, :commands, commands)
