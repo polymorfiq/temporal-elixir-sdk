@@ -1,4 +1,14 @@
 defmodule Temporal.Activity do
+  defmacro __using__(opts) do
+    activities = Keyword.get(opts, :activities)
+
+    if activities do
+      quote do
+        def _temporal_activities, do: unquote(activities)
+      end
+    end
+  end
+
   def name_for_type(activity_type) do
     cond do
       is_binary(activity_type) ->

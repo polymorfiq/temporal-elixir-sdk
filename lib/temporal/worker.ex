@@ -126,22 +126,26 @@ defmodule Temporal.Worker do
 
         true ->
           WorkerWorkflowManager.register(manager_pid, workflow_name, workflow_mod)
-
-          if function_exported?(workflow_mod, :_temporal_activities, 0) do
-            Enum.each(workflow_mod._temporal_activities(), fn
-              {fn_name, arity} when is_atom(fn_name) and is_integer(arity) ->
-                activity_fn = Function.capture(workflow_mod, fn_name, arity)
-                register_activity(worker, activity_fn)
-
-              {fn_name, arity, opts}
-              when is_atom(fn_name) and is_integer(arity) and is_list(opts) ->
-                activity_fn = Function.capture(workflow_mod, fn_name, arity)
-                register_activity(worker, activity_fn, opts)
-            end)
-          end
+          register_activities(worker, workflow_mod)
 
           :ok
       end
+    end
+  end
+
+  @spec register_activities(t(), module()) :: :ok | {:error, term()}
+  def register_activities(worker, mod) do
+    if function_exported?(mod, :_temporal_activities, 0) do
+      Enum.each(mod._temporal_activities(), fn
+        {fn_name, arity} when is_atom(fn_name) and is_integer(arity) ->
+          activity_fn = Function.capture(mod, fn_name, arity)
+          register_activity(worker, activity_fn)
+
+        {fn_name, arity, opts}
+        when is_atom(fn_name) and is_integer(arity) and is_list(opts) ->
+          activity_fn = Function.capture(mod, fn_name, arity)
+          register_activity(worker, activity_fn, opts)
+      end)
     end
   end
 
