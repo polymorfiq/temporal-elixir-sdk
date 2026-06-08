@@ -27,25 +27,36 @@ I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more
 ## Starting a workflow
 
 ```elixir
-alias Temporal.CoreSdk.Data.WorkflowInput
-
+# Connect to Temporal Server
 {:ok, client} = Temporal.Client.new("localhost:7233")
+
+# Start a worker on the Task Queue
 task_queue = Temporal.TaskQueue.new(client, "default")
+queue = create_basic_queue(client, "activities_1")
+{:ok, worker} = Worker.new(queue)
 
-{:ok, worker} = Temporal.Worker.new(task_queue)
+# Register relevant activities and workflows
+:ok = Worker.register_workflow(worker, WorkflowWithActivities)
+:ok = Worker.register_activity(worker, &WorkflowWithActivities.activity_1/2)
 
-Temporal.TaskQueue.start_workflow(
-  task_queue,
-  "my-workflow-id-v5",
-  "MySpecialWorkflow",
-  [
-    123,
-    "456",
-    789.10,
-    %{arbitrary: "map"},
-    WorkflowInput.bytes(<<1, 2, 3>>)
-  ]
-)
+# Define workflow and activities
+defmodule WorkflowWithActivities do
+  use Temporal.Workflow
+  alias Temporal.Workflow
+
+  def execute(ctx, msg) do
+    {:ok, act1} =
+      Workflow.execute_activity(ctx, &activity_1/2, [msg],
+        start_to_close_timeout: {1, :seconds}
+      )
+
+    Workflow.get(ctx, act1)
+  end
+
+  def activity_1(_ctx, msg) do
+    {:ok, "Hello, #{msg}!"}
+  end
+end
 ```
 
 ## Initializing the runtime
