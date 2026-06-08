@@ -92,7 +92,6 @@ defmodule Temporal.WorkflowTest do
       queue = create_basic_queue(client, "polling_activations_2")
       {:ok, worker} = Worker.new(queue, forward_polled_messages: self())
       :ok = Worker.register_workflow(worker, ShouldRunSuccessfully)
-      Worker.flush_registrations(worker)
 
       workflow_id = unique_name("completes-workflow")
       {:ok, handle} = Workflow.start(queue, workflow_id, ShouldRunSuccessfully, ["World!"])
@@ -111,7 +110,7 @@ defmodule Temporal.WorkflowTest do
 
   describe "with activities" do
     defmodule WorkflowWithActivities do
-      use Temporal.Workflow
+      use Temporal.Workflow, activities: [activity_1: 2]
       alias Temporal.Workflow
 
       def execute(ctx, msg) do
@@ -132,8 +131,6 @@ defmodule Temporal.WorkflowTest do
       queue = create_basic_queue(client, "activities_1")
       {:ok, worker} = Worker.new(queue, forward_polled_messages: self())
       :ok = Worker.register_workflow(worker, WorkflowWithActivities)
-      :ok = Worker.register_activity(worker, &WorkflowWithActivities.activity_1/2)
-      Worker.flush_registrations(worker)
 
       workflow_id = unique_name("workflow-with-activities")
 

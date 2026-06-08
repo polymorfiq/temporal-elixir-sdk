@@ -36,7 +36,6 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   def process_activation(pid, activation),
     do: GenServer.call(pid, {:process_activation, activation}, :infinity)
 
-  def flush(pid), do: GenServer.call(pid, :flush, :infinity)
   def register(pid, name, module), do: GenServer.cast(pid, {:register, name, module})
 
   def stop_workflow_with_id(pid, workflow_id),
@@ -56,8 +55,6 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
     {:noreply, state}
   end
-
-  def handle_call(:flush, _from, state), do: {:reply, :ok, state}
 
   def handle_call({:process_activation, activation}, _from, state) do
     if forward_to = manager_state(state, :forward_polled_pid) do

@@ -126,6 +126,21 @@ defmodule Temporal.Worker do
 
         true ->
           WorkerWorkflowManager.register(manager_pid, workflow_name, workflow_mod)
+
+          if function_exported?(workflow_mod, :_temporal_activities, 0) do
+            Enum.each(workflow_mod._temporal_activities(), fn
+              {fn_name, arity} when is_atom(fn_name) and is_integer(arity) ->
+                activity_fn = Function.capture(workflow_mod, fn_name, arity)
+                register_activity(worker, activity_fn)
+
+              {fn_name, arity, opts}
+              when is_atom(fn_name) and is_integer(arity) and is_list(opts) ->
+                activity_fn = Function.capture(workflow_mod, fn_name, arity)
+                register_activity(worker, activity_fn, opts)
+            end)
+          end
+
+          :ok
       end
     end
   end
@@ -139,15 +154,6 @@ defmodule Temporal.Worker do
 
     with {:ok, manager_pid} <- WorkerSupervisor.activity_manager_pid(worker.id) do
       WorkerActivityManager.register(manager_pid, activity_type, activity_fn)
-    end
-  end
-
-  def flush_registrations(worker) do
-    with {:ok, wf_manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id),
-         {:ok, activity_manager} <- WorkerSupervisor.activity_manager_pid(worker.id),
-         :ok <- WorkerWorkflowManager.flush(wf_manager_pid),
-         :ok <- WorkerActivityManager.flush(activity_manager) do
-      :ok
     end
   end
 end

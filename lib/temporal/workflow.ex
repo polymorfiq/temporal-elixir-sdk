@@ -26,8 +26,13 @@ defmodule Temporal.Workflow do
 
   @watch_result_msg :workflow_result
 
-  defmacro __using__(_opts) do
-    quote do
+  defmacro __using__(opts) do
+    activities = Keyword.get(opts, :activities)
+
+    if activities do
+      quote do
+        def _temporal_activities, do: unquote(activities)
+      end
     end
   end
 

@@ -26,16 +26,12 @@ defmodule Temporal.Worker.WorkerActivityManager do
   def process_task(pid, task),
     do: GenServer.call(pid, {:process_task, task.variant, task}, :infinity)
 
-  def flush(pid), do: GenServer.call(pid, :flush, :infinity)
-
   def handle_cast({:register, activity_type, activity_fn}, state) do
     registered = activities_state(state, :registered)
 
     {:noreply,
      activities_state(state, registered: Map.put(registered, activity_type, activity_fn))}
   end
-
-  def handle_call(:flush, _from, state), do: {:reply, :ok, state}
 
   def handle_call({:process_task, {:start, start}, task}, _from, state) do
     registered = activities_state(state, :registered)

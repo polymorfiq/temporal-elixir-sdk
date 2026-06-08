@@ -49,12 +49,13 @@ IO.puts(workflow_result)
 
 # Define workflow and activities
 defmodule WorkflowWithActivities do
-  use Temporal.Workflow
+  use Temporal.Workflow, activities: [my_activity: 2]
+  
   alias Temporal.Workflow
 
   def execute(ctx, msg) do
     {:ok, activity_handle} =
-      Workflow.execute_activity(ctx, &activity_1/2, [msg],
+      Workflow.execute_activity(ctx, &my_activity/2, [msg],
         start_to_close_timeout: {1, :seconds}
       )
 
@@ -63,7 +64,7 @@ defmodule WorkflowWithActivities do
     {:ok, "Received message: #{result}"}
   end
 
-  def activity_1(_ctx, msg) do
+  def my_activity(_ctx, msg) do
     {:ok, "Hello, #{msg}!"}
   end
 end
