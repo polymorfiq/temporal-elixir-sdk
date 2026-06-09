@@ -31,8 +31,13 @@ defmodule Temporal.Supervisor.ClientSupervisor do
   end
 
   @spec core_for_identity(identity :: String.t()) :: {:ok, term()} | {:error, term()}
-  def core_for_identity(identity),
-    do: CoreClient.get_core(via_registry({:core, identity}))
+  def core_for_identity(identity) do
+    if pid = GenServer.whereis(via_registry({:core, identity})) do
+      CoreClient.get_core(pid)
+    else
+      {:error, "Client Core not found for client (#{inspect(identity)})"}
+    end
+  end
 
   defp via_registry(name), do: {:via, Registry, {ClientRegistry, name}}
 end

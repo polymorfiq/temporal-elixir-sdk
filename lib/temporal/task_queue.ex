@@ -6,7 +6,7 @@ defmodule Temporal.TaskQueue do
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkflowDefinition
   alias Temporal.CoreSdk.Data.WorkflowStartOptions
-  alias Temporal.CoreSdk.Data.WorkflowArguments
+  alias Temporal.CoreSdk.Data.ClientPayloads
   alias Temporal.Workflows.WorkflowExecHandle
   alias Temporal.Workflows.WorkflowName
 
@@ -47,7 +47,7 @@ defmodule Temporal.TaskQueue do
     start_opts = WorkflowStartOptions.with_opts!(opts)
 
     with :ok <- validate_workflow_inputs(workflow_name, inputs) do
-      args = WorkflowArguments.with_opts!(args: inputs)
+      args = ClientPayloads.with_opts!(payloads: inputs)
 
       parent = self()
 

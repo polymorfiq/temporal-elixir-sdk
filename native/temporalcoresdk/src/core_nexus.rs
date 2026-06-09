@@ -16,13 +16,13 @@ use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.NexusTask"]
-pub struct SdkNexusTask {
+pub struct SdkNexusTask<'a> {
     pub request_deadline: Option<SdkTimestamp>,
     pub endpoint: String,
-    pub variant: Option<SdkNexusTaskVariant>,
+    pub variant: Option<SdkNexusTaskVariant<'a>>,
 }
 
-impl From<nexus::NexusTask> for SdkNexusTask {
+impl<'a> From<nexus::NexusTask> for SdkNexusTask<'a> {
     fn from(external: nexus::NexusTask) -> Self {
         Self {
             request_deadline: external.request_deadline.try_into_or_none(),
@@ -34,12 +34,12 @@ impl From<nexus::NexusTask> for SdkNexusTask {
 
 #[derive(NifStruct, Default)]
 #[module = "Temporal.CoreSdk.Data.NexusTaskVariant"]
-pub struct SdkNexusTaskVariant {
-    task: Option<SdkNexusPollTaskQueueResponse>,
+pub struct SdkNexusTaskVariant<'a> {
+    task: Option<SdkNexusPollTaskQueueResponse<'a>>,
     cancel_task: Option<SdkNexusCancelTask>,
 }
 
-impl From<nexus::nexus_task::Variant> for SdkNexusTaskVariant {
+impl<'a> From<nexus::nexus_task::Variant> for SdkNexusTaskVariant<'a> {
     fn from(external: nexus::nexus_task::Variant) -> Self {
         match external {
             nexus::nexus_task::Variant::Task(task) => Self {
@@ -57,15 +57,15 @@ impl From<nexus::nexus_task::Variant> for SdkNexusTaskVariant {
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.NexusPollTaskQueueResponse"]
-pub struct SdkNexusPollTaskQueueResponse {
+pub struct SdkNexusPollTaskQueueResponse<'a> {
     pub task_token: Vec<u8>,
-    pub request: Option<SdkNexusRequest>,
+    pub request: Option<SdkNexusRequest<'a>>,
     pub poller_scaling_decision: Option<SdkPollerScalingDecision>,
     pub poller_group_id: String,
     pub poller_group_infos: Vec<SdkPollerGroupInfo>,
 }
 
-impl From<PollNexusTaskQueueResponse> for SdkNexusPollTaskQueueResponse {
+impl<'a> From<PollNexusTaskQueueResponse> for SdkNexusPollTaskQueueResponse<'a> {
     fn from(external: PollNexusTaskQueueResponse) -> Self {
         Self {
             task_token: external.task_token,
@@ -129,15 +129,15 @@ impl From<TaskQueuePollerGroupInfo> for SdkPollerGroupInfo {
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.NexusRequest"]
-pub struct SdkNexusRequest {
+pub struct SdkNexusRequest<'a> {
     pub header: HashMap<String, String>,
     pub scheduled_time: Option<SdkTimestamp>,
     pub capabilities: Option<SdkNexusCapabilities>,
     pub endpoint: String,
-    pub variant: Option<SdkNexusRequestVariant>,
+    pub variant: Option<SdkNexusRequestVariant<'a>>,
 }
 
-impl From<NexusRequest> for SdkNexusRequest {
+impl<'a> From<NexusRequest> for SdkNexusRequest<'a> {
     fn from(external: NexusRequest) -> Self {
         Self {
             header: external.header,
@@ -165,12 +165,12 @@ impl From<NexusCapabilities> for SdkNexusCapabilities {
 
 #[derive(NifStruct, Default)]
 #[module = "Temporal.CoreSdk.Data.NexusRequestVariant"]
-pub struct SdkNexusRequestVariant {
-    pub start_operation: Option<SdkNexusStartOperationRequest>,
+pub struct SdkNexusRequestVariant<'a> {
+    pub start_operation: Option<SdkNexusStartOperationRequest<'a>>,
     pub cancel_operation: Option<SdkNexusCancelOperationRequest>,
 }
 
-impl From<NexusRequestVariant> for SdkNexusRequestVariant {
+impl<'a> From<NexusRequestVariant> for SdkNexusRequestVariant<'a> {
     fn from(external: NexusRequestVariant) -> Self {
         match external {
             NexusRequestVariant::StartOperation(op) => Self {
@@ -209,17 +209,17 @@ impl From<NexusCancelOperationRequest> for SdkNexusCancelOperationRequest {
 
 #[derive(NifStruct)]
 #[module = "Temporal.CoreSdk.Data.NexusStartOperationRequest"]
-pub struct SdkNexusStartOperationRequest {
+pub struct SdkNexusStartOperationRequest<'a> {
     pub service: String,
     pub operation: String,
     pub request_id: String,
     pub callback: String,
-    pub payload: Option<SdkPayload>,
+    pub payload: Option<SdkPayload<'a>>,
     pub callback_header: HashMap<String, String>,
     pub links: Vec<SdkNexusLink>,
 }
 
-impl From<NexusStartOperationRequest> for SdkNexusStartOperationRequest {
+impl<'a> From<NexusStartOperationRequest> for SdkNexusStartOperationRequest<'a> {
     fn from(external: NexusStartOperationRequest) -> Self {
         Self {
             service: external.service,

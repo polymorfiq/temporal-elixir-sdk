@@ -7,7 +7,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletion
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletionSuccessStatus, as: SuccessStatus
   alias Temporal.CoreSdk.Data.WorkflowCommandScheduleActivity
-  alias Temporal.CoreSdk.Data.WorkflowInput
+  alias Temporal.CoreSdk.Data.ClientPayload
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Workflow.WorkflowFlowController
 
@@ -75,7 +75,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     do: GenServer.call(reporter, {:resolve_activity, seq_num, status}, :infinity)
 
   def report_completed_success(reporter, result) do
-    output = WorkflowInput.with_opts!(result) |> Payload.from_workflow_input()
+    output = ClientPayload.with_opts!(result) |> Payload.from_workflow_input()
     GenServer.call(reporter, {:report_completed_success, output}, :infinity)
   end
 

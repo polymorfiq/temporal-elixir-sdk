@@ -5,7 +5,7 @@ defmodule Temporal.Workflow do
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.Data.WorkflowGetResultOptions
   alias Temporal.CoreSdk.Data.WorkflowStartOptions
-  alias Temporal.CoreSdk.Data.WorkflowArguments
+  alias Temporal.CoreSdk.Data.ClientPayload
   alias Temporal.TaskQueue
   alias Temporal.Workflows.WorkflowExecHandle
   alias Temporal.Workflow.WorkflowContext
@@ -36,10 +36,11 @@ defmodule Temporal.Workflow do
   end
 
   @spec result(workflow_exec_handle(), get_results_opts()) ::
-          {:ok, WorkflowArguments.t()} | {:error, term()}
+          {:ok, ClientPayload.t()} | {:error, term()}
   def result(%WorkflowExecHandle{} = handle, opts \\ []) do
     with {:ok, opts} <- Keyword.validate(opts, [:follow_runs, :timeout]),
-         {:ok, runtime} <- Client.core_runtime(handle.client) do
+         {:ok, runtime} <- Client.core_runtime(handle.client),
+         {:ok, client} <- Client.core_for_identity(handle.client.identity) do
       get_result_opts = %WorkflowGetResultOptions{
         follow_runs: Keyword.get(opts, :follow_runs, true)
       }
@@ -50,6 +51,7 @@ defmodule Temporal.Workflow do
         spawn_monitor(fn ->
           CoreSdk._workflow_handle_get_result(
             runtime.core,
+            client.core,
             handle.handle,
             get_result_opts,
             self()
@@ -71,8 +73,8 @@ defmodule Temporal.Workflow do
       timeout = Keyword.get(opts, :timeout, :infinity)
 
       receive do
-        {^pid, {:ok, %WorkflowArguments{} = args}} ->
-          WorkflowArguments.to_workflow_result(args)
+        {^pid, {:ok, result}} ->
+          {:ok, ClientPayload.to_val!(result)}
 
         {:DOWN, ^ref, :process, ^pid, %RuntimeError{} = rt_err} ->
           {:error, rt_err}
@@ -84,7 +86,7 @@ defmodule Temporal.Workflow do
   end
 
   @spec watch_result(workflow_exec_handle(), get_results_opts()) ::
-          {:ok, WorkflowArguments.t()} | {:error, term()}
+          {:ok, ClientPayload.t()} | {:error, term()}
   def watch_result(%WorkflowExecHandle{} = handle, opts \\ []) do
     parent = self()
 
@@ -170,7 +172,8 @@ defmodule Temporal.Workflow do
   end
 
   @spec get(WorkflowContext.t(), exec_handle()) :: {:ok, term()} | {:error, term()}
-  def get(%WorkflowContext{} = _ctx, %WorkflowExecHandle{} = handle), do: handle
+  def get(%WorkflowContext{} = _ctx, %WorkflowExecHandle{} = handle),
+    do: handle |> IO.inspect(label: "HMMM2?")
 
   def get(%WorkflowContext{} = ctx, %ActivityExecHandle{} = activity) do
     with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(ctx.run_id) do
