@@ -54,16 +54,15 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
 
   @spec schedule_activity(
           pid(),
-          activity_id :: String.t(),
           activity_type :: String.t(),
           args :: [term()],
           schedule_activity_opts()
         ) :: :ok | {:error, term()}
-  def schedule_activity(reporter, activity_id, activity_type, args, opts \\ []),
+  def schedule_activity(reporter, activity_type, args, opts \\ []),
     do:
       GenServer.call(
         reporter,
-        {:schedule_activity, activity_id, activity_type, args, opts},
+        {:schedule_activity, activity_type, args, opts},
         :infinity
       )
 
@@ -81,28 +80,35 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   end
 
   def handle_call(
-        {:schedule_activity, activity_id, activity_type, args, opts},
+        {:schedule_activity, activity_type, args, opts},
         _from,
         state
       ) do
     # Do not let user override these
     opts = Keyword.drop(opts, [:seq, :activity_id, :activity_type, :arguments])
 
-    {state, send_resp} =
-      report_successful_completion(state,
-        commands: [
-          {:schedule_activity,
-           [
-             seq: nil,
-             activity_id: activity_id,
-             activity_type: activity_type,
-             task_queue: progress_state(state, :task_queue).queue_name,
-             arguments: args
-           ] ++ opts}
-        ]
-      )
+    next_seq = progress_state(state, :next_seq)
+    activity_id = "#{next_seq}"
 
-    {:reply, send_resp, state}
+    report_successful_completion(state,
+      commands: [
+        {:schedule_activity,
+         [
+           seq: next_seq,
+           activity_id: activity_id,
+           activity_type: activity_type,
+           task_queue: progress_state(state, :task_queue).queue_name,
+           arguments: args
+         ] ++ opts}
+      ]
+    )
+    |> case do
+      {new_state, :ok} ->
+        {:reply, {:ok, activity_id}, progress_state(new_state, next_seq: next_seq + 1)}
+
+      {_new_state, {:error, err}} ->
+        {:reply, {:error, err}, state}
+    end
   end
 
   def handle_call({:resolve_activity, seq_num, result}, _from, state) do
@@ -143,28 +149,22 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   end
 
   def handle_call({:report_completed_success, output}, _from, state) do
-    {state, send_resp} =
-      report_successful_completion(state,
-        commands: [{:complete_workflow_execution, [result: output]}]
-      )
+    report_successful_completion(state,
+      commands: [{:complete_workflow_execution, [result: output]}]
+    )
+    |> case do
+      {new_state, :ok} ->
+        {:reply, :ok, new_state, {:continue, :stop_workflow}}
 
-    {:reply, send_resp, state, {:continue, :stop_workflow}}
+      {_new_state, {:error, err}} ->
+        {:reply, {:error, err}, state}
+    end
   end
 
   @spec report_successful_completion(progress_state(), SuccessStatus.opts()) ::
           :ok | {:error, term()}
   defp report_successful_completion(state, completion) do
-    next_seq = progress_state(state, :next_seq)
     commands = Keyword.get(completion, :commands, [])
-
-    {next_seq, commands} =
-      Enum.reduce(commands, {next_seq, []}, fn {cmd_variant, cmd_opts}, {next_seq, cmds} ->
-        if Keyword.has_key?(cmd_opts, :seq) do
-          {next_seq + 1, cmds ++ [{cmd_variant, Keyword.put(cmd_opts, :seq, next_seq)}]}
-        else
-          {next_seq, cmds ++ [{cmd_variant, cmd_opts}]}
-        end
-      end)
 
     state =
       Enum.reduce(commands, state, fn
@@ -199,7 +199,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         )
         |> case do
           :ok ->
-            send(parent, {self(), progress_state(state, next_seq: next_seq), :ok})
+            send(parent, {self(), state, :ok})
 
           other_resp ->
             send(parent, {self(), state, other_resp})

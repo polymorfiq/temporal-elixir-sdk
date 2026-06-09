@@ -6,7 +6,6 @@ defmodule Temporal.Workflow do
   alias Temporal.CoreSdk.Data.WorkflowGetResultOptions
   alias Temporal.CoreSdk.Data.WorkflowStartOptions
   alias Temporal.CoreSdk.Data.WorkflowArguments
-  alias Temporal.Internal.Hash
   alias Temporal.TaskQueue
   alias Temporal.Workflows.WorkflowExecHandle
   alias Temporal.Workflow.WorkflowContext
@@ -97,8 +96,6 @@ defmodule Temporal.Workflow do
   @spec execute_activity(WorkflowContext.t(), term(), [term()], activity_exec_opts()) ::
           {:ok, ActivityExecHandle.t()} | {:error, term()}
   def execute_activity(%WorkflowContext{} = ctx, activity_type, args \\ [], opts \\ []) do
-    activity_id = Hash.random_hash(32)
-
     args =
       if is_list(args) do
         args
@@ -132,10 +129,9 @@ defmodule Temporal.Workflow do
           Activity.name_for_type(activity_type)
         end)
 
-      with :ok <-
+      with {:ok, activity_id} <-
              WorkflowProgressReporter.schedule_activity(
                reporter,
-               activity_id,
                activity_type,
                args,
                opts
