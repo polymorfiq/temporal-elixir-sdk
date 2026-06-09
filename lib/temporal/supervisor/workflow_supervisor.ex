@@ -6,28 +6,23 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
   alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Workflow.WorkflowExecutor
-  alias Temporal.CoreSdk.Data.WorkflowActivation
-  alias Temporal.CoreSdk.Data.ActivationInitializeWorkflow
+  alias Temporal.Supervisor.ExecutionContext
 
   @type workflow_id :: String.t()
   @type run_id :: String.t()
   @type worker_id :: String.t()
 
-  @spec start_link(
-          {workflow_id(), run_id(), worker_id(), WorkflowActivation.t(),
-           ActivationInitializeWorkflow.t(), keyword()}
-        ) ::
-          {:ok, pid()} | {:error, term()}
-  def start_link({exec_ctx, initialize, server_opts}) do
+  @spec start_link({ExecutionContext.t(), keyword()}) :: {:ok, pid()} | {:error, term()}
+  def start_link({exec_ctx, server_opts}) do
     Supervisor.start_link(
       __MODULE__,
-      {exec_ctx, initialize},
+      exec_ctx,
       server_opts
     )
   end
 
   @impl true
-  def init({exec_ctx, initialize}) do
+  def init(exec_ctx) do
     Process.set_label({:workflow_supervisor, exec_ctx.workflow_id})
 
     run_id = exec_ctx.run_id
@@ -37,21 +32,30 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
        {exec_ctx, [name: via_registry({:progress_reporter, run_id}), shutdown: 10_000]}},
       {WorkflowFlowController, {exec_ctx, [name: via_registry({:flow_control, run_id})]}},
       {WorkflowContext, {exec_ctx, [name: via_registry({:context, run_id})]}},
-      {WorkflowExecutor, {exec_ctx, initialize, [name: via_registry({:executor, run_id})]}}
+      {WorkflowExecutor, {exec_ctx, [name: via_registry({:executor, run_id})]}}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
   end
 
-  @spec stop_workflow(run_id :: String.t()) :: :ok
-  def stop_workflow(run_id) do
-    if sup = GenServer.whereis(process_name(run_id)) do
-      spawn(fn ->
-        Supervisor.stop(sup, :shutdown, :infinity)
-      end)
-    end
+  @spec stop_workflow(run_id :: String.t(), opts :: keyword()) :: :ok
+  def stop_workflow(run_id, opts \\ []) do
+    sup = GenServer.whereis(process_name(run_id))
 
-    :ok
+    cond do
+      sup && opts[:wait] ->
+        Supervisor.stop(sup, :shutdown, :infinity)
+
+      sup ->
+        spawn(fn ->
+          Supervisor.stop(sup, :shutdown, :infinity)
+        end)
+
+        :ok
+
+      true ->
+        :ok
+    end
   end
 
   @spec progress_reporter_pid(workflow_id()) :: {:ok, term()} | {:error, term()}

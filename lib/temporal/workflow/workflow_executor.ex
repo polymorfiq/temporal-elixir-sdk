@@ -17,15 +17,15 @@ defmodule Temporal.Workflow.WorkflowExecutor do
     :initialize
   ])
 
-  def start_link({exec_ctx, initialize, server_opts}) do
+  def start_link({exec_ctx, server_opts}) do
     GenServer.start_link(
       __MODULE__,
-      {exec_ctx, initialize},
+      exec_ctx,
       server_opts
     )
   end
 
-  def init({exec_ctx, initialize}) do
+  def init(exec_ctx) do
     Process.set_label({:workflow_executor, exec_ctx.run_id})
     Process.flag(:trap_exit, true)
 
@@ -36,7 +36,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
        worker_id: exec_ctx.worker_id,
        module: exec_ctx.workflow_module,
        exec_ctx: exec_ctx,
-       initialize: initialize
+       initialize: exec_ctx.workflow_initialize
      ), {:continue, :execute}}
   end
 
@@ -56,6 +56,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
         Enum.map(initialize.arguments, fn
           %{metadata: %{"encoding" => ~c"json/plain"}, data: data} ->
             Jason.decode!(to_string(data))
+
           %{metadata: %{"encoding" => ~c"application/x-erlang-term"}, data: data} ->
             :erlang.binary_to_term(:binary.list_to_bin(data))
         end)

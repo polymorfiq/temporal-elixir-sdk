@@ -13,8 +13,9 @@ defmodule Temporal.Supervisor.ExecutionContext do
             activity_id: nil,
             activity_type: nil,
             activity_fn: nil,
+            activity_task_token: nil,
             activity_start: nil,
-            activity_task_token: nil
+            workflow_initialize: nil
 
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.CoreClient
@@ -34,6 +35,7 @@ defmodule Temporal.Supervisor.ExecutionContext do
           activity_type: String.t() | nil,
           activity_fn: function() | nil,
           activity_start: term() | nil,
-          activity_task_token: [byte()] | nil
+          activity_task_token: [byte()] | nil,
+          workflow_initialize: term() | nil
         }
 end

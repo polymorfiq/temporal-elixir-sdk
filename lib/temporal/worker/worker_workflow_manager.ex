@@ -1,5 +1,6 @@
 defmodule Temporal.Worker.WorkerWorkflowManager do
   use GenServer
+  alias Temporal.Supervisor.ExecutionContext
   alias Temporal.TaskQueue
   alias Temporal.Worker
   alias Temporal.Supervisor.WorkflowSupervisor
@@ -66,36 +67,21 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
   def handle_activation_job({:initialize_workflow, initialize}, activation, state) do
     exec_ctx = manager_state(state, :exec_ctx)
-    worker_id = manager_state(state, :id)
     registered = manager_state(state, :registered)
 
     resp =
       if workflow_module = registered[initialize.workflow_type] do
-        with {:ok, worker} <- WorkerSupervisor.core_for_id(worker_id),
-             {:ok, workflows_sup} <- WorkerSupervisor.workflows_sup_for_id(worker_id) do
-          child_started =
-            DynamicSupervisor.start_child(
-              workflows_sup,
-              Supervisor.child_spec(
-                {WorkflowSupervisor,
-                 {
-                   %{
-                     exec_ctx
-                     | workflow_id: initialize.workflow_id,
-                       run_id: activation.run_id,
-                       workflow_module: workflow_module,
-                       worker: worker
-                   },
-                   initialize,
-                   [name: WorkflowSupervisor.process_name(activation.run_id)]
-                 }},
-                restart: :temporary
-              )
-            )
+        with {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
+          exec_ctx = %{
+            exec_ctx
+            | workflow_id: initialize.workflow_id,
+              run_id: activation.run_id,
+              workflow_module: workflow_module,
+              workflow_initialize: initialize,
+              worker: worker
+          }
 
-          with {:ok, _} <- child_started do
-            :ok
-          end
+          start_or_restart_workflow(exec_ctx)
         end
       else
         Logger.warning(
@@ -137,5 +123,30 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     )
 
     {:ok, state}
+  end
+
+  @spec start_or_restart_workflow(ExecutionContext.t()) :: :ok | {:error, term()}
+  def start_or_restart_workflow(exec_ctx) do
+    with {:ok, workflows_sup} <- WorkerSupervisor.workflows_sup_for_id(exec_ctx.worker_id) do
+      DynamicSupervisor.start_child(
+        workflows_sup,
+        Supervisor.child_spec(
+          {WorkflowSupervisor,
+           {exec_ctx, [name: WorkflowSupervisor.process_name(exec_ctx.run_id)]}},
+          restart: :temporary
+        )
+      )
+      |> case do
+        {:ok, _} ->
+          :ok
+
+        {:error, {:already_started}} ->
+          WorkflowSupervisor.stop_workflow(exec_ctx.run_id, wait: true)
+          start_or_restart_workflow(exec_ctx)
+
+        {:error, err} ->
+          {:error, err}
+      end
+    end
   end
 end

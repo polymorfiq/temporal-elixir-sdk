@@ -33,15 +33,24 @@ defmodule Temporal.Supervisor.ActivitySupervisor do
     Supervisor.init(children, strategy: :one_for_all)
   end
 
-  @spec stop_activity(activity_id :: String.t()) :: :ok
-  def stop_activity(activity_id) do
-    if sup = GenServer.whereis(process_name(activity_id)) do
-      spawn(fn ->
-        Supervisor.stop(sup, :shutdown, :infinity)
-      end)
-    end
+  @spec stop_activity(activity_id :: String.t(), opts :: keyword()) :: :ok
+  def stop_activity(activity_id, opts \\ []) do
+    sup = GenServer.whereis(process_name(activity_id))
 
-    :ok
+    cond do
+      sup && opts[:wait] ->
+        Supervisor.stop(sup, :shutdown, :infinity)
+
+      sup ->
+        spawn(fn ->
+          Supervisor.stop(sup, :shutdown, :infinity)
+        end)
+
+        :ok
+
+      true ->
+        :ok
+    end
   end
 
   @spec progress_reporter_pid(activity_id()) :: {:ok, term()} | {:error, term()}
