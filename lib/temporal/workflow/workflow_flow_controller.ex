@@ -4,6 +4,8 @@ defmodule Temporal.Workflow.WorkflowFlowController do
   require Logger
   require Record
 
+  alias Temporal.Workflow.WorkflowProgressReporter
+
   Record.defrecordp(:flow_state, [
     :id,
     :workflow_id,
@@ -32,8 +34,10 @@ defmodule Temporal.Workflow.WorkflowFlowController do
   def activity_task_resolved(pid, activity_id, result),
     do: GenServer.cast(pid, {:activity_task_resolved, activity_id, result})
 
-  def await_activity_result(pid, activity_id),
-    do: GenServer.call(pid, {:await_activity_result, activity_id}, :infinity)
+  def await_activity_result(pid, run_id, activity_id) do
+    WorkflowProgressReporter.send_heartbeat_for_id(run_id)
+    GenServer.call(pid, {:await_activity_result, activity_id}, :infinity)
+  end
 
   def handle_cast({:activity_task_resolved, activity_id, result}, state) do
     awaiting = flow_state(state, :awaiting_activities)

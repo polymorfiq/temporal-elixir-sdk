@@ -99,7 +99,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
       "Removing from cache (#{job.reason} - #{job.message}): Workflow Run (#{activation.run_id})"
     )
 
-    WorkflowSupervisor.stop_workflow(activation.run_id)
+    WorkflowSupervisor.stop_workflow(activation.run_id, wait: true)
 
     {:ok, state}
   end

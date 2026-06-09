@@ -1,10 +1,9 @@
 defmodule Temporal.Worker.WorkerActivityManager do
   use GenServer
 
-  alias Temporal.ActivityRegistry
-  alias Temporal.Supervisor.ActivitySupervisor
   alias Temporal.Supervisor.ExecutionContext
   alias Temporal.Supervisor.WorkerSupervisor
+  alias Temporal.Workflow.WorkflowActivityManager
 
   require Logger
   require Record
@@ -59,6 +58,8 @@ defmodule Temporal.Worker.WorkerActivityManager do
             exec_ctx = %{
               exec_ctx
               | worker: worker,
+                workflow_id: start.workflow_execution.workflow_id,
+                run_id: start.workflow_execution.run_id,
                 activity_type: start.activity_type,
                 activity_id: start.activity_id,
                 activity_fn: activity_fn,
@@ -66,7 +67,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
                 activity_task_token: task.task_token
             }
 
-            start_or_restart_activity(exec_ctx)
+            WorkflowActivityManager.start_or_restart_activity(exec_ctx)
           end
 
         {:reply, resp, state}
@@ -77,38 +78,5 @@ defmodule Temporal.Worker.WorkerActivityManager do
     cancel |> IO.inspect(label: "cancel-activity")
 
     {:reply, :ok, state}
-  end
-
-  @spec process_name(activity_id :: String.t()) :: {:via, atom(), term()}
-  def process_name(activity_id) do
-    {:via, Registry, {ActivityRegistry, {:activity, activity_id}}}
-  end
-
-  @spec start_or_restart_activity(ExecutionContext.t()) :: :ok | {:error, term()}
-  def start_or_restart_activity(exec_ctx) do
-    with {:ok, activities_sup} <- WorkerSupervisor.activities_sup_for_id(exec_ctx.worker_id) do
-      DynamicSupervisor.start_child(
-        activities_sup,
-        Supervisor.child_spec(
-          {ActivitySupervisor,
-           {
-             exec_ctx,
-             [name: ActivitySupervisor.process_name(exec_ctx.activity_id)]
-           }},
-          restart: :temporary
-        )
-      )
-      |> case do
-        {:ok, _} ->
-          :ok
-
-        {:error, {:already_started, _}} ->
-          ActivitySupervisor.stop_activity(exec_ctx.run_id, wait: true)
-          start_or_restart_activity(exec_ctx)
-
-        {:error, err} ->
-          {:error, err}
-      end
-    end
   end
 end

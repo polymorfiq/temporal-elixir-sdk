@@ -165,7 +165,11 @@ defmodule Temporal.Workflow do
 
   def get(%ActivityExecHandle{} = activity) do
     with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(activity.run_id) do
-      WorkflowFlowController.await_activity_result(flow_control, activity.activity_id)
+      WorkflowFlowController.await_activity_result(
+        flow_control,
+        activity.run_id,
+        activity.activity_id
+      )
     end
   end
 
@@ -174,7 +178,11 @@ defmodule Temporal.Workflow do
 
   def get(%WorkflowContext{} = ctx, %ActivityExecHandle{} = activity) do
     with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(ctx.run_id) do
-      WorkflowFlowController.await_activity_result(flow_control, activity.activity_id)
+      WorkflowFlowController.await_activity_result(
+        flow_control,
+        activity.run_id,
+        activity.activity_id
+      )
     end
   end
 end

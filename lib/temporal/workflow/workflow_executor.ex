@@ -41,7 +41,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
   end
 
   def handle_continue(:execute, state) do
-    Logger.info(
+    Logger.debug(
       "Workflow started (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)}"
     )
 
@@ -70,16 +70,9 @@ defmodule Temporal.Workflow.WorkflowExecutor do
           WorkflowProgressReporter.report_completed_success(reporter, result)
       end
 
-      {:noreply, state, {:continue, :complete}}
+      {:noreply, state}
     else
       {:error, err} -> {:shutdown, {:error, err}}
     end
-  end
-
-  def handle_continue(:complete, state) do
-    run_id = workflow_state(state, :id)
-    WorkflowSupervisor.stop_workflow(run_id)
-
-    {:noreply, state}
   end
 end

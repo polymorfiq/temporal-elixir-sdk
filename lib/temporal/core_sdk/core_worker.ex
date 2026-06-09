@@ -190,8 +190,8 @@ defmodule Temporal.CoreSdk.CoreWorker do
   end
 
   @impl true
-  def terminate(_reason, state) do
-    Logger.debug("Worker (#{friendly_name(state)}) terminating...")
+  def terminate(reason, state) do
+    Logger.debug("Worker (#{friendly_name(state)}) terminating: #{inspect(reason)}")
 
     with :ok <- initiate_shutdown(state),
          :ok <- finalize_shutdown(state) do

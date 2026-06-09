@@ -22,6 +22,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     :next_seq,
     :runtime,
     :worker,
+    command_batch: [],
     sequences: %{}
   ])
 
@@ -38,6 +39,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   end
 
   def init(exec_ctx) do
+    Process.flag(:trap_exit, true)
     Process.set_label({:workflow_progress_reporter, exec_ctx.run_id})
 
     {:ok,
@@ -79,6 +81,12 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     GenServer.call(reporter, {:report_completed_success, output}, :infinity)
   end
 
+  def send_heartbeat_for_id(run_id) do
+    with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(run_id) do
+      GenServer.cast(reporter, :heartbeat)
+    end
+  end
+
   def handle_call(
         {:schedule_activity, activity_type, args, opts},
         _from,
@@ -90,25 +98,20 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     next_seq = progress_state(state, :next_seq)
     activity_id = "#{next_seq}"
 
-    report_successful_completion(state,
-      commands: [
-        {:schedule_activity,
-         [
-           seq: next_seq,
-           activity_id: activity_id,
-           activity_type: activity_type,
-           task_queue: progress_state(state, :task_queue).queue_name,
-           arguments: args
-         ] ++ opts}
-      ]
-    )
-    |> case do
-      {new_state, :ok} ->
-        {:reply, {:ok, activity_id}, progress_state(new_state, next_seq: next_seq + 1)}
+    command =
+      {:schedule_activity,
+       [
+         seq: next_seq,
+         activity_id: activity_id,
+         activity_type: activity_type,
+         task_queue: progress_state(state, :task_queue).queue_name,
+         arguments: args
+       ] ++ opts}
 
-      {_new_state, {:error, err}} ->
-        {:reply, {:error, err}, state}
-    end
+    command_batch = progress_state(state, :command_batch) ++ [command]
+
+    {:reply, {:ok, activity_id},
+     progress_state(state, command_batch: command_batch, next_seq: next_seq + 1)}
   end
 
   def handle_call({:resolve_activity, seq_num, result}, _from, state) do
@@ -153,18 +156,36 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
       commands: [{:complete_workflow_execution, [result: output]}]
     )
     |> case do
-      {new_state, :ok} ->
-        {:reply, :ok, new_state, {:continue, :stop_workflow}}
+      {:ok, new_state} ->
+        send(self(), :stop_workflow)
+        {:reply, :ok, new_state}
 
-      {_new_state, {:error, err}} ->
+      {{:error, err}, _} ->
         {:reply, {:error, err}, state}
     end
   end
 
+  def handle_cast(:heartbeat, state) do
+    if Enum.count(progress_state(state, :command_batch)) > 0 do
+      report_successful_completion(state, commands: [])
+      |> case do
+        {:ok, new_state} ->
+          {:noreply, new_state}
+
+        {{:error, err}, _} ->
+          Logger.error("Workflow heartbeat error: #{inspect(err)}")
+          {:noreply, state}
+      end
+    else
+      {:noreply, state}
+    end
+  end
+
   @spec report_successful_completion(progress_state(), SuccessStatus.opts()) ::
-          :ok | {:error, term()}
+          {:ok, state :: term()} | {:error, term()}
   defp report_successful_completion(state, completion) do
-    commands = Keyword.get(completion, :commands, [])
+    commands = progress_state(state, :command_batch) ++ Keyword.get(completion, :commands, [])
+    state = progress_state(state, command_batch: [])
 
     state =
       Enum.reduce(commands, state, fn
@@ -199,31 +220,41 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         )
         |> case do
           :ok ->
-            send(parent, {self(), state, :ok})
+            receive do
+              {:ok, _} ->
+                send(parent, {self(), state, :ok})
+
+              {:error, err} ->
+                send(parent, {self(), state, {:error, err}})
+                Logger.error("Workflow Complete Activation Error - #{inspect(err)}")
+            end
 
           other_resp ->
             send(parent, {self(), state, other_resp})
-        end
-
-        receive do
-          :ok ->
-            :ok
-
-          {:error, err} ->
-            Logger.error("Workflow Complete Activation Error - #{inspect(err)}")
         end
       end)
 
     receive do
       {^child, state, resp} ->
-        {state, resp}
+        {resp, state}
     end
   end
 
-  def handle_continue(:stop_workflow, state) do
+  def handle_info(:stop_workflow, state) do
     run_id = progress_state(state, :run_id)
     WorkflowSupervisor.stop_workflow(run_id)
 
     {:noreply, state}
+  end
+
+  def handle_info({:EXIT, _, :normal}, state) do
+    {:noreply, state}
+  end
+
+  def terminate(reason, state) do
+    run_id = progress_state(state, :run_id)
+    Logger.debug("Workflow (#{run_id}) terminating: #{inspect(reason)}")
+
+    reason
   end
 end

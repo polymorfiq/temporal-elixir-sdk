@@ -5,7 +5,6 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.CoreClient
   alias Temporal.CoreSdk.CoreWorker
-  alias Temporal.Supervisor.ActivityList
   alias Temporal.Supervisor.WorkflowList
   alias Temporal.TaskQueue
   alias Temporal.Worker.WorkflowActivationPoller
@@ -38,7 +37,6 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
     children = [
       {CoreWorker, {exec_ctx, opts, [name: via_registry({:core, worker_id}), shutdown: 10_000]}},
       {WorkflowList, [name: via_registry({:workflows, worker_id})]},
-      {ActivityList, [name: via_registry({:activities, worker_id})]},
       {WorkerWorkflowManager,
        {exec_ctx, opts, [name: via_registry({:workflow_manager, worker_id})]}},
       {WorkerActivityManager, {exec_ctx, [name: via_registry({:activity_manager, worker_id})]}},
@@ -92,15 +90,6 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
       {:ok, pid}
     else
       {:error, "Workflow list not found for worker (#{inspect(worker_id)})"}
-    end
-  end
-
-  @spec activities_sup_for_id(worker_id()) :: {:ok, term()} | {:error, term()}
-  def activities_sup_for_id(worker_id) do
-    if pid = GenServer.whereis(via_registry({:activities, worker_id})) do
-      {:ok, pid}
-    else
-      {:error, "Activity list not found for worker (#{inspect(worker_id)})"}
     end
   end
 
