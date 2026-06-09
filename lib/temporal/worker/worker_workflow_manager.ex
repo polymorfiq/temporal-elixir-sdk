@@ -140,7 +140,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
         {:ok, _} ->
           :ok
 
-        {:error, {:already_started}} ->
+        {:error, {:already_started, _}} ->
           WorkflowSupervisor.stop_workflow(exec_ctx.run_id, wait: true)
           start_or_restart_workflow(exec_ctx)
 

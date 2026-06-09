@@ -102,7 +102,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
         {:ok, _} ->
           :ok
 
-        {:error, {:already_started}} ->
+        {:error, {:already_started, _}} ->
           ActivitySupervisor.stop_activity(exec_ctx.run_id, wait: true)
           start_or_restart_activity(exec_ctx)
 
