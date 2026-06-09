@@ -120,7 +120,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
 
     sequences = progress_state(state, :sequences)
 
-    will_unlock_anything? =
+    {:ok, will_unlock_anything?} =
       WorkflowFlowController.will_resolutions_unlock?(
         activation.run_id,
         Enum.map(activity_resolve_jobs, fn job ->
@@ -128,6 +128,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
           activity_id
         end)
       )
+    Logger.info("Will resolution unlock? #{inspect(will_unlock_anything?)}")
 
     variants = Enum.map(activation.jobs, & &1.variant)
 
@@ -196,6 +197,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     else
       {:error, err} ->
         Logger.error("Error when processing activation: #{inspect(err)}")
+        {:reply, {:error, err}, state, {:continue, :heartbeat}}
     end
   end
 
