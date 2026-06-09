@@ -5,6 +5,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   alias Temporal.CoreSdk.Data.Payload
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletion
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletionSuccessStatus, as: SuccessStatus
+  alias Temporal.CoreSdk.Data.WorkflowActivationCompletionFailureStatus, as: FailureStatus
   alias Temporal.CoreSdk.Data.WorkflowCommandScheduleActivity
   alias Temporal.CoreSdk.Data.WorkflowInput
   alias Temporal.Supervisor.WorkflowSupervisor
@@ -204,7 +205,6 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     )
     |> case do
       {:ok, new_state} ->
-        send(self(), :stop_workflow)
         {:noreply, new_state}
 
       {{:error, err}, _} ->
@@ -322,7 +322,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
           run_id :: String.t(),
           runtime :: term(),
           worker :: term(),
-          CoreSdk.Data.WorkflowActivationCompletionSuccessStatus.opts()
+          SuccessStatus.opts()
         ) :: :ok | {:error, term()}
   def send_successful_activation_completion(run_id, runtime, worker, completion) do
     Logger.debug("Completed Activation: #{run_id}")
@@ -365,11 +365,51 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     end
   end
 
-  def handle_info(:stop_workflow, state) do
-    run_id = progress_state(state, :run_id)
-    WorkflowSupervisor.stop_workflow(run_id)
+  @spec send_failure_activation_completion(
+          run_id :: String.t(),
+          runtime :: term(),
+          worker :: term(),
+          FailureStatus.opts()
+        ) :: :ok | {:error, term()}
+  def send_failure_activation_completion(run_id, runtime, worker, completion) do
+    Logger.debug("Failed Activation: #{run_id}")
 
-    {:noreply, state}
+    complete_activation_msg =
+      WorkflowActivationCompletion.with_opts!(
+        run_id: run_id,
+        status: {:failed, completion}
+      )
+
+    parent = self()
+
+    child =
+      spawn_link(fn ->
+        CoreSdk._worker_complete_workflow_activation(
+          runtime,
+          worker,
+          complete_activation_msg,
+          self()
+        )
+        |> case do
+          :ok ->
+            receive do
+              {:ok, _} ->
+                send(parent, {self(), :ok})
+
+              {:error, err} ->
+                send(parent, {self(), {:error, err}})
+                Logger.error("Workflow Complete Activation Error - #{inspect(err)}")
+            end
+
+          other_resp ->
+            send(parent, {self(), other_resp})
+        end
+      end)
+
+    receive do
+      {^child, resp} ->
+        resp
+    end
   end
 
   def handle_info({:EXIT, _, :normal}, state) do

@@ -1,8 +1,8 @@
 defmodule Temporal.CoreSdk.Data.WorkflowFailure do
   defstruct [
     :message,
-    :source,
-    :stack_trace,
+    source: "",
+    stack_trace: "",
     encoded_attributes: nil,
     cause: nil,
     failure_info: nil

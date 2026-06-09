@@ -57,6 +57,9 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
     with {:ok, state} <- processed do
       {:reply, :ok, state}
+    else
+      {{:error, err}, _} ->
+        {:reply, {:error, err}, state}
     end
   end
 
@@ -87,7 +90,16 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
           "Ignoring unregistered workflow type: #{inspect(initialize.workflow_type)}"
         )
 
-        :ok
+        with {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
+          WorkflowProgressReporter.send_failure_activation_completion(
+            activation.run_id,
+            exec_ctx.runtime.core,
+            worker.core,
+            failure: [message: "Unknown workflow type: #{inspect(initialize.workflow_type)}"]
+          )
+
+          :ok
+        end
       end
 
     {resp, state}

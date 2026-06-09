@@ -40,7 +40,6 @@ queue = TaskQueue.new(client, "default")
 
 # Register relevant activities and workflows
 :ok = Worker.register_workflow(worker, WorkflowWithActivities)
-:ok = Worker.register_activity(worker, &WorkflowWithActivities.activity_1/2)
 
 # Start workflow
 {:ok, handle} = TaskQueue.start_workflow(queue, "my-workflow", WorkflowWithActivities, ["World"])

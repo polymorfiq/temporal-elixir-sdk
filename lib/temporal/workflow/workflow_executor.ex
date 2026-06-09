@@ -72,7 +72,8 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
       {:noreply, state}
     else
-      {:error, err} -> {:shutdown, {:error, err}}
+      {:error, err} ->
+        {:shutdown, {:error, err}}
     end
   end
 end
