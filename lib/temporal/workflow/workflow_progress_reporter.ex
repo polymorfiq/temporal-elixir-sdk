@@ -231,11 +231,11 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     report_successful_completion(state, commands: [])
     |> case do
       {:ok, new_state} ->
-        {:reply, :ok, new_state}
+        {:noreply, new_state}
 
       {{:error, err}, _} ->
         Logger.error("Workflow heartbeat error: #{inspect(err)}")
-        {:reply, {:error, err}, state}
+        {:noreply, state}
     end
   end
 
