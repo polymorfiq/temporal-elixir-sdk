@@ -106,6 +106,14 @@ defmodule Temporal.Worker do
     end
   end
 
+  def stop(worker) do
+    if sup = GenServer.whereis({:via, Registry, {WorkerRegistry, {:worker, worker.id}}}) do
+      Supervisor.stop(sup, :shutdown, :infinity)
+    else
+      {:error, :worker_already_stopped}
+    end
+  end
+
   @spec register_workflow(t(), WorkflowName.t(), register_workflow_opts()) ::
           :ok | {:error, term()}
   def register_workflow(worker, workflow_mod, opts \\ []) do

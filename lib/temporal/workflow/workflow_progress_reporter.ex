@@ -172,7 +172,8 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         _ -> false
       end)
 
-    everything = patch_updates ++ update_seeds ++ signals_updates ++ queries ++ evictions ++ variants
+    everything =
+      patch_updates ++ update_seeds ++ signals_updates ++ queries ++ evictions ++ variants
 
     processed =
       everything

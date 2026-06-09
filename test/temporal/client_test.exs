@@ -50,6 +50,8 @@ defmodule Temporal.ClientTest do
 
   defp setup_create_client(ctx) do
     {:ok, client} = Client.new("localhost:7233")
+    on_exit(fn -> Client.stop(client) end)
+
     Map.put(ctx, :client, client)
   end
 end

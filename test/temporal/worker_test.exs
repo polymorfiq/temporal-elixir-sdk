@@ -14,6 +14,8 @@ defmodule Temporal.WorkerTest do
 
   defp setup_create_task_queue(ctx) do
     {:ok, client} = Client.new("localhost:7233")
+    on_exit(fn -> Client.stop(client) end)
+
     task_queue = TaskQueue.new(client, "default")
     Map.merge(ctx, %{queue: task_queue, client: client})
   end

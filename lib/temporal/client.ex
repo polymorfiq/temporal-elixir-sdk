@@ -46,6 +46,14 @@ defmodule Temporal.Client do
     end
   end
 
+  def stop(client) do
+    if sup = GenServer.whereis({:via, Registry, {ClientRegistry, {:client, client.identity}}}) do
+      Supervisor.stop(sup, :shutdown, :infinity)
+    else
+      {:error, :client_already_stopped}
+    end
+  end
+
   def core_runtime(client),
     do: Runtime.core_for_id(client.runtime_id)
 

@@ -49,6 +49,7 @@ defmodule Temporal.Workflow.WorkflowFlowController do
     was_awaiting
     |> Enum.map(fn {activity_id, awaiting} ->
       result = Enum.find_value(results, fn {id, output} -> id == activity_id && output end)
+
       Enum.each(awaiting, fn awaiter ->
         Logger.debug("Awaiting activity (Unlocked): #{inspect(awaiter)} - #{activity_id}")
         GenServer.reply(awaiter, result)

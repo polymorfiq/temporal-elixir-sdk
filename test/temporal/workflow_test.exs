@@ -151,6 +151,7 @@ defmodule Temporal.WorkflowTest do
 
   defp setup_create_task_queue(ctx) do
     {:ok, client} = Client.new("localhost:7233")
+    on_exit(fn -> Client.stop(client) end)
 
     queue = create_basic_queue(client, "workflow_test")
 
