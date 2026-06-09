@@ -3975,7 +3975,6 @@ impl TemporalDeserializable for SdkWorkflowInput {
             None => String::from("bytes/plain"),
         };
 
-        println!("ENCODING SEEN: {}", encoding);
         match encoding.as_str() {
             "application/x-erlang-term" => Ok(Self::ErlangExternalTerm(payload.data)),
             "json/plain" => {
