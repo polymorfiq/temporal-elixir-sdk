@@ -19,13 +19,9 @@ defmodule Temporal.Activity do
         {:name, function_name} = Function.info(activity_type, :name)
         {:arity, arity} = Function.info(activity_type, :arity)
 
-        module_name =
-          case "#{module_name}" do
-            "Elixir." <> name -> name
-            other -> other
-          end
+        module_name = Module.split(module_name) |> List.last()
 
-        "&#{module_name}.#{function_name}/#{arity}"
+        "#{module_name}.#{function_name}/#{arity}"
 
       is_atom(activity_type) ->
         {:ok, "#{activity_type}"}
