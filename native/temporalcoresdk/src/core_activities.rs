@@ -9,12 +9,12 @@ use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityTask"]
-pub struct SdkActivityTask<'a> {
+pub struct SdkActivityTask {
     pub task_token: Vec<u8>,
-    pub variant: Option<SdkActivityTaskVariant<'a>>,
+    pub variant: Option<SdkActivityTaskVariant>,
 }
 
-impl<'a> From<activity_task::ActivityTask> for SdkActivityTask<'a> {
+impl From<activity_task::ActivityTask> for SdkActivityTask {
     fn from(external: activity_task::ActivityTask) -> Self {
         Self {
             task_token: external.task_token,
@@ -23,7 +23,7 @@ impl<'a> From<activity_task::ActivityTask> for SdkActivityTask<'a> {
     }
 }
 
-impl<'a> Into<activity_task::ActivityTask> for SdkActivityTask<'a> {
+impl Into<activity_task::ActivityTask> for SdkActivityTask {
     fn into(self) -> activity_task::ActivityTask {
         activity_task::ActivityTask {
             task_token: self.task_token,
@@ -33,12 +33,12 @@ impl<'a> Into<activity_task::ActivityTask> for SdkActivityTask<'a> {
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkActivityTaskVariant<'a> {
-    Start(SdkActivityTaskStart<'a>),
+pub enum SdkActivityTaskVariant {
+    Start(SdkActivityTaskStart),
     Cancel(SdkActivityTaskCancel),
 }
 
-impl<'a> From<ActivityTaskVariant> for SdkActivityTaskVariant<'a> {
+impl From<ActivityTaskVariant> for SdkActivityTaskVariant {
     fn from(external: ActivityTaskVariant) -> Self {
         match external {
             ActivityTaskVariant::Start(task) => Self::Start(task.into()),
@@ -47,7 +47,7 @@ impl<'a> From<ActivityTaskVariant> for SdkActivityTaskVariant<'a> {
     }
 }
 
-impl<'a> Into<ActivityTaskVariant> for SdkActivityTaskVariant<'a> {
+impl Into<ActivityTaskVariant> for SdkActivityTaskVariant {
     fn into(self) -> ActivityTaskVariant {
         match self {
             Self::Start(task) => ActivityTaskVariant::Start(task.into()),
@@ -58,15 +58,15 @@ impl<'a> Into<ActivityTaskVariant> for SdkActivityTaskVariant<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityTaskStart"]
-pub struct SdkActivityTaskStart<'a> {
+pub struct SdkActivityTaskStart {
     pub workflow_namespace: String,
     pub workflow_type: String,
     pub workflow_execution: Option<SdkWorkflowExecution>,
     pub activity_id: String,
     pub activity_type: String,
-    pub header_fields: HashMap<String, SdkPayload<'a>>,
-    pub input: Vec<SdkPayload<'a>>,
-    pub heartbeat_details: Vec<SdkPayload<'a>>,
+    pub header_fields: HashMap<String, SdkPayload>,
+    pub input: Vec<SdkPayload>,
+    pub heartbeat_details: Vec<SdkPayload>,
     pub scheduled_time: Option<SdkTimestamp>,
     pub current_attempt_scheduled_time: Option<SdkTimestamp>,
     pub started_time: Option<SdkTimestamp>,
@@ -80,7 +80,7 @@ pub struct SdkActivityTaskStart<'a> {
     pub run_id: String,
 }
 
-impl<'a> From<activity_task::Start> for SdkActivityTaskStart<'a> {
+impl From<activity_task::Start> for SdkActivityTaskStart {
     fn from(external: activity_task::Start) -> Self {
         Self {
             workflow_namespace: external.workflow_namespace,
@@ -116,7 +116,7 @@ impl<'a> From<activity_task::Start> for SdkActivityTaskStart<'a> {
     }
 }
 
-impl<'a> Into<activity_task::Start> for SdkActivityTaskStart<'a> {
+impl Into<activity_task::Start> for SdkActivityTaskStart {
     fn into(self) -> activity_task::Start {
         activity_task::Start {
             workflow_namespace: self.workflow_namespace,
@@ -252,13 +252,13 @@ impl Into<activity_task::ActivityCancellationDetails> for SdkActivityCancellatio
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityTaskCompletion"]
-pub struct SdkActivityTaskCompletion<'a> {
+pub struct SdkActivityTaskCompletion {
     task_token: Vec<u8>,
-    result: Option<SdkActivityExecutionResult<'a>>,
+    result: Option<SdkActivityExecutionResult>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion>
-    for SdkActivityTaskCompletion<'a>
+impl From<temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion>
+    for SdkActivityTaskCompletion
 {
     fn from(external: temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion) -> Self {
         Self {
@@ -268,8 +268,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion>
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion>
-    for SdkActivityTaskCompletion<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion>
+    for SdkActivityTaskCompletion
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion {
         temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion {
@@ -281,12 +281,12 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityExecutionResult"]
-pub struct SdkActivityExecutionResult<'a> {
-    status: Option<SdkActivityExecutionStatus<'a>>,
+pub struct SdkActivityExecutionResult {
+    status: Option<SdkActivityExecutionStatus>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::ActivityExecutionResult>
-    for SdkActivityExecutionResult<'a>
+impl From<temporalio_sdk_common::protos::coresdk::activity_result::ActivityExecutionResult>
+    for SdkActivityExecutionResult
 {
     fn from(
         external: temporalio_sdk_common::protos::coresdk::activity_result::ActivityExecutionResult,
@@ -297,8 +297,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::ActivityE
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::ActivityExecutionResult>
-    for SdkActivityExecutionResult<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::ActivityExecutionResult>
+    for SdkActivityExecutionResult
 {
     fn into(
         self,
@@ -310,14 +310,14 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::ActivityE
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkActivityExecutionStatus<'a> {
-    Completed(SdkActivityExecutionSuccess<'a>),
-    Failed(SdkActivityExecutionFailure<'a>),
-    Cancelled(SdkActivityExecutionCancellation<'a>),
+pub enum SdkActivityExecutionStatus {
+    Completed(SdkActivityExecutionSuccess),
+    Failed(SdkActivityExecutionFailure),
+    Cancelled(SdkActivityExecutionCancellation),
     WillCompleteAsync(SdkActivityExecutionWillCompleteAsync),
 }
 
-impl<'a> From<ActivityExecutionStatus> for SdkActivityExecutionStatus<'a> {
+impl From<ActivityExecutionStatus> for SdkActivityExecutionStatus {
     fn from(external: ActivityExecutionStatus) -> Self {
         match external {
             ActivityExecutionStatus::Completed(status) => Self::Completed(status.into()),
@@ -330,7 +330,7 @@ impl<'a> From<ActivityExecutionStatus> for SdkActivityExecutionStatus<'a> {
     }
 }
 
-impl<'a> Into<ActivityExecutionStatus> for SdkActivityExecutionStatus<'a> {
+impl Into<ActivityExecutionStatus> for SdkActivityExecutionStatus {
     fn into(self) -> ActivityExecutionStatus {
         match self {
             Self::Completed(status) => ActivityExecutionStatus::Completed(status.into()),
@@ -345,12 +345,12 @@ impl<'a> Into<ActivityExecutionStatus> for SdkActivityExecutionStatus<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityExecutionSuccess"]
-pub struct SdkActivityExecutionSuccess<'a> {
-    result: Option<SdkPayload<'a>>,
+pub struct SdkActivityExecutionSuccess {
+    result: Option<SdkPayload>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Success>
-    for SdkActivityExecutionSuccess<'a>
+impl From<temporalio_sdk_common::protos::coresdk::activity_result::Success>
+    for SdkActivityExecutionSuccess
 {
     fn from(external: temporalio_sdk_common::protos::coresdk::activity_result::Success) -> Self {
         Self {
@@ -359,8 +359,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Success>
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Success>
-    for SdkActivityExecutionSuccess<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Success>
+    for SdkActivityExecutionSuccess
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Success {
         temporalio_sdk_common::protos::coresdk::activity_result::Success {
@@ -371,12 +371,12 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Success>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityExecutionFailure"]
-pub struct SdkActivityExecutionFailure<'a> {
-    failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkActivityExecutionFailure {
+    failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
-    for SdkActivityExecutionFailure<'a>
+impl From<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
+    for SdkActivityExecutionFailure
 {
     fn from(external: temporalio_sdk_common::protos::coresdk::activity_result::Failure) -> Self {
         Self {
@@ -385,8 +385,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
-    for SdkActivityExecutionFailure<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
+    for SdkActivityExecutionFailure
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Failure {
         temporalio_sdk_common::protos::coresdk::activity_result::Failure {
@@ -397,12 +397,12 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityExecutionCancellation"]
-pub struct SdkActivityExecutionCancellation<'a> {
-    failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkActivityExecutionCancellation {
+    failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
-    for SdkActivityExecutionCancellation<'a>
+impl From<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
+    for SdkActivityExecutionCancellation
 {
     fn from(
         external: temporalio_sdk_common::protos::coresdk::activity_result::Cancellation,
@@ -413,8 +413,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Cancellat
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
-    for SdkActivityExecutionCancellation<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
+    for SdkActivityExecutionCancellation
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Cancellation {
         temporalio_sdk_common::protos::coresdk::activity_result::Cancellation {

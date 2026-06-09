@@ -4,46 +4,21 @@ use crate::core_nexus::SdkNexusTask;
 use crate::core_runtime::ElixirRuntime;
 use crate::core_worker::ElixirWorker;
 use crate::core_workflows::{
-    ElixirWorkflowHandle, SdkClientPayloads, SdkServerPayload, SdkWorkflowActivation,
-    SdkWorkflowActivationCompletion, SdkWorkflowDefinition, SdkWorkflowExecHandle,
-    SdkWorkflowGetResultOptions, SdkWorkflowStartOptions,
+    ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion,
+    SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowGetResultOptions,
+    SdkWorkflowStartOptions,
 };
-use rustler::{Atom, Env, LocalPid, NifResult, OwnedEnv, ResourceArc};
+use rustler::{Atom, LocalPid, NifResult, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use temporalio_sdk_client::errors::{
-    WorkflowGetResultError, WorkflowInteractionError, WorkflowStartError,
-};
-use temporalio_sdk_client::grpc::WorkflowService;
-use temporalio_sdk_client::tonic::{Code, IntoRequest};
 use temporalio_sdk_client::{
     Client, ClientKeepAliveOptions, ClientOptions, ClientTlsOptions, Connection, ConnectionOptions,
-    DnsLoadBalancingOptions, HttpConnectProxyOptions, NamespacedClient, RetryOptions, TlsOptions,
-    WorkflowExecutionResult, WorkflowFetchHistoryOptions, WorkflowGetResultOptions,
+    DnsLoadBalancingOptions, HttpConnectProxyOptions, RetryOptions, TlsOptions,
 };
-use temporalio_sdk_common::data_converters::{
-    GenericPayloadConverter, PayloadConverter, SerializationContext, SerializationContextData,
-};
-use temporalio_sdk_common::protos::coresdk::FromPayloadsExt;
-use temporalio_sdk_common::protos::coresdk::IntoPayloadsExt;
-use temporalio_sdk_common::protos::temporal::api::common::v1::{
-    Payload, Priority, SearchAttributes, WorkflowExecution, WorkflowType,
-};
-use temporalio_sdk_common::protos::temporal::api::enums::v1::{
-    HistoryEventFilterType, TaskQueueKind, VersioningBehavior,
-};
-use temporalio_sdk_common::protos::temporal::api::errordetails::v1::WorkflowExecutionAlreadyStartedFailure;
-use temporalio_sdk_common::protos::temporal::api::history::v1::history_event::Attributes;
-use temporalio_sdk_common::protos::temporal::api::history::v1::HistoryEvent;
-use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
-use temporalio_sdk_common::protos::temporal::api::taskqueue::v1::TaskQueue;
+use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
 use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
-use temporalio_sdk_common::protos::temporal::api::workflowservice::v1::{
-    GetWorkflowExecutionHistoryRequest, StartWorkflowExecutionRequest,
-};
-use temporalio_sdk_common::protos::utilities::{decode_status_detail, TryIntoOrNone};
 use temporalio_sdk_common::worker::{
     WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes,
 };
@@ -55,7 +30,6 @@ use temporalio_sdk_core::{
 use tokio::runtime::Runtime;
 use tracing::{error, warn};
 use url::Url;
-use uuid::Uuid;
 
 mod common;
 mod core_activities;
@@ -73,7 +47,7 @@ mod atoms {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn _create_runtime(
-    opts: Option<core_runtime::SdkRuntimeOpts>,
+    opts: Option<crate::core_runtime::SdkRuntimeOpts>,
 ) -> Result<ResourceArc<ElixirRuntime>, String> {
     let core_opts = match opts {
         Some(sdk_opts) => {
@@ -105,10 +79,10 @@ fn _create_runtime(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _create_client(
     runtime: ResourceArc<ElixirRuntime>,
-    options: core_client::SdkClientOpts,
+    options: crate::core_client::SdkClientOpts,
     resp_pid: LocalPid,
 ) -> Result<bool, String> {
     let parsed_host = Url::parse(
@@ -247,7 +221,7 @@ fn _create_client(
 fn _create_worker(
     runtime: ResourceArc<ElixirRuntime>,
     client: ResourceArc<ElixirClient>,
-    options: core_worker::SdkWorkerOpts,
+    options: crate::core_worker::SdkWorkerOpts,
     resp_pid: LocalPid,
 ) -> Result<bool, String> {
     let config = WorkerConfig::builder()
@@ -391,7 +365,7 @@ fn _create_worker(
     }
 }
 
-fn build_tuner(options: core_worker::SdkWorkerTunerOpts) -> Result<TunerHolder, String> {
+fn build_tuner(options: crate::core_worker::SdkWorkerTunerOpts) -> Result<TunerHolder, String> {
     let (workflow_slot_options, resource_slot_options) =
         build_tuner_slot_options(options.workflow_slot_supplier, None)?;
     let (activity_slot_options, resource_slot_options) =
@@ -428,24 +402,24 @@ fn build_tuner(options: core_worker::SdkWorkerTunerOpts) -> Result<TunerHolder, 
 }
 
 fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
-    options: core_worker::SdkWorkerSlotSupplierOpts,
+    options: crate::core_worker::SdkWorkerSlotSupplierOpts,
     prev_slots_options: Option<ResourceBasedSlotsOptions>,
 ) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), String> {
     match options {
-        core_worker::SdkWorkerSlotSupplierOpts::FixedSize(slots) => Ok((
+        crate::core_worker::SdkWorkerSlotSupplierOpts::FixedSize(slots) => Ok((
             SlotSupplierOptions::FixedSize {
                 slots: slots as usize,
             },
             prev_slots_options,
         )),
-        core_worker::SdkWorkerSlotSupplierOpts::ResourceBased(resource) => {
+        crate::core_worker::SdkWorkerSlotSupplierOpts::ResourceBased(resource) => {
             build_tuner_resource_options(resource, prev_slots_options)
         }
     }
 }
 
 fn build_tuner_resource_options<SK: SlotKind>(
-    options: core_worker::SdkWorkerTunerResourceOpts,
+    options: crate::core_worker::SdkWorkerTunerResourceOpts,
     prev_slots_options: Option<ResourceBasedSlotsOptions>,
 ) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), String> {
     let slots_options = ResourceBasedSlotsOptions::builder()
@@ -512,7 +486,7 @@ fn _validate_worker(
     Ok(true)
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _worker_poll_activity_task(
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
@@ -523,7 +497,6 @@ fn _worker_poll_activity_task(
         .read()
         .expect("Invalid runtime handle")
         .tokio_handle();
-
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -549,7 +522,7 @@ fn _worker_poll_activity_task(
     Ok(atoms::ok())
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _worker_poll_nexus_task(
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
@@ -560,7 +533,6 @@ fn _worker_poll_nexus_task(
         .read()
         .expect("Invalid runtime handle")
         .tokio_handle();
-
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -586,9 +558,8 @@ fn _worker_poll_nexus_task(
     Ok(atoms::ok())
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif]
 fn _worker_complete_workflow_activation(
-    env: Env,
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
     completion: SdkWorkflowActivationCompletion,
@@ -599,8 +570,8 @@ fn _worker_complete_workflow_activation(
         .read()
         .expect("Invalid runtime handle")
         .tokio_handle();
-
-    handle.block_on(async move {
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
             Some(core_worker) => {
                 let completion_result = core_worker
@@ -612,18 +583,13 @@ fn _worker_complete_workflow_activation(
                     Err(error) => Err(format!("Error completing workflows activation: {}", error)),
                 };
 
-                env.send(&resp_pid, msg).unwrap_or_else(|err| {
-                    error!("Error sending activation completion message: {:?}", err)
-                });
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
             }
 
             None => {
                 let msg: Result<bool, String> =
                     Err(String::from("Core Worker instance unavailable..."));
-
-                env.send(&resp_pid, msg).unwrap_or_else(|err| {
-                    error!("Error sending activation completion error: {:?}", err)
-                });
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
             }
         }
     });
@@ -631,9 +597,8 @@ fn _worker_complete_workflow_activation(
     Ok(atoms::ok())
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif]
 fn _worker_complete_activity_task(
-    env: Env,
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
     completion: SdkActivityTaskCompletion,
@@ -644,8 +609,8 @@ fn _worker_complete_activity_task(
         .read()
         .expect("Invalid runtime handle")
         .tokio_handle();
-
-    handle.block_on(async move {
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
             Some(core_worker) => {
                 let completion_result = core_worker.complete_activity_task(completion.into()).await;
@@ -655,17 +620,13 @@ fn _worker_complete_activity_task(
                     Err(error) => Err(format!("Error completing workflows activation: {}", error)),
                 };
 
-                env.send(&resp_pid, msg).unwrap_or_else(|err| {
-                    error!("Error sending complete activity message: {:?}", err)
-                });
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
             }
 
             None => {
                 let msg: Result<bool, String> =
                     Err(String::from("Core Worker instance unavailable..."));
-                env.send(&resp_pid, msg).unwrap_or_else(|err| {
-                    error!("Error sending complete activity error: {:?}", err)
-                });
+                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
             }
         }
     });
@@ -684,7 +645,6 @@ fn _worker_poll_workflow_activation(
         .read()
         .expect("Invalid runtime handle")
         .tokio_handle();
-
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -710,13 +670,12 @@ fn _worker_poll_workflow_activation(
     Ok(atoms::ok())
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _worker_initiate_shutdown(
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
     let rt = Runtime::new().unwrap();
-
     let _ = rt.spawn(async move {
         let mut owned_env = OwnedEnv::new();
         match worker.worker.as_ref() {
@@ -738,7 +697,7 @@ fn _worker_initiate_shutdown(
     Ok(atoms::ok())
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _worker_finalize_shutdown(
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
@@ -768,13 +727,12 @@ fn _worker_finalize_shutdown(
     Ok(atoms::ok())
 }
 
-#[rustler::nif(schedule = "DirtyIo")]
+#[rustler::nif]
 fn _client_start_workflow(
-    env: Env,
     runtime: ResourceArc<ElixirRuntime>,
     client: ResourceArc<ElixirClient>,
     workflow: SdkWorkflowDefinition,
-    input: SdkClientPayloads,
+    input: SdkWorkflowArguments,
     options: SdkWorkflowStartOptions,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
@@ -783,137 +741,30 @@ fn _client_start_workflow(
         .read()
         .expect("Invalid runtime handle")
         .tokio_handle();
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        let started = client
+            .client
+            .start_workflow(workflow, input, options.into())
+            .await;
 
-    let payloads: Vec<Payload> = input.into();
-    handle.block_on(async move {
-        let msg = match start_workflow(&client.client, workflow, options, payloads).await {
-            Ok(handle) => Ok(ResourceArc::new(ElixirWorkflowHandle { handle: handle })),
+        let msg = match started {
+            Ok(handle) => Ok(ResourceArc::new(ElixirWorkflowHandle {
+                handle: RwLock::new(handle),
+            })),
             Err(error) => Err(format!("Error starting workflow - {}", error)),
         };
 
-        env.send(&resp_pid, msg)
-            .unwrap_or_else(|err| error!("Error sending start workflow message: {:?}", err));
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
     });
 
     Ok(atoms::ok())
 }
 
-async fn start_workflow<'a>(
-    client: &Client,
-    workflow: SdkWorkflowDefinition,
-    options: SdkWorkflowStartOptions<'a>,
-    payloads: Vec<Payload>,
-) -> Result<SdkWorkflowExecHandle, WorkflowStartError> {
-    let user_metadata = if options.static_summary.is_some() || options.static_details.is_some() {
-        let payload_converter = PayloadConverter::default();
-        let context = SerializationContext {
-            data: &SerializationContextData::Workflow,
-            converter: &payload_converter,
-        };
-        Some(UserMetadata {
-            summary: options.static_summary.map(|s| {
-                payload_converter
-                    .to_payload(&context, &s)
-                    .expect("String-to-JSON payload serialization is infallible")
-            }),
-            details: options.static_details.map(|s| {
-                payload_converter
-                    .to_payload(&context, &s)
-                    .expect("String-to-JSON payload serialization is infallible")
-            }),
-        })
-    } else {
-        None
-    };
-
-    let res = client
-        .clone()
-        .start_workflow_execution(
-            StartWorkflowExecutionRequest {
-                namespace: client.namespace().clone(),
-                input: payloads.into_payloads(),
-                workflow_id: options.workflow_id.clone(),
-                workflow_type: Some(WorkflowType {
-                    name: workflow.name,
-                }),
-                task_queue: Some(TaskQueue {
-                    name: options.task_queue,
-                    kind: TaskQueueKind::Unspecified as i32,
-                    normal_name: "".to_string(),
-                }),
-                request_id: Uuid::new_v4().to_string(),
-                workflow_id_reuse_policy: options.id_reuse_policy as i32,
-                workflow_id_conflict_policy: options.id_conflict_policy as i32,
-                workflow_execution_timeout: options
-                    .execution_timeout
-                    .and_then(|d| d.try_into().ok()),
-                workflow_run_timeout: options.run_timeout.and_then(|d| d.try_into().ok()),
-                workflow_task_timeout: options.task_timeout.and_then(|d| d.try_into().ok()),
-                search_attributes: {
-                    match options.search_attributes {
-                        Some(attributes) => Some(SearchAttributes {
-                            indexed_fields: attributes
-                                .iter()
-                                .map(|(k, v)| (k.clone(), v.clone().into()))
-                                .collect(),
-                        }),
-                        None => None,
-                    }
-                },
-                cron_schedule: options.cron_schedule.unwrap_or_default(),
-                request_eager_execution: options.enable_eager_workflow_start,
-                retry_policy: options.retry_policy.try_into_or_none(),
-                links: options
-                    .links
-                    .iter()
-                    .map(|link| link.clone().into())
-                    .collect(),
-                completion_callbacks: options
-                    .completion_callbacks
-                    .iter()
-                    .map(|c| c.clone().into())
-                    .collect(),
-                priority: Some(Priority {
-                    priority_key: options.priority.priority_key.unwrap_or(0) as i32,
-                    fairness_key: options.priority.fairness_key.unwrap_or_default(),
-                    fairness_weight: options.priority.fairness_weight.unwrap_or(0.0),
-                }),
-                header: options.header.try_into_or_none(),
-                user_metadata,
-                ..Default::default()
-            }
-            .into_request(),
-        )
-        .await
-        .map_err(|status| {
-            if status.code() == Code::AlreadyExists {
-                let run_id = decode_status_detail::<WorkflowExecutionAlreadyStartedFailure>(
-                    status.details(),
-                )
-                .map(|f| f.run_id);
-                WorkflowStartError::AlreadyStarted {
-                    run_id,
-                    source: status,
-                }
-            } else {
-                WorkflowStartError::Rpc(status)
-            }
-        })?
-        .into_inner();
-
-    Ok(SdkWorkflowExecHandle {
-        namespace: client.namespace(),
-        workflow_id: options.workflow_id.clone(),
-        run_id: res.run_id.clone(),
-        first_execution_run_id: res.run_id,
-    })
-}
-
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 fn _workflow_handle_get_result(
     runtime: ResourceArc<ElixirRuntime>,
-    client: ResourceArc<ElixirClient>,
-    workflow_handle: ResourceArc<ElixirWorkflowHandle>,
+    workflow_handle: ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>,
     options: SdkWorkflowGetResultOptions,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
@@ -923,31 +774,17 @@ fn _workflow_handle_get_result(
         .expect("Invalid runtime handle")
         .tokio_handle();
 
+    let wf_handle = workflow_handle
+        .handle
+        .read()
+        .expect("Invalid workflow handle")
+        .clone();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
-        let result =
-            get_workflow_result(&client.client, &workflow_handle.handle, options.into()).await;
+        let result = wf_handle.get_result(options.into()).await;
 
-        let parsed_result: Result<Payload, WorkflowGetResultError> = match result {
-            Ok(WorkflowExecutionResult::Succeeded(v)) => Ok(v),
-            Ok(WorkflowExecutionResult::Failed(f)) => {
-                Err(WorkflowGetResultError::Failed(Box::new(f)))
-            }
-            Ok(WorkflowExecutionResult::Cancelled { details }) => {
-                Err(WorkflowGetResultError::Cancelled { details })
-            }
-            Ok(WorkflowExecutionResult::Terminated { details }) => {
-                Err(WorkflowGetResultError::Terminated { details })
-            }
-            Ok(WorkflowExecutionResult::TimedOut) => Err(WorkflowGetResultError::TimedOut),
-            Ok(WorkflowExecutionResult::ContinuedAsNew) => {
-                Err(WorkflowGetResultError::ContinuedAsNew)
-            }
-            Err(err) => Err(WorkflowGetResultError::Other(Box::new(err))),
-        };
-
-        let msg: Result<SdkServerPayload, String> = match parsed_result {
-            Ok(payload) => Ok(payload.into()),
+        let msg = match result {
+            Ok(outputs) => Ok(outputs),
             Err(error) => Err(format!("Error getting workflow results - {}", error)),
         };
 
@@ -955,143 +792,6 @@ fn _workflow_handle_get_result(
     });
 
     Ok(atoms::ok())
-}
-
-async fn get_workflow_result(
-    client: &Client,
-    handle: &SdkWorkflowExecHandle,
-    opts: WorkflowGetResultOptions,
-) -> Result<WorkflowExecutionResult<Payload>, WorkflowInteractionError> {
-    let fetch_opts = WorkflowFetchHistoryOptions::builder()
-        .skip_archival(true)
-        .wait_new_event(true)
-        .event_filter_type(HistoryEventFilterType::CloseEvent)
-        .build();
-
-    #[allow(unused)]
-    let mut run_id = handle.run_id.clone();
-    loop {
-        let mut events =
-            fetch_history_for_run(client, &run_id, &handle.workflow_id, &fetch_opts).await?;
-
-        if events.is_empty() {
-            continue;
-        }
-
-        let event_attrs = events.pop().and_then(|ev| ev.attributes);
-
-        macro_rules! follow {
-            ($attrs:ident) => {
-                if opts.follow_runs && $attrs.new_execution_run_id != "" {
-                    run_id = $attrs.new_execution_run_id;
-                    continue;
-                }
-            };
-        }
-
-        break match event_attrs {
-            Some(Attributes::WorkflowExecutionCompletedEventAttributes(attrs)) => {
-                follow!(attrs);
-                let payload = attrs
-                    .result
-                    .and_then(|p| p.payloads.into_iter().next())
-                    .unwrap_or_default();
-                let result = payload;
-                Ok(WorkflowExecutionResult::Succeeded(result))
-            }
-            Some(Attributes::WorkflowExecutionFailedEventAttributes(attrs)) => {
-                follow!(attrs);
-                Ok(WorkflowExecutionResult::Failed(
-                    attrs.failure.unwrap_or_default(),
-                ))
-            }
-            Some(Attributes::WorkflowExecutionCanceledEventAttributes(attrs)) => {
-                Ok(WorkflowExecutionResult::Cancelled {
-                    details: Vec::from_payloads(attrs.details),
-                })
-            }
-            Some(Attributes::WorkflowExecutionTimedOutEventAttributes(attrs)) => {
-                follow!(attrs);
-                Ok(WorkflowExecutionResult::TimedOut)
-            }
-            Some(Attributes::WorkflowExecutionTerminatedEventAttributes(attrs)) => {
-                Ok(WorkflowExecutionResult::Terminated {
-                    details: Vec::from_payloads(attrs.details),
-                })
-            }
-            Some(Attributes::WorkflowExecutionContinuedAsNewEventAttributes(attrs)) => {
-                if opts.follow_runs {
-                    if !attrs.new_execution_run_id.is_empty() {
-                        run_id = attrs.new_execution_run_id;
-                        continue;
-                    } else {
-                        return Err(WorkflowInteractionError::Other(
-                            "New execution run id was empty in continue as new event!".into(),
-                        ));
-                    }
-                } else {
-                    Ok(WorkflowExecutionResult::ContinuedAsNew)
-                }
-            }
-            o => Err(WorkflowInteractionError::Other(
-                format!(
-                    "Server returned an event that didn't match the CloseEvent filter. \
-                         This is either a server bug or a new event the SDK does not understand. \
-                         Event details: {o:?}"
-                )
-                .into(),
-            )),
-        };
-    }
-}
-
-async fn fetch_history_for_run(
-    client: &Client,
-    run_id: &String,
-    workflow_id: &String,
-    opts: &WorkflowFetchHistoryOptions,
-) -> Result<Vec<HistoryEvent>, WorkflowInteractionError> {
-    let mut all_events = Vec::new();
-    let mut next_page_token = vec![];
-
-    loop {
-        let response = WorkflowService::get_workflow_execution_history(
-            &mut client.clone(),
-            GetWorkflowExecutionHistoryRequest {
-                namespace: client.namespace(),
-                execution: Some(WorkflowExecution {
-                    workflow_id: workflow_id.clone(),
-                    run_id: run_id.clone(),
-                }),
-                next_page_token: next_page_token.clone(),
-                skip_archival: opts.skip_archival,
-                wait_new_event: opts.wait_new_event,
-                history_event_filter_type: opts.event_filter_type as i32,
-                ..Default::default()
-            }
-            .into_request(),
-        )
-        .await
-        .map_err(|status| {
-            if status.code() == Code::NotFound {
-                WorkflowInteractionError::NotFound(status)
-            } else {
-                WorkflowInteractionError::Rpc(status)
-            }
-        })?
-        .into_inner();
-
-        if let Some(history) = response.history {
-            all_events.extend(history.events);
-        }
-
-        if response.next_page_token.is_empty() {
-            break;
-        }
-        next_page_token = response.next_page_token;
-    }
-
-    Ok(all_events)
 }
 
 rustler::init!("Elixir.Temporal.CoreSdk");

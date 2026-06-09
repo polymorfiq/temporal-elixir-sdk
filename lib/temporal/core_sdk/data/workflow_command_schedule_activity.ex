@@ -73,7 +73,7 @@ defmodule Temporal.CoreSdk.Data.WorkflowCommandScheduleActivity do
     schedule =
       update_in(schedule, [Access.key(:arguments)], fn arguments ->
         Enum.map(arguments, fn arg ->
-          arg |> Data.ClientPayload.with_opts!() |> Data.Payload.from_workflow_input()
+          arg |> Data.WorkflowInput.with_opts!() |> Data.Payload.from_workflow_input()
         end)
       end)
 

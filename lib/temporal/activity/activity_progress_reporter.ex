@@ -3,7 +3,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
 
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.Data.ActivityTaskCompletion
-  alias Temporal.CoreSdk.Data.ClientPayload
+  alias Temporal.CoreSdk.Data.WorkflowInput
   alias Temporal.CoreSdk.Data.Payload
   alias Temporal.Supervisor.ActivitySupervisor
 
@@ -48,7 +48,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
   def handle_call({:report_success, result}, _from, state) do
     task_token = progress_state(state, :task_token)
 
-    output = ClientPayload.with_opts!(result) |> Payload.from_workflow_input()
+    output = WorkflowInput.with_opts!(result) |> Payload.from_workflow_input()
 
     completion =
       ActivityTaskCompletion.with_opts!(

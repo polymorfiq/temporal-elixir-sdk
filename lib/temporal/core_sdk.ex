@@ -77,7 +77,7 @@ defmodule Temporal.CoreSdk do
           runtime :: term(),
           client :: term(),
           workflow :: Data.WorkflowDefinition.t(),
-          input :: [Data.ClientPayload.t()],
+          input :: [Data.WorkflowInput.t()],
           opts :: Data.WorkflowStartOptions.t(),
           resp_pid :: pid()
         ) ::
@@ -88,13 +88,12 @@ defmodule Temporal.CoreSdk do
   @doc false
   @spec _workflow_handle_get_result(
           runtime :: term(),
-          client :: term(),
           workflow_handle :: term(),
           opts :: Data.SdkWorkflowGetResultOptions.t(),
           resp_pid :: pid()
         ) ::
           {:ok, bool()} | {:error, term()}
-  def _workflow_handle_get_result(_runtime, _client, _handle, _opts, _resp_pid),
+  def _workflow_handle_get_result(_runtime, _workflow_handle, _opts, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false

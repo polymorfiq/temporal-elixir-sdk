@@ -1,5 +1,5 @@
 use crate::core_workflows::SdkExternalPayloadDetails;
-use rustler::{Binary, NifStruct, NifTaggedEnum};
+use rustler::{NifStruct, NifTaggedEnum};
 use std::collections::HashMap;
 use temporalio_sdk_common::protos::temporal::api as temporal_api;
 use temporalio_sdk_common::protos::temporal::api::common as api_common;
@@ -73,19 +73,17 @@ impl Into<prost_wkt_types::Timestamp> for SdkTimestamp {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.Payload"]
-pub struct SdkPayload<'a> {
+pub struct SdkPayload {
     pub metadata: HashMap<String, Vec<u8>>,
-    pub data: Option<Vec<u8>>,
-    pub data_binary: Option<Binary<'a>>,
+    pub data: Vec<u8>,
     pub external_payloads: Vec<SdkExternalPayloadDetails>,
 }
 
-impl<'a> From<temporal_api::common::v1::Payload> for SdkPayload<'a> {
+impl From<temporal_api::common::v1::Payload> for SdkPayload {
     fn from(external: temporal_api::common::v1::Payload) -> Self {
         Self {
             metadata: external.metadata,
-            data: Some(external.data),
-            data_binary: None,
+            data: external.data,
             external_payloads: external
                 .external_payloads
                 .iter()
@@ -95,12 +93,11 @@ impl<'a> From<temporal_api::common::v1::Payload> for SdkPayload<'a> {
     }
 }
 
-impl<'a> From<&temporal_api::common::v1::Payload> for SdkPayload<'a> {
+impl From<&temporal_api::common::v1::Payload> for SdkPayload {
     fn from(external: &temporal_api::common::v1::Payload) -> Self {
         Self {
             metadata: external.metadata.clone(),
-            data: Some(external.data.clone()),
-            data_binary: None,
+            data: external.data.clone(),
             external_payloads: external
                 .external_payloads
                 .iter()
@@ -110,22 +107,11 @@ impl<'a> From<&temporal_api::common::v1::Payload> for SdkPayload<'a> {
     }
 }
 
-impl<'a> Into<temporal_api::common::v1::Payload> for SdkPayload<'a> {
+impl Into<temporal_api::common::v1::Payload> for SdkPayload {
     fn into(self) -> temporal_api::common::v1::Payload {
-        let data = match self {
-            SdkPayload {
-                data_binary: Some(bin),
-                ..
-            } => bin.as_slice().to_vec(),
-            SdkPayload {
-                data: Some(data), ..
-            } => data.clone(),
-            _ => vec![],
-        };
-
         temporal_api::common::v1::Payload {
             metadata: self.metadata.clone(),
-            data: data,
+            data: self.data.clone(),
             external_payloads: self
                 .external_payloads
                 .iter()
@@ -135,22 +121,11 @@ impl<'a> Into<temporal_api::common::v1::Payload> for SdkPayload<'a> {
     }
 }
 
-impl<'a> Into<temporal_api::common::v1::Payload> for &SdkPayload<'a> {
+impl Into<temporal_api::common::v1::Payload> for &SdkPayload {
     fn into(self) -> temporal_api::common::v1::Payload {
-        let data = match self {
-            SdkPayload {
-                data_binary: Some(bin),
-                ..
-            } => bin.as_slice().to_vec(),
-            SdkPayload {
-                data: Some(data), ..
-            } => data.clone(),
-            _ => vec![],
-        };
-
         temporal_api::common::v1::Payload {
             metadata: self.metadata.clone(),
-            data: data,
+            data: self.data.clone(),
             external_payloads: self
                 .external_payloads
                 .iter()
@@ -162,11 +137,11 @@ impl<'a> Into<temporal_api::common::v1::Payload> for &SdkPayload<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.Payloads"]
-pub struct SdkPayloads<'a> {
-    pub payloads: Vec<SdkPayload<'a>>,
+pub struct SdkPayloads {
+    pub payloads: Vec<SdkPayload>,
 }
 
-impl<'a> From<temporal_api::common::v1::Payloads> for SdkPayloads<'a> {
+impl From<temporal_api::common::v1::Payloads> for SdkPayloads {
     fn from(external: temporal_api::common::v1::Payloads) -> Self {
         Self {
             payloads: external.payloads.iter().map(|val| val.into()).collect(),
@@ -174,7 +149,7 @@ impl<'a> From<temporal_api::common::v1::Payloads> for SdkPayloads<'a> {
     }
 }
 
-impl<'a> Into<temporal_api::common::v1::Payloads> for SdkPayloads<'a> {
+impl Into<temporal_api::common::v1::Payloads> for SdkPayloads {
     fn into(self) -> temporal_api::common::v1::Payloads {
         temporal_api::common::v1::Payloads {
             payloads: self.payloads.iter().map(|val| val.clone().into()).collect(),
@@ -182,7 +157,7 @@ impl<'a> Into<temporal_api::common::v1::Payloads> for SdkPayloads<'a> {
     }
 }
 
-impl<'a> Into<temporal_api::common::v1::Payloads> for &SdkPayloads<'a> {
+impl Into<temporal_api::common::v1::Payloads> for &SdkPayloads {
     fn into(self) -> temporal_api::common::v1::Payloads {
         temporal_api::common::v1::Payloads {
             payloads: self.payloads.iter().map(|val| val.clone().into()).collect(),
@@ -282,11 +257,11 @@ impl Into<temporal_api::common::v1::RetryPolicy> for SdkRetryPolicy {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.Header"]
-pub struct SdkHeader<'a> {
-    fields: HashMap<String, SdkPayload<'a>>,
+pub struct SdkHeader {
+    fields: HashMap<String, SdkPayload>,
 }
 
-impl<'a> From<api_common::v1::Header> for SdkHeader<'a> {
+impl From<api_common::v1::Header> for SdkHeader {
     fn from(external: api_common::v1::Header) -> Self {
         Self {
             fields: external
@@ -298,7 +273,7 @@ impl<'a> From<api_common::v1::Header> for SdkHeader<'a> {
     }
 }
 
-impl<'a> Into<api_common::v1::Header> for SdkHeader<'a> {
+impl Into<api_common::v1::Header> for SdkHeader {
     fn into(self) -> api_common::v1::Header {
         api_common::v1::Header {
             fields: self

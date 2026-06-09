@@ -3,15 +3,13 @@ use crate::common::{
     SdkPriority, SdkRetryPolicy, SdkTimestamp,
 };
 use crate::core_worker::SdkWorkerDeploymentVersion;
-use rustler::types::tuple::make_tuple;
-use rustler::{
-    Atom, Binary, Decoder, Encoder, Env, NifResult, NifStruct, NifTaggedEnum, NifUnitEnum,
-    OwnedBinary, Resource, Term,
-};
+use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
 use std::collections::HashMap;
-use temporalio_sdk_client::{WorkflowStartOptions, WorkflowStartSignal};
+use std::sync::RwLock;
+use temporalio_sdk_client::{Client, WorkflowHandle, WorkflowStartOptions, WorkflowStartSignal};
 use temporalio_sdk_common::data_converters::{
-    PayloadConversionError, SerializationContext, TemporalDeserializable, TemporalSerializable,
+    GenericPayloadConverter, PayloadConversionError, SerializationContext, TemporalDeserializable,
+    TemporalSerializable,
 };
 use temporalio_sdk_common::protos::coresdk::activity_result::activity_resolution::Status as ActivityResolutionStatus;
 use temporalio_sdk_common::protos::coresdk::child_workflow::child_workflow_result::Status as ChildWorkflowStatus;
@@ -31,40 +29,24 @@ use temporalio_sdk_common::protos::temporal::api::enums::v1::{
 use temporalio_sdk_common::protos::temporal::api::failure::v1::failure::FailureInfo;
 use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
+use temporalio_sdk_common::{HasWorkflowDefinition, WorkflowDefinition};
 
-mod atoms {
-    rustler::atoms! {
-        json,
-        bytes,
-        erlang_external_term
-    }
-}
-
-pub struct SdkWorkflowExecHandle {
+pub struct ElixirWorkflowHandle<W> {
     #[allow(unused)]
-    pub namespace: String,
-    pub workflow_id: String,
-    pub run_id: String,
-    #[allow(unused)]
-    pub first_execution_run_id: String,
-}
-
-pub struct ElixirWorkflowHandle {
-    #[allow(unused)]
-    pub handle: SdkWorkflowExecHandle,
+    pub handle: RwLock<WorkflowHandle<Client, W>>,
 }
 
 #[rustler::resource_impl]
-impl Resource for ElixirWorkflowHandle {}
+impl Resource for ElixirWorkflowHandle<SdkWorkflowDefinition> {}
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowActivation"]
-pub struct SdkWorkflowActivation<'a> {
+pub struct SdkWorkflowActivation {
     pub run_id: String,
     pub timestamp: Option<SdkTimestamp>,
     pub is_replaying: bool,
     pub history_length: u32,
-    pub jobs: Vec<SdkWorkflowActivationJob<'a>>,
+    pub jobs: Vec<SdkWorkflowActivationJob>,
     pub available_internal_flags: Vec<u32>,
     pub history_size_bytes: u64,
     pub continue_as_new_suggested: bool,
@@ -74,7 +56,7 @@ pub struct SdkWorkflowActivation<'a> {
     pub target_worker_deployment_version_changed: bool,
 }
 
-impl<'a> From<workflow_activation::WorkflowActivation> for SdkWorkflowActivation<'a> {
+impl From<workflow_activation::WorkflowActivation> for SdkWorkflowActivation {
     fn from(external: workflow_activation::WorkflowActivation) -> Self {
         Self {
             run_id: external.run_id,
@@ -98,11 +80,11 @@ impl<'a> From<workflow_activation::WorkflowActivation> for SdkWorkflowActivation
 
 #[derive(NifStruct, Default, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowActivationJob"]
-pub struct SdkWorkflowActivationJob<'a> {
-    variant: Option<SdkWorkflowActivationJobVariant<'a>>,
+pub struct SdkWorkflowActivationJob {
+    variant: Option<SdkWorkflowActivationJobVariant>,
 }
 
-impl<'a> From<workflow_activation::WorkflowActivationJob> for SdkWorkflowActivationJob<'a> {
+impl From<workflow_activation::WorkflowActivationJob> for SdkWorkflowActivationJob {
     fn from(external: workflow_activation::WorkflowActivationJob) -> Self {
         Self {
             variant: external.variant.try_into_or_none(),
@@ -111,26 +93,26 @@ impl<'a> From<workflow_activation::WorkflowActivationJob> for SdkWorkflowActivat
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowActivationJobVariant<'a> {
-    InitializeWorkflow(SdkActivationInitializeWorkflow<'a>),
+pub enum SdkWorkflowActivationJobVariant {
+    InitializeWorkflow(SdkActivationInitializeWorkflow),
     FireTimer(SdkActivationFireTimer),
     UpdateRandomSeed(SdkActivationUpdateRandomSeed),
-    QueryWorkflow(SdkActivationQueryWorkflow<'a>),
+    QueryWorkflow(SdkActivationQueryWorkflow),
     CancelWorkflow(SdkActivationCancelWorkflow),
-    SignalWorkflow(SdkActivationSignalWorkflow<'a>),
-    ResolveActivity(SdkActivationResolveActivity<'a>),
+    SignalWorkflow(SdkActivationSignalWorkflow),
+    ResolveActivity(SdkActivationResolveActivity),
     NotifyHasPatch(SdkActivationNotifyHasPatch),
-    ResolveChildWorkflowExecutionStart(SdkActivationResolveChildWorkflowExecutionStart<'a>),
-    ResolveChildWorkflowExecution(SdkActivationResolveChildWorkflowExecution<'a>),
-    ResolveSignalExternalWorkflow(SdkActivationResolveSignalExternalWorkflow<'a>),
-    ResolveRequestCancelExternalWorkflow(SdkActivationResolveRequestCancelExternalWorkflow<'a>),
-    DoUpdate(SdkActivationDoUpdate<'a>),
-    ResolveNexusOperationStart(SdkActivationResolveNexusOperationStart<'a>),
-    ResolveNexusOperation(SdkActivationResolveNexusOperation<'a>),
+    ResolveChildWorkflowExecutionStart(SdkActivationResolveChildWorkflowExecutionStart),
+    ResolveChildWorkflowExecution(SdkActivationResolveChildWorkflowExecution),
+    ResolveSignalExternalWorkflow(SdkActivationResolveSignalExternalWorkflow),
+    ResolveRequestCancelExternalWorkflow(SdkActivationResolveRequestCancelExternalWorkflow),
+    DoUpdate(SdkActivationDoUpdate),
+    ResolveNexusOperationStart(SdkActivationResolveNexusOperationStart),
+    ResolveNexusOperation(SdkActivationResolveNexusOperation),
     RemoveFromCache(SdkActivationRemoveFromCache),
 }
 
-impl<'a> From<ActivationVariant> for SdkWorkflowActivationJobVariant<'a> {
+impl From<ActivationVariant> for SdkWorkflowActivationJobVariant {
     fn from(external: ActivationVariant) -> Self {
         match external {
             ActivationVariant::InitializeWorkflow(variant) => {
@@ -167,7 +149,7 @@ impl<'a> From<ActivationVariant> for SdkWorkflowActivationJobVariant<'a> {
     }
 }
 
-impl<'a> Into<ActivationVariant> for SdkWorkflowActivationJobVariant<'a> {
+impl Into<ActivationVariant> for SdkWorkflowActivationJobVariant {
     fn into(self) -> ActivationVariant {
         match self {
             Self::InitializeWorkflow(variant) => {
@@ -206,12 +188,12 @@ impl<'a> Into<ActivationVariant> for SdkWorkflowActivationJobVariant<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationInitializeWorkflow"]
-pub struct SdkActivationInitializeWorkflow<'a> {
+pub struct SdkActivationInitializeWorkflow {
     pub workflow_type: String,
     pub workflow_id: String,
-    pub arguments: Vec<SdkPayload<'a>>,
+    pub arguments: Vec<SdkPayload>,
     pub randomness_seed: u64,
-    pub headers: HashMap<String, SdkPayload<'a>>,
+    pub headers: HashMap<String, SdkPayload>,
     pub identity: String,
     pub parent_workflow_info: Option<SdkWorkflowNamespacedExecution>,
     pub workflow_execution_timeout: Option<SdkDuration>,
@@ -219,22 +201,22 @@ pub struct SdkActivationInitializeWorkflow<'a> {
     pub workflow_task_timeout: Option<SdkDuration>,
     pub continued_from_execution_run_id: String,
     pub continued_initiator: i32,
-    pub continued_failure: Option<SdkWorkflowFailure<'a>>,
-    pub last_completion_result: Option<SdkPayloads<'a>>,
+    pub continued_failure: Option<SdkWorkflowFailure>,
+    pub last_completion_result: Option<SdkPayloads>,
     pub first_execution_run_id: String,
     pub retry_policy: Option<SdkRetryPolicy>,
     pub attempt: i32,
     pub cron_schedule: String,
     pub workflow_execution_expiration_time: Option<SdkTimestamp>,
     pub cron_schedule_to_schedule_interval: Option<SdkDuration>,
-    pub memo: Option<SdkWorkflowMemo<'a>>,
-    pub search_attributes: Option<SdkWorkflowSearchAttributes<'a>>,
+    pub memo: Option<SdkWorkflowMemo>,
+    pub search_attributes: Option<SdkWorkflowSearchAttributes>,
     pub start_time: Option<SdkTimestamp>,
     pub root_workflow: Option<SdkWorkflowExecution>,
     pub priority: Option<SdkPriority>,
 }
 
-impl<'a> From<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWorkflow<'a> {
+impl From<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWorkflow {
     fn from(external: workflow_activation::InitializeWorkflow) -> Self {
         Self {
             workflow_type: external.workflow_type,
@@ -274,7 +256,7 @@ impl<'a> From<workflow_activation::InitializeWorkflow> for SdkActivationInitiali
     }
 }
 
-impl<'a> Into<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWorkflow<'a> {
+impl Into<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWorkflow {
     fn into(self) -> workflow_activation::InitializeWorkflow {
         workflow_activation::InitializeWorkflow {
             workflow_type: self.workflow_type,
@@ -356,14 +338,14 @@ impl Into<workflow_activation::UpdateRandomSeed> for SdkActivationUpdateRandomSe
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationQueryWorkflow"]
-pub struct SdkActivationQueryWorkflow<'a> {
+pub struct SdkActivationQueryWorkflow {
     pub query_id: String,
     pub query_type: String,
-    pub arguments: Vec<SdkPayload<'a>>,
-    pub headers: HashMap<String, SdkPayload<'a>>,
+    pub arguments: Vec<SdkPayload>,
+    pub headers: HashMap<String, SdkPayload>,
 }
 
-impl<'a> From<workflow_activation::QueryWorkflow> for SdkActivationQueryWorkflow<'a> {
+impl From<workflow_activation::QueryWorkflow> for SdkActivationQueryWorkflow {
     fn from(external: workflow_activation::QueryWorkflow) -> Self {
         Self {
             query_id: external.query_id,
@@ -378,7 +360,7 @@ impl<'a> From<workflow_activation::QueryWorkflow> for SdkActivationQueryWorkflow
     }
 }
 
-impl<'a> Into<workflow_activation::QueryWorkflow> for SdkActivationQueryWorkflow<'a> {
+impl Into<workflow_activation::QueryWorkflow> for SdkActivationQueryWorkflow {
     fn into(self) -> workflow_activation::QueryWorkflow {
         workflow_activation::QueryWorkflow {
             query_id: self.query_id,
@@ -417,14 +399,14 @@ impl Into<workflow_activation::CancelWorkflow> for SdkActivationCancelWorkflow {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationSignalWorkflow"]
-pub struct SdkActivationSignalWorkflow<'a> {
+pub struct SdkActivationSignalWorkflow {
     pub signal_name: String,
-    pub input: Vec<SdkPayload<'a>>,
+    pub input: Vec<SdkPayload>,
     pub identity: String,
-    pub headers: HashMap<String, SdkPayload<'a>>,
+    pub headers: HashMap<String, SdkPayload>,
 }
 
-impl<'a> From<workflow_activation::SignalWorkflow> for SdkActivationSignalWorkflow<'a> {
+impl From<workflow_activation::SignalWorkflow> for SdkActivationSignalWorkflow {
     fn from(external: workflow_activation::SignalWorkflow) -> Self {
         Self {
             signal_name: external.signal_name,
@@ -439,7 +421,7 @@ impl<'a> From<workflow_activation::SignalWorkflow> for SdkActivationSignalWorkfl
     }
 }
 
-impl<'a> Into<workflow_activation::SignalWorkflow> for SdkActivationSignalWorkflow<'a> {
+impl Into<workflow_activation::SignalWorkflow> for SdkActivationSignalWorkflow {
     fn into(self) -> workflow_activation::SignalWorkflow {
         workflow_activation::SignalWorkflow {
             signal_name: self.signal_name,
@@ -456,13 +438,13 @@ impl<'a> Into<workflow_activation::SignalWorkflow> for SdkActivationSignalWorkfl
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationResolveActivity"]
-pub struct SdkActivationResolveActivity<'a> {
+pub struct SdkActivationResolveActivity {
     pub seq: u32,
-    pub result: Option<SdkActivityResolution<'a>>,
+    pub result: Option<SdkActivityResolution>,
     pub is_local: bool,
 }
 
-impl<'a> From<workflow_activation::ResolveActivity> for SdkActivationResolveActivity<'a> {
+impl From<workflow_activation::ResolveActivity> for SdkActivationResolveActivity {
     fn from(external: workflow_activation::ResolveActivity) -> Self {
         Self {
             seq: external.seq,
@@ -472,7 +454,7 @@ impl<'a> From<workflow_activation::ResolveActivity> for SdkActivationResolveActi
     }
 }
 
-impl<'a> Into<workflow_activation::ResolveActivity> for SdkActivationResolveActivity<'a> {
+impl Into<workflow_activation::ResolveActivity> for SdkActivationResolveActivity {
     fn into(self) -> workflow_activation::ResolveActivity {
         workflow_activation::ResolveActivity {
             seq: self.seq,
@@ -506,13 +488,13 @@ impl Into<workflow_activation::NotifyHasPatch> for SdkActivationNotifyHasPatch {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationResolveChildWorkflowExecutionStart"]
-pub struct SdkActivationResolveChildWorkflowExecutionStart<'a> {
+pub struct SdkActivationResolveChildWorkflowExecutionStart {
     pub seq: u32,
-    pub status: Option<SdkWorkflowChildExecutionStartStatus<'a>>,
+    pub status: Option<SdkWorkflowChildExecutionStartStatus>,
 }
 
-impl<'a> From<workflow_activation::ResolveChildWorkflowExecutionStart>
-    for SdkActivationResolveChildWorkflowExecutionStart<'a>
+impl From<workflow_activation::ResolveChildWorkflowExecutionStart>
+    for SdkActivationResolveChildWorkflowExecutionStart
 {
     fn from(external: workflow_activation::ResolveChildWorkflowExecutionStart) -> Self {
         Self {
@@ -522,8 +504,8 @@ impl<'a> From<workflow_activation::ResolveChildWorkflowExecutionStart>
     }
 }
 
-impl<'a> Into<workflow_activation::ResolveChildWorkflowExecutionStart>
-    for SdkActivationResolveChildWorkflowExecutionStart<'a>
+impl Into<workflow_activation::ResolveChildWorkflowExecutionStart>
+    for SdkActivationResolveChildWorkflowExecutionStart
 {
     fn into(self) -> workflow_activation::ResolveChildWorkflowExecutionStart {
         workflow_activation::ResolveChildWorkflowExecutionStart {
@@ -535,13 +517,13 @@ impl<'a> Into<workflow_activation::ResolveChildWorkflowExecutionStart>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationResolveChildWorkflowExecution"]
-pub struct SdkActivationResolveChildWorkflowExecution<'a> {
+pub struct SdkActivationResolveChildWorkflowExecution {
     pub seq: u32,
-    pub result: Option<SdkWorkflowChildResult<'a>>,
+    pub result: Option<SdkWorkflowChildResult>,
 }
 
-impl<'a> From<workflow_activation::ResolveChildWorkflowExecution>
-    for SdkActivationResolveChildWorkflowExecution<'a>
+impl From<workflow_activation::ResolveChildWorkflowExecution>
+    for SdkActivationResolveChildWorkflowExecution
 {
     fn from(external: workflow_activation::ResolveChildWorkflowExecution) -> Self {
         Self {
@@ -551,8 +533,8 @@ impl<'a> From<workflow_activation::ResolveChildWorkflowExecution>
     }
 }
 
-impl<'a> Into<workflow_activation::ResolveChildWorkflowExecution>
-    for SdkActivationResolveChildWorkflowExecution<'a>
+impl Into<workflow_activation::ResolveChildWorkflowExecution>
+    for SdkActivationResolveChildWorkflowExecution
 {
     fn into(self) -> workflow_activation::ResolveChildWorkflowExecution {
         workflow_activation::ResolveChildWorkflowExecution {
@@ -564,13 +546,13 @@ impl<'a> Into<workflow_activation::ResolveChildWorkflowExecution>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationResolveSignalExternalWorkflow"]
-pub struct SdkActivationResolveSignalExternalWorkflow<'a> {
+pub struct SdkActivationResolveSignalExternalWorkflow {
     pub seq: u32,
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+    pub failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<workflow_activation::ResolveSignalExternalWorkflow>
-    for SdkActivationResolveSignalExternalWorkflow<'a>
+impl From<workflow_activation::ResolveSignalExternalWorkflow>
+    for SdkActivationResolveSignalExternalWorkflow
 {
     fn from(external: workflow_activation::ResolveSignalExternalWorkflow) -> Self {
         Self {
@@ -580,8 +562,8 @@ impl<'a> From<workflow_activation::ResolveSignalExternalWorkflow>
     }
 }
 
-impl<'a> Into<workflow_activation::ResolveSignalExternalWorkflow>
-    for SdkActivationResolveSignalExternalWorkflow<'a>
+impl Into<workflow_activation::ResolveSignalExternalWorkflow>
+    for SdkActivationResolveSignalExternalWorkflow
 {
     fn into(self) -> workflow_activation::ResolveSignalExternalWorkflow {
         workflow_activation::ResolveSignalExternalWorkflow {
@@ -593,13 +575,13 @@ impl<'a> Into<workflow_activation::ResolveSignalExternalWorkflow>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationResolveRequestCancelExternalWorkflow"]
-pub struct SdkActivationResolveRequestCancelExternalWorkflow<'a> {
+pub struct SdkActivationResolveRequestCancelExternalWorkflow {
     pub seq: u32,
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+    pub failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<workflow_activation::ResolveRequestCancelExternalWorkflow>
-    for SdkActivationResolveRequestCancelExternalWorkflow<'a>
+impl From<workflow_activation::ResolveRequestCancelExternalWorkflow>
+    for SdkActivationResolveRequestCancelExternalWorkflow
 {
     fn from(external: workflow_activation::ResolveRequestCancelExternalWorkflow) -> Self {
         Self {
@@ -609,8 +591,8 @@ impl<'a> From<workflow_activation::ResolveRequestCancelExternalWorkflow>
     }
 }
 
-impl<'a> Into<workflow_activation::ResolveRequestCancelExternalWorkflow>
-    for SdkActivationResolveRequestCancelExternalWorkflow<'a>
+impl Into<workflow_activation::ResolveRequestCancelExternalWorkflow>
+    for SdkActivationResolveRequestCancelExternalWorkflow
 {
     fn into(self) -> workflow_activation::ResolveRequestCancelExternalWorkflow {
         workflow_activation::ResolveRequestCancelExternalWorkflow {
@@ -622,17 +604,17 @@ impl<'a> Into<workflow_activation::ResolveRequestCancelExternalWorkflow>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationDoUpdate"]
-pub struct SdkActivationDoUpdate<'a> {
+pub struct SdkActivationDoUpdate {
     pub id: String,
     pub protocol_instance_id: String,
     pub name: String,
-    pub input: Vec<SdkPayload<'a>>,
-    pub headers: HashMap<String, SdkPayload<'a>>,
+    pub input: Vec<SdkPayload>,
+    pub headers: HashMap<String, SdkPayload>,
     pub meta: Option<SdkUpdateMeta>,
     pub run_validator: bool,
 }
 
-impl<'a> From<workflow_activation::DoUpdate> for SdkActivationDoUpdate<'a> {
+impl From<workflow_activation::DoUpdate> for SdkActivationDoUpdate {
     fn from(external: workflow_activation::DoUpdate) -> Self {
         Self {
             id: external.id,
@@ -650,7 +632,7 @@ impl<'a> From<workflow_activation::DoUpdate> for SdkActivationDoUpdate<'a> {
     }
 }
 
-impl<'a> Into<workflow_activation::DoUpdate> for SdkActivationDoUpdate<'a> {
+impl Into<workflow_activation::DoUpdate> for SdkActivationDoUpdate {
     fn into(self) -> workflow_activation::DoUpdate {
         workflow_activation::DoUpdate {
             id: self.id,
@@ -670,13 +652,13 @@ impl<'a> Into<workflow_activation::DoUpdate> for SdkActivationDoUpdate<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationResolveNexusOperationStart"]
-pub struct SdkActivationResolveNexusOperationStart<'a> {
+pub struct SdkActivationResolveNexusOperationStart {
     pub seq: u32,
-    pub status: Option<SdkWorkflowResolveNexusOperationStartStatus<'a>>,
+    pub status: Option<SdkWorkflowResolveNexusOperationStartStatus>,
 }
 
-impl<'a> From<workflow_activation::ResolveNexusOperationStart>
-    for SdkActivationResolveNexusOperationStart<'a>
+impl From<workflow_activation::ResolveNexusOperationStart>
+    for SdkActivationResolveNexusOperationStart
 {
     fn from(external: workflow_activation::ResolveNexusOperationStart) -> Self {
         Self {
@@ -686,8 +668,8 @@ impl<'a> From<workflow_activation::ResolveNexusOperationStart>
     }
 }
 
-impl<'a> Into<workflow_activation::ResolveNexusOperationStart>
-    for SdkActivationResolveNexusOperationStart<'a>
+impl Into<workflow_activation::ResolveNexusOperationStart>
+    for SdkActivationResolveNexusOperationStart
 {
     fn into(self) -> workflow_activation::ResolveNexusOperationStart {
         workflow_activation::ResolveNexusOperationStart {
@@ -699,14 +681,12 @@ impl<'a> Into<workflow_activation::ResolveNexusOperationStart>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivationResolveNexusOperation"]
-pub struct SdkActivationResolveNexusOperation<'a> {
+pub struct SdkActivationResolveNexusOperation {
     pub seq: u32,
-    pub result: Option<SdkWorkflowNexusOperationResult<'a>>,
+    pub result: Option<SdkWorkflowNexusOperationResult>,
 }
 
-impl<'a> From<workflow_activation::ResolveNexusOperation>
-    for SdkActivationResolveNexusOperation<'a>
-{
+impl From<workflow_activation::ResolveNexusOperation> for SdkActivationResolveNexusOperation {
     fn from(external: workflow_activation::ResolveNexusOperation) -> Self {
         Self {
             seq: external.seq,
@@ -715,9 +695,7 @@ impl<'a> From<workflow_activation::ResolveNexusOperation>
     }
 }
 
-impl<'a> Into<workflow_activation::ResolveNexusOperation>
-    for SdkActivationResolveNexusOperation<'a>
-{
+impl Into<workflow_activation::ResolveNexusOperation> for SdkActivationResolveNexusOperation {
     fn into(self) -> workflow_activation::ResolveNexusOperation {
         workflow_activation::ResolveNexusOperation {
             seq: self.seq,
@@ -806,12 +784,12 @@ impl From<i32> for SdkCacheEvictionReason {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowNexusOperationResult"]
-pub struct SdkWorkflowNexusOperationResult<'a> {
-    pub status: Option<SdkWorkflowNexusOperationStatus<'a>>,
+pub struct SdkWorkflowNexusOperationResult {
+    pub status: Option<SdkWorkflowNexusOperationStatus>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult>
-    for SdkWorkflowNexusOperationResult<'a>
+impl From<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult>
+    for SdkWorkflowNexusOperationResult
 {
     fn from(external: temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult) -> Self {
         Self {
@@ -820,8 +798,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResul
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult>
-    for SdkWorkflowNexusOperationResult<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult>
+    for SdkWorkflowNexusOperationResult
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult {
         temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResult {
@@ -831,14 +809,14 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::nexus::NexusOperationResul
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowNexusOperationStatus<'a> {
-    Completed(SdkPayload<'a>),
-    Failed(SdkWorkflowFailure<'a>),
-    Cancelled(SdkWorkflowFailure<'a>),
-    TimedOut(SdkWorkflowFailure<'a>),
+pub enum SdkWorkflowNexusOperationStatus {
+    Completed(SdkPayload),
+    Failed(SdkWorkflowFailure),
+    Cancelled(SdkWorkflowFailure),
+    TimedOut(SdkWorkflowFailure),
 }
 
-impl<'a> From<NexusOperationResultStatus> for SdkWorkflowNexusOperationStatus<'a> {
+impl From<NexusOperationResultStatus> for SdkWorkflowNexusOperationStatus {
     fn from(external: NexusOperationResultStatus) -> Self {
         match external {
             NexusOperationResultStatus::Completed(variant) => Self::Completed(variant.into()),
@@ -849,7 +827,7 @@ impl<'a> From<NexusOperationResultStatus> for SdkWorkflowNexusOperationStatus<'a
     }
 }
 
-impl<'a> Into<NexusOperationResultStatus> for SdkWorkflowNexusOperationStatus<'a> {
+impl Into<NexusOperationResultStatus> for SdkWorkflowNexusOperationStatus {
     fn into(self) -> NexusOperationResultStatus {
         match self {
             Self::Completed(variant) => NexusOperationResultStatus::Completed(variant.into()),
@@ -861,14 +839,14 @@ impl<'a> Into<NexusOperationResultStatus> for SdkWorkflowNexusOperationStatus<'a
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowResolveNexusOperationStartStatus<'a> {
+pub enum SdkWorkflowResolveNexusOperationStartStatus {
     OperationToken(String),
     StartedSync(bool),
-    Failed(SdkWorkflowFailure<'a>),
+    Failed(SdkWorkflowFailure),
 }
 
-impl<'a> From<workflow_activation::resolve_nexus_operation_start::Status>
-    for SdkWorkflowResolveNexusOperationStartStatus<'a>
+impl From<workflow_activation::resolve_nexus_operation_start::Status>
+    for SdkWorkflowResolveNexusOperationStartStatus
 {
     fn from(external: workflow_activation::resolve_nexus_operation_start::Status) -> Self {
         match external {
@@ -885,8 +863,8 @@ impl<'a> From<workflow_activation::resolve_nexus_operation_start::Status>
     }
 }
 
-impl<'a> Into<workflow_activation::resolve_nexus_operation_start::Status>
-    for SdkWorkflowResolveNexusOperationStartStatus<'a>
+impl Into<workflow_activation::resolve_nexus_operation_start::Status>
+    for SdkWorkflowResolveNexusOperationStartStatus
 {
     fn into(self) -> workflow_activation::resolve_nexus_operation_start::Status {
         match self {
@@ -930,12 +908,12 @@ impl Into<temporal_api::update::v1::Meta> for SdkUpdateMeta {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowChildResult"]
-pub struct SdkWorkflowChildResult<'a> {
-    pub status: Option<SdkWorkflowChildExecutionStatus<'a>>,
+pub struct SdkWorkflowChildResult {
+    pub status: Option<SdkWorkflowChildExecutionStatus>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult>
-    for SdkWorkflowChildResult<'a>
+impl From<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult>
+    for SdkWorkflowChildResult
 {
     fn from(
         external: temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult,
@@ -946,8 +924,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkf
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult>
-    for SdkWorkflowChildResult<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult>
+    for SdkWorkflowChildResult
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult {
         temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowResult {
@@ -957,13 +935,13 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkf
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowChildExecutionStatus<'a> {
-    Completed(SdkWorkflowChildExecutionCompletedStatus<'a>),
-    Failed(SdkWorkflowChildExecutionFailedStatus<'a>),
-    Cancelled(SdkWorkflowChildExecutionCancelledStatus<'a>),
+pub enum SdkWorkflowChildExecutionStatus {
+    Completed(SdkWorkflowChildExecutionCompletedStatus),
+    Failed(SdkWorkflowChildExecutionFailedStatus),
+    Cancelled(SdkWorkflowChildExecutionCancelledStatus),
 }
 
-impl<'a> From<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus<'a> {
+impl From<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus {
     fn from(external: ChildWorkflowStatus) -> Self {
         match external {
             ChildWorkflowStatus::Completed(status) => Self::Completed(status.into()),
@@ -973,7 +951,7 @@ impl<'a> From<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus<'a> {
     }
 }
 
-impl<'a> Into<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus<'a> {
+impl Into<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus {
     fn into(self) -> ChildWorkflowStatus {
         match self {
             Self::Completed(status) => ChildWorkflowStatus::Completed(status.into()),
@@ -985,12 +963,12 @@ impl<'a> Into<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionCompletedStatus"]
-pub struct SdkWorkflowChildExecutionCompletedStatus<'a> {
-    pub result: Option<SdkPayload<'a>>,
+pub struct SdkWorkflowChildExecutionCompletedStatus {
+    pub result: Option<SdkPayload>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
-    for SdkWorkflowChildExecutionCompletedStatus<'a>
+impl From<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
+    for SdkWorkflowChildExecutionCompletedStatus
 {
     fn from(external: temporalio_sdk_common::protos::coresdk::child_workflow::Success) -> Self {
         Self {
@@ -999,8 +977,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
-    for SdkWorkflowChildExecutionCompletedStatus<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
+    for SdkWorkflowChildExecutionCompletedStatus
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::child_workflow::Success {
         temporalio_sdk_common::protos::coresdk::child_workflow::Success {
@@ -1011,12 +989,12 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionFailedStatus"]
-pub struct SdkWorkflowChildExecutionFailedStatus<'a> {
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkWorkflowChildExecutionFailedStatus {
+    pub failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
-    for SdkWorkflowChildExecutionFailedStatus<'a>
+impl From<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
+    for SdkWorkflowChildExecutionFailedStatus
 {
     fn from(external: temporalio_sdk_common::protos::coresdk::child_workflow::Failure) -> Self {
         Self {
@@ -1025,8 +1003,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
-    for SdkWorkflowChildExecutionFailedStatus<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
+    for SdkWorkflowChildExecutionFailedStatus
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::child_workflow::Failure {
         temporalio_sdk_common::protos::coresdk::child_workflow::Failure {
@@ -1037,12 +1015,12 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionCancelledStatus"]
-pub struct SdkWorkflowChildExecutionCancelledStatus<'a> {
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkWorkflowChildExecutionCancelledStatus {
+    pub failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation>
-    for SdkWorkflowChildExecutionCancelledStatus<'a>
+impl From<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation>
+    for SdkWorkflowChildExecutionCancelledStatus
 {
     fn from(
         external: temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation,
@@ -1053,8 +1031,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellati
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation>
-    for SdkWorkflowChildExecutionCancelledStatus<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation>
+    for SdkWorkflowChildExecutionCancelledStatus
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation {
         temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation {
@@ -1064,14 +1042,14 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellati
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowChildExecutionStartStatus<'a> {
+pub enum SdkWorkflowChildExecutionStartStatus {
     Succeeded(SdkWorkflowChildExecutionStartSucceededStatus),
     Failed(SdkWorkflowChildExecutionStartFailedStatus),
-    Cancelled(SdkWorkflowChildExecutionStartCancelledStatus<'a>),
+    Cancelled(SdkWorkflowChildExecutionStartCancelledStatus),
 }
 
-impl<'a> From<workflow_activation::resolve_child_workflow_execution_start::Status>
-    for SdkWorkflowChildExecutionStartStatus<'a>
+impl From<workflow_activation::resolve_child_workflow_execution_start::Status>
+    for SdkWorkflowChildExecutionStartStatus
 {
     fn from(external: workflow_activation::resolve_child_workflow_execution_start::Status) -> Self {
         match external {
@@ -1088,8 +1066,8 @@ impl<'a> From<workflow_activation::resolve_child_workflow_execution_start::Statu
     }
 }
 
-impl<'a> Into<workflow_activation::resolve_child_workflow_execution_start::Status>
-    for SdkWorkflowChildExecutionStartStatus<'a>
+impl Into<workflow_activation::resolve_child_workflow_execution_start::Status>
+    for SdkWorkflowChildExecutionStartStatus
 {
     fn into(self) -> workflow_activation::resolve_child_workflow_execution_start::Status {
         match self {
@@ -1198,12 +1176,12 @@ impl From<i32> for SdkStartChildWorkflowExecutionFailedCause {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionStartCancelledStatus"]
-pub struct SdkWorkflowChildExecutionStartCancelledStatus<'a> {
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkWorkflowChildExecutionStartCancelledStatus {
+    pub failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<workflow_activation::ResolveChildWorkflowExecutionStartCancelled>
-    for SdkWorkflowChildExecutionStartCancelledStatus<'a>
+impl From<workflow_activation::ResolveChildWorkflowExecutionStartCancelled>
+    for SdkWorkflowChildExecutionStartCancelledStatus
 {
     fn from(external: workflow_activation::ResolveChildWorkflowExecutionStartCancelled) -> Self {
         Self {
@@ -1212,8 +1190,8 @@ impl<'a> From<workflow_activation::ResolveChildWorkflowExecutionStartCancelled>
     }
 }
 
-impl<'a> Into<workflow_activation::ResolveChildWorkflowExecutionStartCancelled>
-    for SdkWorkflowChildExecutionStartCancelledStatus<'a>
+impl Into<workflow_activation::ResolveChildWorkflowExecutionStartCancelled>
+    for SdkWorkflowChildExecutionStartCancelledStatus
 {
     fn into(self) -> workflow_activation::ResolveChildWorkflowExecutionStartCancelled {
         workflow_activation::ResolveChildWorkflowExecutionStartCancelled {
@@ -1224,12 +1202,12 @@ impl<'a> Into<workflow_activation::ResolveChildWorkflowExecutionStartCancelled>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityResolution"]
-pub struct SdkActivityResolution<'a> {
-    pub status: Option<SdkActivityResolutionStatus<'a>>,
+pub struct SdkActivityResolution {
+    pub status: Option<SdkActivityResolutionStatus>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution>
-    for SdkActivityResolution<'a>
+impl From<temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution>
+    for SdkActivityResolution
 {
     fn from(
         external: temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution,
@@ -1240,8 +1218,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::ActivityR
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution>
-    for SdkActivityResolution<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution>
+    for SdkActivityResolution
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution {
         temporalio_sdk_common::protos::coresdk::activity_result::ActivityResolution {
@@ -1251,14 +1229,14 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::ActivityR
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkActivityResolutionStatus<'a> {
-    Completed(SdkActivityResolutionCompletedStatus<'a>),
-    Failed(SdkActivityResolutionFailedStatus<'a>),
-    Cancelled(SdkActivityResolutionCancelledStatus<'a>),
+pub enum SdkActivityResolutionStatus {
+    Completed(SdkActivityResolutionCompletedStatus),
+    Failed(SdkActivityResolutionFailedStatus),
+    Cancelled(SdkActivityResolutionCancelledStatus),
     Backoff(SdkActivityResolutionBackoffStatus),
 }
 
-impl<'a> From<ActivityResolutionStatus> for SdkActivityResolutionStatus<'a> {
+impl From<ActivityResolutionStatus> for SdkActivityResolutionStatus {
     fn from(external: ActivityResolutionStatus) -> Self {
         match external {
             ActivityResolutionStatus::Completed(status) => Self::Completed(status.into()),
@@ -1269,7 +1247,7 @@ impl<'a> From<ActivityResolutionStatus> for SdkActivityResolutionStatus<'a> {
     }
 }
 
-impl<'a> Into<ActivityResolutionStatus> for SdkActivityResolutionStatus<'a> {
+impl Into<ActivityResolutionStatus> for SdkActivityResolutionStatus {
     fn into(self) -> ActivityResolutionStatus {
         match self {
             Self::Completed(status) => ActivityResolutionStatus::Completed(status.into()),
@@ -1282,12 +1260,12 @@ impl<'a> Into<ActivityResolutionStatus> for SdkActivityResolutionStatus<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityResolutionCompletedStatus"]
-pub struct SdkActivityResolutionCompletedStatus<'a> {
-    pub result: Option<SdkPayload<'a>>,
+pub struct SdkActivityResolutionCompletedStatus {
+    pub result: Option<SdkPayload>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Success>
-    for SdkActivityResolutionCompletedStatus<'a>
+impl From<temporalio_sdk_common::protos::coresdk::activity_result::Success>
+    for SdkActivityResolutionCompletedStatus
 {
     fn from(external: temporalio_sdk_common::protos::coresdk::activity_result::Success) -> Self {
         Self {
@@ -1296,8 +1274,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Success>
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Success>
-    for SdkActivityResolutionCompletedStatus<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Success>
+    for SdkActivityResolutionCompletedStatus
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Success {
         temporalio_sdk_common::protos::coresdk::activity_result::Success {
@@ -1308,12 +1286,12 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Success>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityResolutionFailedStatus"]
-pub struct SdkActivityResolutionFailedStatus<'a> {
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkActivityResolutionFailedStatus {
+    pub failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
-    for SdkActivityResolutionFailedStatus<'a>
+impl From<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
+    for SdkActivityResolutionFailedStatus
 {
     fn from(external: temporalio_sdk_common::protos::coresdk::activity_result::Failure) -> Self {
         Self {
@@ -1322,8 +1300,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
-    for SdkActivityResolutionFailedStatus<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
+    for SdkActivityResolutionFailedStatus
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Failure {
         temporalio_sdk_common::protos::coresdk::activity_result::Failure {
@@ -1334,12 +1312,12 @@ impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.ActivityResolutionCancelledStatus"]
-pub struct SdkActivityResolutionCancelledStatus<'a> {
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkActivityResolutionCancelledStatus {
+    pub failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
-    for SdkActivityResolutionCancelledStatus<'a>
+impl From<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
+    for SdkActivityResolutionCancelledStatus
 {
     fn from(
         external: temporalio_sdk_common::protos::coresdk::activity_result::Cancellation,
@@ -1350,8 +1328,8 @@ impl<'a> From<temporalio_sdk_common::protos::coresdk::activity_result::Cancellat
     }
 }
 
-impl<'a> Into<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
-    for SdkActivityResolutionCancelledStatus<'a>
+impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
+    for SdkActivityResolutionCancelledStatus
 {
     fn into(self) -> temporalio_sdk_common::protos::coresdk::activity_result::Cancellation {
         temporalio_sdk_common::protos::coresdk::activity_result::Cancellation {
@@ -1394,11 +1372,11 @@ impl Into<temporalio_sdk_common::protos::coresdk::activity_result::DoBackoff>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowMemo"]
-pub struct SdkWorkflowMemo<'a> {
-    pub fields: HashMap<String, SdkPayload<'a>>,
+pub struct SdkWorkflowMemo {
+    pub fields: HashMap<String, SdkPayload>,
 }
 
-impl<'a> From<temporal_api::common::v1::Memo> for SdkWorkflowMemo<'a> {
+impl From<temporal_api::common::v1::Memo> for SdkWorkflowMemo {
     fn from(external: temporal_api::common::v1::Memo) -> Self {
         Self {
             fields: external
@@ -1410,7 +1388,7 @@ impl<'a> From<temporal_api::common::v1::Memo> for SdkWorkflowMemo<'a> {
     }
 }
 
-impl<'a> Into<temporal_api::common::v1::Memo> for SdkWorkflowMemo<'a> {
+impl Into<temporal_api::common::v1::Memo> for SdkWorkflowMemo {
     fn into(self) -> temporal_api::common::v1::Memo {
         temporal_api::common::v1::Memo {
             fields: self
@@ -1424,11 +1402,11 @@ impl<'a> Into<temporal_api::common::v1::Memo> for SdkWorkflowMemo<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowSearchAttributes"]
-pub struct SdkWorkflowSearchAttributes<'a> {
-    pub indexed_fields: HashMap<String, SdkPayload<'a>>,
+pub struct SdkWorkflowSearchAttributes {
+    pub indexed_fields: HashMap<String, SdkPayload>,
 }
 
-impl<'a> From<temporal_api::common::v1::SearchAttributes> for SdkWorkflowSearchAttributes<'a> {
+impl From<temporal_api::common::v1::SearchAttributes> for SdkWorkflowSearchAttributes {
     fn from(external: temporal_api::common::v1::SearchAttributes) -> Self {
         Self {
             indexed_fields: external
@@ -1440,7 +1418,7 @@ impl<'a> From<temporal_api::common::v1::SearchAttributes> for SdkWorkflowSearchA
     }
 }
 
-impl<'a> Into<temporal_api::common::v1::SearchAttributes> for SdkWorkflowSearchAttributes<'a> {
+impl Into<temporal_api::common::v1::SearchAttributes> for SdkWorkflowSearchAttributes {
     fn into(self) -> temporal_api::common::v1::SearchAttributes {
         temporal_api::common::v1::SearchAttributes {
             indexed_fields: self
@@ -1520,16 +1498,16 @@ impl Into<temporal_api::common::v1::payload::ExternalPayloadDetails>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowFailure"]
-pub struct SdkWorkflowFailure<'a> {
+pub struct SdkWorkflowFailure {
     pub message: String,
     pub source: String,
     pub stack_trace: String,
-    pub encoded_attributes: Option<SdkPayload<'a>>,
-    pub cause: Option<Box<SdkWorkflowFailure<'a>>>,
-    pub failure_info: Option<SdkWorkflowFailureInfo<'a>>,
+    pub encoded_attributes: Option<SdkPayload>,
+    pub cause: Option<Box<SdkWorkflowFailure>>,
+    pub failure_info: Option<SdkWorkflowFailureInfo>,
 }
 
-impl<'a> From<temporal_api::failure::v1::Failure> for SdkWorkflowFailure<'a> {
+impl From<temporal_api::failure::v1::Failure> for SdkWorkflowFailure {
     fn from(external: temporal_api::failure::v1::Failure) -> Self {
         Self {
             message: external.message,
@@ -1545,7 +1523,7 @@ impl<'a> From<temporal_api::failure::v1::Failure> for SdkWorkflowFailure<'a> {
     }
 }
 
-impl<'a> Into<temporal_api::failure::v1::Failure> for SdkWorkflowFailure<'a> {
+impl Into<temporal_api::failure::v1::Failure> for SdkWorkflowFailure {
     fn into(self) -> temporal_api::failure::v1::Failure {
         temporal_api::failure::v1::Failure {
             message: self.message,
@@ -1562,20 +1540,20 @@ impl<'a> Into<temporal_api::failure::v1::Failure> for SdkWorkflowFailure<'a> {
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowFailureInfo<'a> {
-    Application(SdkWorkflowApplicationFailureInfo<'a>),
-    Timeout(SdkWorkflowTimeoutFailureInfo<'a>),
-    Cancelled(SdkWorkflowCanceledFailureInfo<'a>),
+pub enum SdkWorkflowFailureInfo {
+    Application(SdkWorkflowApplicationFailureInfo),
+    Timeout(SdkWorkflowTimeoutFailureInfo),
+    Cancelled(SdkWorkflowCanceledFailureInfo),
     Terminated(SdkWorkflowTerminatedFailureInfo),
     Server(SdkWorkflowServerFailureInfo),
-    ResetWorkflow(SdkWorkflowResetFailureInfo<'a>),
+    ResetWorkflow(SdkWorkflowResetFailureInfo),
     Activity(SdkWorkflowActivityFailureInfo),
     ChildExecution(SdkWorkflowChildExecutionFailureInfo),
     NexusOperation(SdkWorkflowNexusOperationFailureInfo),
     NexusHandler(SdkWorkflowNexusHandlerFailureInfo),
 }
 
-impl<'a> From<FailureInfo> for SdkWorkflowFailureInfo<'a> {
+impl From<FailureInfo> for SdkWorkflowFailureInfo {
     fn from(external: FailureInfo) -> Self {
         match external {
             FailureInfo::ApplicationFailureInfo(info) => Self::Application(info.into()),
@@ -1596,7 +1574,7 @@ impl<'a> From<FailureInfo> for SdkWorkflowFailureInfo<'a> {
     }
 }
 
-impl<'a> Into<FailureInfo> for SdkWorkflowFailureInfo<'a> {
+impl Into<FailureInfo> for SdkWorkflowFailureInfo {
     fn into(self) -> FailureInfo {
         match self {
             Self::Application(info) => FailureInfo::ApplicationFailureInfo(info.into()),
@@ -1619,17 +1597,15 @@ impl<'a> Into<FailureInfo> for SdkWorkflowFailureInfo<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowApplicationFailureInfo"]
-pub struct SdkWorkflowApplicationFailureInfo<'a> {
+pub struct SdkWorkflowApplicationFailureInfo {
     pub failure_type: String,
     pub non_retryable: bool,
-    pub details: Option<SdkPayloads<'a>>,
+    pub details: Option<SdkPayloads>,
     pub next_retry_delay: Option<SdkDuration>,
     pub category: SdkApplicationErrorCategory,
 }
 
-impl<'a> From<temporal_api::failure::v1::ApplicationFailureInfo>
-    for SdkWorkflowApplicationFailureInfo<'a>
-{
+impl From<temporal_api::failure::v1::ApplicationFailureInfo> for SdkWorkflowApplicationFailureInfo {
     fn from(external: temporal_api::failure::v1::ApplicationFailureInfo) -> Self {
         Self {
             failure_type: external.r#type,
@@ -1641,9 +1617,7 @@ impl<'a> From<temporal_api::failure::v1::ApplicationFailureInfo>
     }
 }
 
-impl<'a> Into<temporal_api::failure::v1::ApplicationFailureInfo>
-    for SdkWorkflowApplicationFailureInfo<'a>
-{
+impl Into<temporal_api::failure::v1::ApplicationFailureInfo> for SdkWorkflowApplicationFailureInfo {
     fn into(self) -> temporal_api::failure::v1::ApplicationFailureInfo {
         temporal_api::failure::v1::ApplicationFailureInfo {
             r#type: self.failure_type,
@@ -1683,12 +1657,12 @@ impl From<i32> for SdkApplicationErrorCategory {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowTimeoutFailureInfo"]
-pub struct SdkWorkflowTimeoutFailureInfo<'a> {
+pub struct SdkWorkflowTimeoutFailureInfo {
     pub timeout_type: SdkTimeoutType,
-    pub last_heartbeat_details: Option<SdkPayloads<'a>>,
+    pub last_heartbeat_details: Option<SdkPayloads>,
 }
 
-impl<'a> From<temporal_api::failure::v1::TimeoutFailureInfo> for SdkWorkflowTimeoutFailureInfo<'a> {
+impl From<temporal_api::failure::v1::TimeoutFailureInfo> for SdkWorkflowTimeoutFailureInfo {
     fn from(external: temporal_api::failure::v1::TimeoutFailureInfo) -> Self {
         Self {
             timeout_type: external.timeout_type.into(),
@@ -1697,7 +1671,7 @@ impl<'a> From<temporal_api::failure::v1::TimeoutFailureInfo> for SdkWorkflowTime
     }
 }
 
-impl<'a> Into<temporal_api::failure::v1::TimeoutFailureInfo> for SdkWorkflowTimeoutFailureInfo<'a> {
+impl Into<temporal_api::failure::v1::TimeoutFailureInfo> for SdkWorkflowTimeoutFailureInfo {
     fn into(self) -> temporal_api::failure::v1::TimeoutFailureInfo {
         temporal_api::failure::v1::TimeoutFailureInfo {
             timeout_type: self.timeout_type.into(),
@@ -1743,14 +1717,12 @@ impl From<i32> for SdkTimeoutType {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCanceledFailureInfo"]
-pub struct SdkWorkflowCanceledFailureInfo<'a> {
-    pub details: Option<SdkPayloads<'a>>,
+pub struct SdkWorkflowCanceledFailureInfo {
+    pub details: Option<SdkPayloads>,
     pub identity: String,
 }
 
-impl<'a> From<temporal_api::failure::v1::CanceledFailureInfo>
-    for SdkWorkflowCanceledFailureInfo<'a>
-{
+impl From<temporal_api::failure::v1::CanceledFailureInfo> for SdkWorkflowCanceledFailureInfo {
     fn from(external: temporal_api::failure::v1::CanceledFailureInfo) -> Self {
         Self {
             details: external.details.try_into_or_none(),
@@ -1759,9 +1731,7 @@ impl<'a> From<temporal_api::failure::v1::CanceledFailureInfo>
     }
 }
 
-impl<'a> Into<temporal_api::failure::v1::CanceledFailureInfo>
-    for SdkWorkflowCanceledFailureInfo<'a>
-{
+impl Into<temporal_api::failure::v1::CanceledFailureInfo> for SdkWorkflowCanceledFailureInfo {
     fn into(self) -> temporal_api::failure::v1::CanceledFailureInfo {
         temporal_api::failure::v1::CanceledFailureInfo {
             details: self.details.try_into_or_none(),
@@ -1816,13 +1786,11 @@ impl Into<temporal_api::failure::v1::ServerFailureInfo> for SdkWorkflowServerFai
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowResetFailureInfo"]
-pub struct SdkWorkflowResetFailureInfo<'a> {
-    pub last_heartbeat_details: Option<SdkPayloads<'a>>,
+pub struct SdkWorkflowResetFailureInfo {
+    pub last_heartbeat_details: Option<SdkPayloads>,
 }
 
-impl<'a> From<temporal_api::failure::v1::ResetWorkflowFailureInfo>
-    for SdkWorkflowResetFailureInfo<'a>
-{
+impl From<temporal_api::failure::v1::ResetWorkflowFailureInfo> for SdkWorkflowResetFailureInfo {
     fn from(external: temporal_api::failure::v1::ResetWorkflowFailureInfo) -> Self {
         Self {
             last_heartbeat_details: external.last_heartbeat_details.try_into_or_none(),
@@ -1830,9 +1798,7 @@ impl<'a> From<temporal_api::failure::v1::ResetWorkflowFailureInfo>
     }
 }
 
-impl<'a> Into<temporal_api::failure::v1::ResetWorkflowFailureInfo>
-    for SdkWorkflowResetFailureInfo<'a>
-{
+impl Into<temporal_api::failure::v1::ResetWorkflowFailureInfo> for SdkWorkflowResetFailureInfo {
     fn into(self) -> temporal_api::failure::v1::ResetWorkflowFailureInfo {
         temporal_api::failure::v1::ResetWorkflowFailureInfo {
             last_heartbeat_details: self.last_heartbeat_details.try_into_or_none(),
@@ -2130,14 +2096,12 @@ impl From<i32> for SdkNexusHandlerErrorRetryBehavior {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowActivationCompletion"]
-pub struct SdkWorkflowActivationCompletion<'a> {
+pub struct SdkWorkflowActivationCompletion {
     pub run_id: String,
-    pub status: Option<SdkWorkflowActivationCompletionStatus<'a>>,
+    pub status: Option<SdkWorkflowActivationCompletionStatus>,
 }
 
-impl<'a> From<workflow_completion::WorkflowActivationCompletion>
-    for SdkWorkflowActivationCompletion<'a>
-{
+impl From<workflow_completion::WorkflowActivationCompletion> for SdkWorkflowActivationCompletion {
     fn from(external: workflow_completion::WorkflowActivationCompletion) -> Self {
         Self {
             run_id: external.run_id,
@@ -2146,9 +2110,7 @@ impl<'a> From<workflow_completion::WorkflowActivationCompletion>
     }
 }
 
-impl<'a> Into<workflow_completion::WorkflowActivationCompletion>
-    for SdkWorkflowActivationCompletion<'a>
-{
+impl Into<workflow_completion::WorkflowActivationCompletion> for SdkWorkflowActivationCompletion {
     fn into(self) -> workflow_completion::WorkflowActivationCompletion {
         workflow_completion::WorkflowActivationCompletion {
             run_id: self.run_id,
@@ -2158,12 +2120,12 @@ impl<'a> Into<workflow_completion::WorkflowActivationCompletion>
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowActivationCompletionStatus<'a> {
-    Successful(SdkWorkflowActivationCompletionSuccessStatus<'a>),
-    Failed(SdkWorkflowActivationCompletionFailureStatus<'a>),
+pub enum SdkWorkflowActivationCompletionStatus {
+    Successful(SdkWorkflowActivationCompletionSuccessStatus),
+    Failed(SdkWorkflowActivationCompletionFailureStatus),
 }
 
-impl<'a> From<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompletionStatus<'a> {
+impl From<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompletionStatus {
     fn from(external: WorkflowActivationCompletionStatus) -> Self {
         match external {
             WorkflowActivationCompletionStatus::Successful(status) => {
@@ -2174,7 +2136,7 @@ impl<'a> From<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompl
     }
 }
 
-impl<'a> Into<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompletionStatus<'a> {
+impl Into<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompletionStatus {
     fn into(self) -> WorkflowActivationCompletionStatus {
         match self {
             Self::Successful(status) => {
@@ -2187,13 +2149,13 @@ impl<'a> Into<WorkflowActivationCompletionStatus> for SdkWorkflowActivationCompl
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowActivationCompletionSuccessStatus"]
-pub struct SdkWorkflowActivationCompletionSuccessStatus<'a> {
-    pub commands: Vec<SdkWorkflowCommand<'a>>,
+pub struct SdkWorkflowActivationCompletionSuccessStatus {
+    pub commands: Vec<SdkWorkflowCommand>,
     pub used_internal_flags: Vec<u32>,
     pub versioning_behavior: SdkVersioningBehavior,
 }
 
-impl<'a> From<workflow_completion::Success> for SdkWorkflowActivationCompletionSuccessStatus<'a> {
+impl From<workflow_completion::Success> for SdkWorkflowActivationCompletionSuccessStatus {
     fn from(external: workflow_completion::Success) -> Self {
         Self {
             commands: external
@@ -2207,7 +2169,7 @@ impl<'a> From<workflow_completion::Success> for SdkWorkflowActivationCompletionS
     }
 }
 
-impl<'a> Into<workflow_completion::Success> for SdkWorkflowActivationCompletionSuccessStatus<'a> {
+impl Into<workflow_completion::Success> for SdkWorkflowActivationCompletionSuccessStatus {
     fn into(self) -> workflow_completion::Success {
         workflow_completion::Success {
             commands: self.commands.iter().map(|val| val.clone().into()).collect(),
@@ -2248,12 +2210,12 @@ impl From<i32> for SdkVersioningBehavior {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowActivationCompletionFailureStatus"]
-pub struct SdkWorkflowActivationCompletionFailureStatus<'a> {
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkWorkflowActivationCompletionFailureStatus {
+    pub failure: Option<SdkWorkflowFailure>,
     pub force_cause: SdkWorkflowTaskFailedCause,
 }
 
-impl<'a> From<workflow_completion::Failure> for SdkWorkflowActivationCompletionFailureStatus<'a> {
+impl From<workflow_completion::Failure> for SdkWorkflowActivationCompletionFailureStatus {
     fn from(external: workflow_completion::Failure) -> Self {
         Self {
             failure: external.failure.try_into_or_none(),
@@ -2262,7 +2224,7 @@ impl<'a> From<workflow_completion::Failure> for SdkWorkflowActivationCompletionF
     }
 }
 
-impl<'a> Into<workflow_completion::Failure> for SdkWorkflowActivationCompletionFailureStatus<'a> {
+impl Into<workflow_completion::Failure> for SdkWorkflowActivationCompletionFailureStatus {
     fn into(self) -> workflow_completion::Failure {
         workflow_completion::Failure {
             failure: self.failure.try_into_or_none(),
@@ -2407,12 +2369,12 @@ impl From<i32> for SdkWorkflowTaskFailedCause {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommand"]
-pub struct SdkWorkflowCommand<'a> {
-    pub user_metadata: Option<SdkUserMetadata<'a>>,
-    pub variant: Option<SdkWorkflowCommandVariant<'a>>,
+pub struct SdkWorkflowCommand {
+    pub user_metadata: Option<SdkUserMetadata>,
+    pub variant: Option<SdkWorkflowCommandVariant>,
 }
 
-impl<'a> From<WorkflowCommand> for SdkWorkflowCommand<'a> {
+impl From<WorkflowCommand> for SdkWorkflowCommand {
     fn from(external: WorkflowCommand) -> Self {
         Self {
             user_metadata: external.user_metadata.try_into_or_none(),
@@ -2421,7 +2383,7 @@ impl<'a> From<WorkflowCommand> for SdkWorkflowCommand<'a> {
     }
 }
 
-impl<'a> Into<WorkflowCommand> for SdkWorkflowCommand<'a> {
+impl Into<WorkflowCommand> for SdkWorkflowCommand {
     fn into(self) -> WorkflowCommand {
         WorkflowCommand {
             user_metadata: self.user_metadata.try_into_or_none(),
@@ -2430,7 +2392,7 @@ impl<'a> Into<WorkflowCommand> for SdkWorkflowCommand<'a> {
     }
 }
 
-impl<'a> Into<WorkflowCommand> for &SdkWorkflowCommand<'a> {
+impl Into<WorkflowCommand> for &SdkWorkflowCommand {
     fn into(self) -> WorkflowCommand {
         WorkflowCommand {
             user_metadata: self.user_metadata.clone().try_into_or_none(),
@@ -2441,12 +2403,12 @@ impl<'a> Into<WorkflowCommand> for &SdkWorkflowCommand<'a> {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.UserMetadata"]
-pub struct SdkUserMetadata<'a> {
-    pub summary: Option<SdkPayload<'a>>,
-    pub details: Option<SdkPayload<'a>>,
+pub struct SdkUserMetadata {
+    pub summary: Option<SdkPayload>,
+    pub details: Option<SdkPayload>,
 }
 
-impl<'a> From<UserMetadata> for SdkUserMetadata<'a> {
+impl From<UserMetadata> for SdkUserMetadata {
     fn from(external: UserMetadata) -> Self {
         Self {
             summary: external.summary.try_into_or_none(),
@@ -2455,7 +2417,7 @@ impl<'a> From<UserMetadata> for SdkUserMetadata<'a> {
     }
 }
 
-impl<'a> Into<UserMetadata> for SdkUserMetadata<'a> {
+impl Into<UserMetadata> for SdkUserMetadata {
     fn into(self) -> UserMetadata {
         UserMetadata {
             summary: self.summary.try_into_or_none(),
@@ -2465,34 +2427,34 @@ impl<'a> Into<UserMetadata> for SdkUserMetadata<'a> {
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowCommandVariant<'a> {
+pub enum SdkWorkflowCommandVariant {
     StartTimer(SdkWorkflowCommandStartTimer),
-    ScheduleActivity(SdkWorkflowCommandScheduleActivity<'a>),
-    RespondToQuery(SdkWorkflowCommandQueryResult<'a>),
+    ScheduleActivity(SdkWorkflowCommandScheduleActivity),
+    RespondToQuery(SdkWorkflowCommandQueryResult),
     RequestCancelActivity(SdkWorkflowCommandRequestCancelActivity),
     CancelTimer(SdkWorkflowCommandCancelTimer),
-    CompleteWorkflowExecution(SdkWorkflowCommandCompleteWorkflowExecution<'a>),
-    FailWorkflowExecution(SdkWorkflowCommandFailWorkflowExecution<'a>),
-    ContinueAsNewWorkflowExecution(SdkWorkflowCommandContinueAsNewWorkflowExecution<'a>),
+    CompleteWorkflowExecution(SdkWorkflowCommandCompleteWorkflowExecution),
+    FailWorkflowExecution(SdkWorkflowCommandFailWorkflowExecution),
+    ContinueAsNewWorkflowExecution(SdkWorkflowCommandContinueAsNewWorkflowExecution),
     CancelWorkflowExecution(SdkWorkflowCommandCancelWorkflowExecution),
     SetPatchMarker(SdkWorkflowCommandSetPatchMarker),
-    StartChildWorkflowExecution(SdkWorkflowCommandStartChildWorkflowExecution<'a>),
+    StartChildWorkflowExecution(SdkWorkflowCommandStartChildWorkflowExecution),
     CancelChildWorkflowExecution(SdkWorkflowCommandCancelChildWorkflowExecution),
     RequestCancelExternalWorkflowExecution(
         SdkWorkflowCommandRequestCancelExternalWorkflowExecution,
     ),
-    SignalExternalWorkflowExecution(SdkWorkflowCommandSignalExternalWorkflowExecution<'a>),
+    SignalExternalWorkflowExecution(SdkWorkflowCommandSignalExternalWorkflowExecution),
     CancelSignalWorkflow(SdkWorkflowCommandCancelSignalWorkflow),
-    ScheduleLocalActivity(SdkWorkflowCommandScheduleLocalActivity<'a>),
+    ScheduleLocalActivity(SdkWorkflowCommandScheduleLocalActivity),
     RequestCancelLocalActivity(SdkWorkflowCommandRequestCancelLocalActivity),
-    UpsertWorkflowSearchAttributes(SdkWorkflowCommandUpsertWorkflowSearchAttributes<'a>),
-    ModifyWorkflowProperties(SdkWorkflowCommandModifyWorkflowProperties<'a>),
-    UpdateResponse(SdkWorkflowCommandUpdateResponse<'a>),
-    ScheduleNexusOperation(SdkWorkflowCommandScheduleNexusOperation<'a>),
+    UpsertWorkflowSearchAttributes(SdkWorkflowCommandUpsertWorkflowSearchAttributes),
+    ModifyWorkflowProperties(SdkWorkflowCommandModifyWorkflowProperties),
+    UpdateResponse(SdkWorkflowCommandUpdateResponse),
+    ScheduleNexusOperation(SdkWorkflowCommandScheduleNexusOperation),
     RequestCancelNexusOperation(SdkWorkflowCommandRequestCancelNexusOperation),
 }
 
-impl<'a> From<WorkflowCommandVariant> for SdkWorkflowCommandVariant<'a> {
+impl From<WorkflowCommandVariant> for SdkWorkflowCommandVariant {
     fn from(external: WorkflowCommandVariant) -> Self {
         match external {
             WorkflowCommandVariant::StartTimer(cmd) => Self::StartTimer(cmd.into()),
@@ -2553,7 +2515,7 @@ impl<'a> From<WorkflowCommandVariant> for SdkWorkflowCommandVariant<'a> {
     }
 }
 
-impl<'a> Into<WorkflowCommandVariant> for SdkWorkflowCommandVariant<'a> {
+impl Into<WorkflowCommandVariant> for SdkWorkflowCommandVariant {
     fn into(self) -> WorkflowCommandVariant {
         match self {
             Self::StartTimer(cmd) => WorkflowCommandVariant::StartTimer(cmd.into()),
@@ -2641,13 +2603,13 @@ impl Into<workflow_commands::StartTimer> for SdkWorkflowCommandStartTimer {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandScheduleActivity"]
-pub struct SdkWorkflowCommandScheduleActivity<'a> {
+pub struct SdkWorkflowCommandScheduleActivity {
     pub seq: u32,
     pub activity_id: String,
     pub activity_type: String,
     pub task_queue: String,
-    pub headers: HashMap<String, SdkPayload<'a>>,
-    pub arguments: Vec<SdkPayload<'a>>,
+    pub headers: HashMap<String, SdkPayload>,
+    pub arguments: Vec<SdkPayload>,
     pub schedule_to_close_timeout: Option<SdkDuration>,
     pub schedule_to_start_timeout: Option<SdkDuration>,
     pub start_to_close_timeout: Option<SdkDuration>,
@@ -2659,7 +2621,7 @@ pub struct SdkWorkflowCommandScheduleActivity<'a> {
     pub priority: Option<SdkPriority>,
 }
 
-impl<'a> From<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleActivity<'a> {
+impl From<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleActivity {
     fn from(external: workflow_commands::ScheduleActivity) -> Self {
         Self {
             seq: external.seq,
@@ -2689,7 +2651,7 @@ impl<'a> From<workflow_commands::ScheduleActivity> for SdkWorkflowCommandSchedul
     }
 }
 
-impl<'a> Into<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleActivity<'a> {
+impl Into<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleActivity {
     fn into(self) -> workflow_commands::ScheduleActivity {
         workflow_commands::ScheduleActivity {
             seq: self.seq,
@@ -2721,12 +2683,12 @@ impl<'a> Into<workflow_commands::ScheduleActivity> for SdkWorkflowCommandSchedul
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandQueryResult"]
-pub struct SdkWorkflowCommandQueryResult<'a> {
+pub struct SdkWorkflowCommandQueryResult {
     pub query_id: String,
-    pub variant: Option<SdkWorkflowCommandQueryResultVariant<'a>>,
+    pub variant: Option<SdkWorkflowCommandQueryResultVariant>,
 }
 
-impl<'a> From<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult<'a> {
+impl From<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult {
     fn from(external: workflow_commands::QueryResult) -> Self {
         Self {
             query_id: external.query_id,
@@ -2735,7 +2697,7 @@ impl<'a> From<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult<
     }
 }
 
-impl<'a> Into<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult<'a> {
+impl Into<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult {
     fn into(self) -> workflow_commands::QueryResult {
         workflow_commands::QueryResult {
             query_id: self.query_id,
@@ -2782,12 +2744,12 @@ impl Into<workflow_commands::CancelTimer> for SdkWorkflowCommandCancelTimer {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandCompleteWorkflowExecution"]
-pub struct SdkWorkflowCommandCompleteWorkflowExecution<'a> {
-    pub result: Option<SdkPayload<'a>>,
+pub struct SdkWorkflowCommandCompleteWorkflowExecution {
+    pub result: Option<SdkPayload>,
 }
 
-impl<'a> From<workflow_commands::CompleteWorkflowExecution>
-    for SdkWorkflowCommandCompleteWorkflowExecution<'a>
+impl From<workflow_commands::CompleteWorkflowExecution>
+    for SdkWorkflowCommandCompleteWorkflowExecution
 {
     fn from(external: workflow_commands::CompleteWorkflowExecution) -> Self {
         Self {
@@ -2796,8 +2758,8 @@ impl<'a> From<workflow_commands::CompleteWorkflowExecution>
     }
 }
 
-impl<'a> Into<workflow_commands::CompleteWorkflowExecution>
-    for SdkWorkflowCommandCompleteWorkflowExecution<'a>
+impl Into<workflow_commands::CompleteWorkflowExecution>
+    for SdkWorkflowCommandCompleteWorkflowExecution
 {
     fn into(self) -> workflow_commands::CompleteWorkflowExecution {
         workflow_commands::CompleteWorkflowExecution {
@@ -2808,13 +2770,11 @@ impl<'a> Into<workflow_commands::CompleteWorkflowExecution>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandFailWorkflowExecution"]
-pub struct SdkWorkflowCommandFailWorkflowExecution<'a> {
-    pub failure: Option<SdkWorkflowFailure<'a>>,
+pub struct SdkWorkflowCommandFailWorkflowExecution {
+    pub failure: Option<SdkWorkflowFailure>,
 }
 
-impl<'a> From<workflow_commands::FailWorkflowExecution>
-    for SdkWorkflowCommandFailWorkflowExecution<'a>
-{
+impl From<workflow_commands::FailWorkflowExecution> for SdkWorkflowCommandFailWorkflowExecution {
     fn from(external: workflow_commands::FailWorkflowExecution) -> Self {
         Self {
             failure: external.failure.try_into_or_none(),
@@ -2822,9 +2782,7 @@ impl<'a> From<workflow_commands::FailWorkflowExecution>
     }
 }
 
-impl<'a> Into<workflow_commands::FailWorkflowExecution>
-    for SdkWorkflowCommandFailWorkflowExecution<'a>
-{
+impl Into<workflow_commands::FailWorkflowExecution> for SdkWorkflowCommandFailWorkflowExecution {
     fn into(self) -> workflow_commands::FailWorkflowExecution {
         workflow_commands::FailWorkflowExecution {
             failure: self.failure.try_into_or_none(),
@@ -2834,15 +2792,15 @@ impl<'a> Into<workflow_commands::FailWorkflowExecution>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandContinueAsNewWorkflowExecution"]
-pub struct SdkWorkflowCommandContinueAsNewWorkflowExecution<'a> {
+pub struct SdkWorkflowCommandContinueAsNewWorkflowExecution {
     pub workflow_type: String,
     pub task_queue: String,
-    pub arguments: Vec<SdkPayload<'a>>,
+    pub arguments: Vec<SdkPayload>,
     pub workflow_run_timeout: Option<SdkDuration>,
     pub workflow_task_timeout: Option<SdkDuration>,
-    pub memo: HashMap<String, SdkPayload<'a>>,
-    pub headers: HashMap<String, SdkPayload<'a>>,
-    pub search_attributes: Option<SdkWorkflowSearchAttributes<'a>>,
+    pub memo: HashMap<String, SdkPayload>,
+    pub headers: HashMap<String, SdkPayload>,
+    pub search_attributes: Option<SdkWorkflowSearchAttributes>,
     pub retry_policy: Option<SdkRetryPolicy>,
     pub versioning_intent: SdkVersioningIntent,
     pub initial_versioning_behavior: SdkContinueAsNewVersioningBehavior,
@@ -2877,8 +2835,8 @@ impl From<i32> for SdkContinueAsNewVersioningBehavior {
     }
 }
 
-impl<'a> From<workflow_commands::ContinueAsNewWorkflowExecution>
-    for SdkWorkflowCommandContinueAsNewWorkflowExecution<'a>
+impl From<workflow_commands::ContinueAsNewWorkflowExecution>
+    for SdkWorkflowCommandContinueAsNewWorkflowExecution
 {
     fn from(external: workflow_commands::ContinueAsNewWorkflowExecution) -> Self {
         Self {
@@ -2909,8 +2867,8 @@ impl<'a> From<workflow_commands::ContinueAsNewWorkflowExecution>
     }
 }
 
-impl<'a> Into<workflow_commands::ContinueAsNewWorkflowExecution>
-    for SdkWorkflowCommandContinueAsNewWorkflowExecution<'a>
+impl Into<workflow_commands::ContinueAsNewWorkflowExecution>
+    for SdkWorkflowCommandContinueAsNewWorkflowExecution
 {
     fn into(self) -> workflow_commands::ContinueAsNewWorkflowExecution {
         workflow_commands::ContinueAsNewWorkflowExecution {
@@ -2988,13 +2946,13 @@ impl Into<workflow_commands::SetPatchMarker> for SdkWorkflowCommandSetPatchMarke
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandStartChildWorkflowExecution"]
-pub struct SdkWorkflowCommandStartChildWorkflowExecution<'a> {
+pub struct SdkWorkflowCommandStartChildWorkflowExecution {
     pub seq: u32,
     pub namespace: String,
     pub workflow_id: String,
     pub workflow_type: String,
     pub task_queue: String,
-    pub input: Vec<SdkPayload<'a>>,
+    pub input: Vec<SdkPayload>,
     pub workflow_execution_timeout: Option<SdkDuration>,
     pub workflow_run_timeout: Option<SdkDuration>,
     pub workflow_task_timeout: Option<SdkDuration>,
@@ -3002,16 +2960,16 @@ pub struct SdkWorkflowCommandStartChildWorkflowExecution<'a> {
     pub workflow_id_reuse_policy: SdkWorkflowIdReusePolicy,
     pub retry_policy: Option<SdkRetryPolicy>,
     pub cron_schedule: String,
-    pub headers: HashMap<String, SdkPayload<'a>>,
-    pub memo: HashMap<String, SdkPayload<'a>>,
-    pub search_attributes: Option<SdkWorkflowSearchAttributes<'a>>,
+    pub headers: HashMap<String, SdkPayload>,
+    pub memo: HashMap<String, SdkPayload>,
+    pub search_attributes: Option<SdkWorkflowSearchAttributes>,
     pub cancellation_type: SdkChildWorkflowCancellationType,
     pub versioning_intent: SdkVersioningIntent,
     pub priority: Option<SdkPriority>,
 }
 
-impl<'a> From<workflow_commands::StartChildWorkflowExecution>
-    for SdkWorkflowCommandStartChildWorkflowExecution<'a>
+impl From<workflow_commands::StartChildWorkflowExecution>
+    for SdkWorkflowCommandStartChildWorkflowExecution
 {
     fn from(external: workflow_commands::StartChildWorkflowExecution) -> Self {
         Self {
@@ -3046,8 +3004,8 @@ impl<'a> From<workflow_commands::StartChildWorkflowExecution>
     }
 }
 
-impl<'a> Into<workflow_commands::StartChildWorkflowExecution>
-    for SdkWorkflowCommandStartChildWorkflowExecution<'a>
+impl Into<workflow_commands::StartChildWorkflowExecution>
+    for SdkWorkflowCommandStartChildWorkflowExecution
 {
     fn into(self) -> workflow_commands::StartChildWorkflowExecution {
         workflow_commands::StartChildWorkflowExecution {
@@ -3298,16 +3256,16 @@ impl Into<workflow_commands::RequestCancelExternalWorkflowExecution>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandSignalExternalWorkflowExecution"]
-pub struct SdkWorkflowCommandSignalExternalWorkflowExecution<'a> {
+pub struct SdkWorkflowCommandSignalExternalWorkflowExecution {
     pub seq: u32,
     pub signal_name: String,
-    pub args: Vec<SdkPayload<'a>>,
-    pub headers: HashMap<String, SdkPayload<'a>>,
+    pub args: Vec<SdkPayload>,
+    pub headers: HashMap<String, SdkPayload>,
     pub target: Option<SdkWorkflowCommandSignalExternalExecutionTarget>,
 }
 
-impl<'a> From<workflow_commands::SignalExternalWorkflowExecution>
-    for SdkWorkflowCommandSignalExternalWorkflowExecution<'a>
+impl From<workflow_commands::SignalExternalWorkflowExecution>
+    for SdkWorkflowCommandSignalExternalWorkflowExecution
 {
     fn from(external: workflow_commands::SignalExternalWorkflowExecution) -> Self {
         Self {
@@ -3324,8 +3282,8 @@ impl<'a> From<workflow_commands::SignalExternalWorkflowExecution>
     }
 }
 
-impl<'a> Into<workflow_commands::SignalExternalWorkflowExecution>
-    for SdkWorkflowCommandSignalExternalWorkflowExecution<'a>
+impl Into<workflow_commands::SignalExternalWorkflowExecution>
+    for SdkWorkflowCommandSignalExternalWorkflowExecution
 {
     fn into(self) -> workflow_commands::SignalExternalWorkflowExecution {
         workflow_commands::SignalExternalWorkflowExecution {
@@ -3362,14 +3320,14 @@ impl Into<workflow_commands::CancelSignalWorkflow> for SdkWorkflowCommandCancelS
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandScheduleLocalActivity"]
-pub struct SdkWorkflowCommandScheduleLocalActivity<'a> {
+pub struct SdkWorkflowCommandScheduleLocalActivity {
     pub seq: u32,
     pub activity_id: String,
     pub activity_type: String,
     pub attempt: u32,
     pub original_schedule_time: Option<SdkTimestamp>,
-    pub headers: HashMap<String, SdkPayload<'a>>,
-    pub arguments: Vec<SdkPayload<'a>>,
+    pub headers: HashMap<String, SdkPayload>,
+    pub arguments: Vec<SdkPayload>,
     pub schedule_to_close_timeout: Option<SdkDuration>,
     pub schedule_to_start_timeout: Option<SdkDuration>,
     pub start_to_close_timeout: Option<SdkDuration>,
@@ -3407,9 +3365,7 @@ impl From<i32> for SdkActivityCancellationType {
     }
 }
 
-impl<'a> From<workflow_commands::ScheduleLocalActivity>
-    for SdkWorkflowCommandScheduleLocalActivity<'a>
-{
+impl From<workflow_commands::ScheduleLocalActivity> for SdkWorkflowCommandScheduleLocalActivity {
     fn from(external: workflow_commands::ScheduleLocalActivity) -> Self {
         Self {
             seq: external.seq,
@@ -3433,9 +3389,7 @@ impl<'a> From<workflow_commands::ScheduleLocalActivity>
     }
 }
 
-impl<'a> Into<workflow_commands::ScheduleLocalActivity>
-    for SdkWorkflowCommandScheduleLocalActivity<'a>
-{
+impl Into<workflow_commands::ScheduleLocalActivity> for SdkWorkflowCommandScheduleLocalActivity {
     fn into(self) -> workflow_commands::ScheduleLocalActivity {
         workflow_commands::ScheduleLocalActivity {
             seq: self.seq,
@@ -3483,12 +3437,12 @@ impl Into<workflow_commands::RequestCancelLocalActivity>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandUpsertWorkflowSearchAttributes"]
-pub struct SdkWorkflowCommandUpsertWorkflowSearchAttributes<'a> {
-    pub search_attributes: Option<SdkWorkflowSearchAttributes<'a>>,
+pub struct SdkWorkflowCommandUpsertWorkflowSearchAttributes {
+    pub search_attributes: Option<SdkWorkflowSearchAttributes>,
 }
 
-impl<'a> From<workflow_commands::UpsertWorkflowSearchAttributes>
-    for SdkWorkflowCommandUpsertWorkflowSearchAttributes<'a>
+impl From<workflow_commands::UpsertWorkflowSearchAttributes>
+    for SdkWorkflowCommandUpsertWorkflowSearchAttributes
 {
     fn from(external: workflow_commands::UpsertWorkflowSearchAttributes) -> Self {
         Self {
@@ -3497,8 +3451,8 @@ impl<'a> From<workflow_commands::UpsertWorkflowSearchAttributes>
     }
 }
 
-impl<'a> Into<workflow_commands::UpsertWorkflowSearchAttributes>
-    for SdkWorkflowCommandUpsertWorkflowSearchAttributes<'a>
+impl Into<workflow_commands::UpsertWorkflowSearchAttributes>
+    for SdkWorkflowCommandUpsertWorkflowSearchAttributes
 {
     fn into(self) -> workflow_commands::UpsertWorkflowSearchAttributes {
         workflow_commands::UpsertWorkflowSearchAttributes {
@@ -3509,12 +3463,12 @@ impl<'a> Into<workflow_commands::UpsertWorkflowSearchAttributes>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandModifyWorkflowProperties"]
-pub struct SdkWorkflowCommandModifyWorkflowProperties<'a> {
-    pub upserted_memo: Option<SdkWorkflowMemo<'a>>,
+pub struct SdkWorkflowCommandModifyWorkflowProperties {
+    pub upserted_memo: Option<SdkWorkflowMemo>,
 }
 
-impl<'a> From<workflow_commands::ModifyWorkflowProperties>
-    for SdkWorkflowCommandModifyWorkflowProperties<'a>
+impl From<workflow_commands::ModifyWorkflowProperties>
+    for SdkWorkflowCommandModifyWorkflowProperties
 {
     fn from(external: workflow_commands::ModifyWorkflowProperties) -> Self {
         Self {
@@ -3523,8 +3477,8 @@ impl<'a> From<workflow_commands::ModifyWorkflowProperties>
     }
 }
 
-impl<'a> Into<workflow_commands::ModifyWorkflowProperties>
-    for SdkWorkflowCommandModifyWorkflowProperties<'a>
+impl Into<workflow_commands::ModifyWorkflowProperties>
+    for SdkWorkflowCommandModifyWorkflowProperties
 {
     fn into(self) -> workflow_commands::ModifyWorkflowProperties {
         workflow_commands::ModifyWorkflowProperties {
@@ -3535,12 +3489,12 @@ impl<'a> Into<workflow_commands::ModifyWorkflowProperties>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandUpdateResponse"]
-pub struct SdkWorkflowCommandUpdateResponse<'a> {
+pub struct SdkWorkflowCommandUpdateResponse {
     pub protocol_instance_id: String,
-    pub response: Option<SdkWorkflowCommandUpdateResponseStatus<'a>>,
+    pub response: Option<SdkWorkflowCommandUpdateResponseStatus>,
 }
 
-impl<'a> From<workflow_commands::UpdateResponse> for SdkWorkflowCommandUpdateResponse<'a> {
+impl From<workflow_commands::UpdateResponse> for SdkWorkflowCommandUpdateResponse {
     fn from(external: workflow_commands::UpdateResponse) -> Self {
         Self {
             protocol_instance_id: external.protocol_instance_id,
@@ -3549,7 +3503,7 @@ impl<'a> From<workflow_commands::UpdateResponse> for SdkWorkflowCommandUpdateRes
     }
 }
 
-impl<'a> Into<workflow_commands::UpdateResponse> for SdkWorkflowCommandUpdateResponse<'a> {
+impl Into<workflow_commands::UpdateResponse> for SdkWorkflowCommandUpdateResponse {
     fn into(self) -> workflow_commands::UpdateResponse {
         workflow_commands::UpdateResponse {
             protocol_instance_id: self.protocol_instance_id,
@@ -3559,15 +3513,13 @@ impl<'a> Into<workflow_commands::UpdateResponse> for SdkWorkflowCommandUpdateRes
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowCommandUpdateResponseStatus<'a> {
+pub enum SdkWorkflowCommandUpdateResponseStatus {
     Accepted(()),
-    Rejected(SdkWorkflowFailure<'a>),
-    Completed(SdkPayload<'a>),
+    Rejected(SdkWorkflowFailure),
+    Completed(SdkPayload),
 }
 
-impl<'a> From<workflow_commands::update_response::Response>
-    for SdkWorkflowCommandUpdateResponseStatus<'a>
-{
+impl From<workflow_commands::update_response::Response> for SdkWorkflowCommandUpdateResponseStatus {
     fn from(external: workflow_commands::update_response::Response) -> Self {
         match external {
             workflow_commands::update_response::Response::Accepted(()) => Self::Accepted(()),
@@ -3581,9 +3533,7 @@ impl<'a> From<workflow_commands::update_response::Response>
     }
 }
 
-impl<'a> Into<workflow_commands::update_response::Response>
-    for SdkWorkflowCommandUpdateResponseStatus<'a>
-{
+impl Into<workflow_commands::update_response::Response> for SdkWorkflowCommandUpdateResponseStatus {
     fn into(self) -> workflow_commands::update_response::Response {
         match self {
             Self::Accepted(()) => workflow_commands::update_response::Response::Accepted(()),
@@ -3599,12 +3549,12 @@ impl<'a> Into<workflow_commands::update_response::Response>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandScheduleNexusOperation"]
-pub struct SdkWorkflowCommandScheduleNexusOperation<'a> {
+pub struct SdkWorkflowCommandScheduleNexusOperation {
     pub seq: u32,
     pub endpoint: String,
     pub service: String,
     pub operation: String,
-    pub input: Option<SdkPayload<'a>>,
+    pub input: Option<SdkPayload>,
     pub schedule_to_close_timeout: Option<SdkDuration>,
     pub nexus_header: HashMap<String, String>,
     pub cancellation_type: SdkNexusOperationCancellationType,
@@ -3612,9 +3562,7 @@ pub struct SdkWorkflowCommandScheduleNexusOperation<'a> {
     pub start_to_close_timeout: Option<SdkDuration>,
 }
 
-impl<'a> From<workflow_commands::ScheduleNexusOperation>
-    for SdkWorkflowCommandScheduleNexusOperation<'a>
-{
+impl From<workflow_commands::ScheduleNexusOperation> for SdkWorkflowCommandScheduleNexusOperation {
     fn from(external: workflow_commands::ScheduleNexusOperation) -> Self {
         Self {
             seq: external.seq,
@@ -3631,9 +3579,7 @@ impl<'a> From<workflow_commands::ScheduleNexusOperation>
     }
 }
 
-impl<'a> Into<workflow_commands::ScheduleNexusOperation>
-    for SdkWorkflowCommandScheduleNexusOperation<'a>
-{
+impl Into<workflow_commands::ScheduleNexusOperation> for SdkWorkflowCommandScheduleNexusOperation {
     fn into(self) -> workflow_commands::ScheduleNexusOperation {
         workflow_commands::ScheduleNexusOperation {
             seq: self.seq,
@@ -3743,14 +3689,12 @@ impl Into<workflow_commands::signal_external_workflow_execution::Target>
 }
 
 #[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowCommandQueryResultVariant<'a> {
-    Succeeded(SdkWorkflowCommandQuerySuccess<'a>),
-    Failed(SdkWorkflowFailure<'a>),
+pub enum SdkWorkflowCommandQueryResultVariant {
+    Succeeded(SdkWorkflowCommandQuerySuccess),
+    Failed(SdkWorkflowFailure),
 }
 
-impl<'a> From<workflow_commands::query_result::Variant>
-    for SdkWorkflowCommandQueryResultVariant<'a>
-{
+impl From<workflow_commands::query_result::Variant> for SdkWorkflowCommandQueryResultVariant {
     fn from(external: workflow_commands::query_result::Variant) -> Self {
         match external {
             workflow_commands::query_result::Variant::Succeeded(status) => {
@@ -3761,9 +3705,7 @@ impl<'a> From<workflow_commands::query_result::Variant>
     }
 }
 
-impl<'a> Into<workflow_commands::query_result::Variant>
-    for SdkWorkflowCommandQueryResultVariant<'a>
-{
+impl Into<workflow_commands::query_result::Variant> for SdkWorkflowCommandQueryResultVariant {
     fn into(self) -> workflow_commands::query_result::Variant {
         match self {
             Self::Succeeded(status) => {
@@ -3776,11 +3718,11 @@ impl<'a> Into<workflow_commands::query_result::Variant>
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowCommandQuerySuccess"]
-pub struct SdkWorkflowCommandQuerySuccess<'a> {
-    pub response: Option<SdkPayload<'a>>,
+pub struct SdkWorkflowCommandQuerySuccess {
+    pub response: Option<SdkPayload>,
 }
 
-impl<'a> From<workflow_commands::QuerySuccess> for SdkWorkflowCommandQuerySuccess<'a> {
+impl From<workflow_commands::QuerySuccess> for SdkWorkflowCommandQuerySuccess {
     fn from(external: workflow_commands::QuerySuccess) -> Self {
         Self {
             response: external.response.try_into_or_none(),
@@ -3788,7 +3730,7 @@ impl<'a> From<workflow_commands::QuerySuccess> for SdkWorkflowCommandQuerySucces
     }
 }
 
-impl<'a> Into<workflow_commands::QuerySuccess> for SdkWorkflowCommandQuerySuccess<'a> {
+impl Into<workflow_commands::QuerySuccess> for SdkWorkflowCommandQuerySuccess {
     fn into(self) -> workflow_commands::QuerySuccess {
         workflow_commands::QuerySuccess {
             response: self.response.try_into_or_none(),
@@ -3798,7 +3740,7 @@ impl<'a> Into<workflow_commands::QuerySuccess> for SdkWorkflowCommandQuerySucces
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowStartOptions"]
-pub struct SdkWorkflowStartOptions<'a> {
+pub struct SdkWorkflowStartOptions {
     pub task_queue: String,
     pub workflow_id: String,
     pub id_reuse_policy: SdkWorkflowIdReusePolicy,
@@ -3807,19 +3749,19 @@ pub struct SdkWorkflowStartOptions<'a> {
     pub run_timeout: Option<SdkDuration>,
     pub task_timeout: Option<SdkDuration>,
     pub cron_schedule: Option<String>,
-    pub search_attributes: Option<HashMap<String, SdkPayload<'a>>>,
+    pub search_attributes: Option<HashMap<String, SdkPayload>>,
     pub enable_eager_workflow_start: bool,
     pub retry_policy: Option<SdkRetryPolicy>,
-    pub start_signal: Option<SdkWorkflowStartSignal<'a>>,
+    pub start_signal: Option<SdkWorkflowStartSignal>,
     pub links: Vec<SdkLink>,
     pub completion_callbacks: Vec<SdkCallback>,
     pub priority: SdkClientPriority,
-    pub header: Option<SdkHeader<'a>>,
+    pub header: Option<SdkHeader>,
     pub static_summary: Option<String>,
     pub static_details: Option<String>,
 }
 
-impl<'a> From<WorkflowStartOptions> for SdkWorkflowStartOptions<'a> {
+impl From<WorkflowStartOptions> for SdkWorkflowStartOptions {
     fn from(external: WorkflowStartOptions) -> Self {
         Self {
             task_queue: external.task_queue,
@@ -3860,7 +3802,7 @@ impl<'a> From<WorkflowStartOptions> for SdkWorkflowStartOptions<'a> {
     }
 }
 
-impl<'a> Into<WorkflowStartOptions> for SdkWorkflowStartOptions<'a> {
+impl Into<WorkflowStartOptions> for SdkWorkflowStartOptions {
     fn into(self) -> WorkflowStartOptions {
         WorkflowStartOptions::new(self.task_queue, self.workflow_id)
             .id_reuse_policy(self.id_reuse_policy.into())
@@ -3928,13 +3870,13 @@ impl Into<WorkflowIdConflictPolicy> for SdkWorkflowIdConflictPolicy {
 
 #[derive(NifStruct, Clone)]
 #[module = "Temporal.CoreSdk.Data.WorkflowStartSignal"]
-pub struct SdkWorkflowStartSignal<'a> {
+pub struct SdkWorkflowStartSignal {
     pub signal_name: String,
-    pub input: Option<SdkPayloads<'a>>,
-    pub header: Option<SdkHeader<'a>>,
+    pub input: Option<SdkPayloads>,
+    pub header: Option<SdkHeader>,
 }
 
-impl<'a> From<WorkflowStartSignal> for SdkWorkflowStartSignal<'a> {
+impl From<WorkflowStartSignal> for SdkWorkflowStartSignal {
     fn from(external: WorkflowStartSignal) -> Self {
         Self {
             signal_name: external.signal_name,
@@ -3944,7 +3886,7 @@ impl<'a> From<WorkflowStartSignal> for SdkWorkflowStartSignal<'a> {
     }
 }
 
-impl<'a> Into<WorkflowStartSignal> for SdkWorkflowStartSignal<'a> {
+impl Into<WorkflowStartSignal> for SdkWorkflowStartSignal {
     fn into(self) -> WorkflowStartSignal {
         WorkflowStartSignal::new(self.signal_name)
             .maybe_input(self.input.try_into_or_none())
@@ -3959,123 +3901,126 @@ pub struct SdkWorkflowDefinition {
     pub name: String,
 }
 
-#[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.ClientPayloads"]
-pub struct SdkClientPayloads<'a> {
-    pub payloads: Vec<SdkClientPayload<'a>>,
-}
-
-impl<'a> Into<Vec<Payload>> for SdkClientPayloads<'a> {
-    fn into(self) -> Vec<Payload> {
-        let mut payloads: Vec<Payload> = vec![];
-        for payload in self.payloads {
-            payloads.push(payload.into());
-        }
-
-        payloads
+impl WorkflowDefinition for SdkWorkflowDefinition {
+    type Input = SdkWorkflowArguments;
+    type Output = SdkWorkflowArguments;
+    fn name(&self) -> &str {
+        self.name.as_str()
     }
 }
 
-impl<'a> TemporalSerializable for SdkClientPayloads<'a> {
+impl HasWorkflowDefinition for SdkWorkflowDefinition {
+    type Run = Self;
+}
+
+#[derive(NifStruct)]
+#[module = "Temporal.CoreSdk.Data.WorkflowArguments"]
+pub struct SdkWorkflowArguments {
+    pub args: Vec<SdkWorkflowInput>,
+}
+
+impl TemporalDeserializable for SdkWorkflowArguments {
+    fn from_payloads(
+        ctx: &SerializationContext<'_>,
+        payloads: Vec<Payload>,
+    ) -> Result<Self, PayloadConversionError> {
+        let mut args = vec![];
+        for (_idx, payload) in payloads.iter().enumerate() {
+            match SdkWorkflowInput::from_payload(ctx, payload.clone()) {
+                Ok(input) => args.push(input),
+                Err(err) => return Err(err),
+            };
+        }
+
+        Ok(Self { args: args })
+    }
+}
+
+impl TemporalSerializable for SdkWorkflowArguments {
     fn to_payloads(
         &self,
         ctx: &SerializationContext<'_>,
     ) -> Result<Vec<Payload>, PayloadConversionError> {
         let mut payloads = vec![];
-        for (_idx, client_payload) in self.payloads.iter().enumerate() {
-            payloads.push(client_payload.to_payload(ctx)?);
+        for (_idx, arg) in self.args.iter().enumerate() {
+            match ctx.converter.to_payload(ctx, arg) {
+                Ok(payload) => payloads.push(payload),
+                Err(err) => return Err(err),
+            };
         }
 
         Ok(payloads)
     }
 }
 
-pub enum SdkServerPayload {
-    JSON(OwnedBinary),
-    ErlangExternalTerm(OwnedBinary),
-    Bytes(OwnedBinary),
+#[derive(NifTaggedEnum, Clone)]
+pub enum SdkWorkflowInput {
+    Integer(i64),
+    Float(f64),
+    String(String),
+    JSON(String),
+    ErlangExternalTerm(Vec<u8>),
+    Bytes(Vec<u8>),
 }
 
-impl From<Payload> for SdkServerPayload {
-    fn from(payload: Payload) -> Self {
-        let mut binary_data =
-            OwnedBinary::new(payload.data.len()).expect("Binary allocation failed");
-        binary_data.as_mut_slice().copy_from_slice(&payload.data);
-
-        match payload.metadata.get("encoding") {
-            Some(encoding) => {
-                let encoding_str =
-                    std::str::from_utf8(encoding).expect("Error unwrapping encoding");
-
-                match encoding_str {
-                    "application/x-erlang-term" => Self::ErlangExternalTerm(binary_data),
-                    "json/plain" => Self::JSON(binary_data),
-                    "bytes/plain" => Self::Bytes(binary_data),
-                    _ => Self::Bytes(binary_data),
-                }
-            }
-            None => Self::Bytes(binary_data),
-        }
-    }
-}
-
-impl Decoder<'_> for SdkServerPayload {
-    fn decode(term: Term<'_>) -> NifResult<Self> {
-        let (data_type, data): (Atom, Term) = term.decode()?;
-
-        if data_type == atoms::json() && data.is_binary() {
-            Ok(Self::JSON(data.to_binary()))
-        } else if data_type == atoms::erlang_external_term() && data.is_binary() {
-            Ok(Self::ErlangExternalTerm(data.to_binary()))
-        } else if data_type == atoms::bytes() && data.is_binary() {
-            Ok(Self::Bytes(data.to_binary()))
-        } else {
-            Err(rustler::error::Error::BadArg)
-        }
-    }
-}
-
-impl Encoder for SdkServerPayload {
-    fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
-        match self {
-            Self::Bytes(term) => make_tuple(env, &[atoms::bytes().encode(env), term.encode(env)]),
-            Self::ErlangExternalTerm(term) => make_tuple(
-                env,
-                &[atoms::erlang_external_term().encode(env), term.encode(env)],
-            ),
-            Self::JSON(term) => make_tuple(env, &[atoms::json().encode(env), term.encode(env)]),
-        }
-    }
-}
-
-impl TemporalDeserializable for SdkServerPayload {
+impl TemporalDeserializable for SdkWorkflowInput {
     fn from_payload(
         _ctx: &SerializationContext<'_>,
         payload: Payload,
     ) -> Result<Self, PayloadConversionError> {
-        Ok(payload.into())
+        let encoding = match payload.metadata.get("encoding") {
+            Some(encoding) => {
+                String::from_utf8(encoding.clone()).expect("Encoding of payload was not UTF8")
+            }
+            None => String::from("bytes/plain"),
+        };
+
+        match encoding.as_str() {
+            "application/x-erlang-term" => Ok(Self::ErlangExternalTerm(payload.data)),
+            "json/plain" => {
+                let json_str = String::from_utf8(payload.data).expect("JSON payload was not UTF8");
+                let v: serde_json::Value =
+                    serde_json::from_str(json_str.as_str()).expect("Could not decode JSON");
+
+                if let Some(float_val) = v.as_f64() {
+                    Ok(Self::Float(float_val))
+                } else if let Some(int_val) = v.as_i64() {
+                    Ok(Self::Integer(int_val))
+                } else if let Some(str_val) = v.as_str() {
+                    Ok(Self::String(String::from(str_val)))
+                } else {
+                    Ok(Self::JSON(json_str))
+                }
+            }
+
+            "bytes/plain" => Ok(Self::Bytes(payload.data)),
+
+            _ => Err(PayloadConversionError::WrongEncoding),
+        }
     }
 }
 
-impl TemporalSerializable for SdkServerPayload {
+impl TemporalSerializable for SdkWorkflowInput {
     fn to_payload(
         &self,
-        _ctx: &SerializationContext<'_>,
+        ctx: &SerializationContext<'_>,
     ) -> Result<Payload, PayloadConversionError> {
         match self {
-            Self::JSON(val) => {
+            SdkWorkflowInput::Integer(val) => ctx.converter.to_payload(ctx, val),
+            SdkWorkflowInput::Float(val) => ctx.converter.to_payload(ctx, val),
+            SdkWorkflowInput::String(val) => ctx.converter.to_payload(ctx, val),
+            SdkWorkflowInput::JSON(val) => {
                 let mut metadata = HashMap::new();
                 metadata.insert("encoding".to_owned(), "json/plain".as_bytes().to_vec());
 
                 Ok(SdkPayload {
                     metadata,
-                    data: Some(val.as_slice().to_vec()),
-                    data_binary: None,
+                    data: val.as_bytes().to_vec(),
                     external_payloads: Vec::new(),
                 }
                 .into())
             }
-            Self::ErlangExternalTerm(val) => {
+            SdkWorkflowInput::ErlangExternalTerm(val) => {
                 let mut metadata = HashMap::new();
                 metadata.insert(
                     "encoding".to_owned(),
@@ -4084,81 +4029,13 @@ impl TemporalSerializable for SdkServerPayload {
 
                 Ok(SdkPayload {
                     metadata,
-                    data: Some(val.as_slice().to_vec()),
-                    data_binary: None,
+                    data: val.clone(),
                     external_payloads: Vec::new(),
                 }
                 .into())
             }
-            Self::Bytes(val) => {
-                let mut metadata = HashMap::new();
-                metadata.insert("encoding".to_owned(), "binary/plain".as_bytes().to_vec());
-
-                Ok(SdkPayload {
-                    metadata,
-                    data: Some(val.as_slice().to_vec()),
-                    data_binary: None,
-                    external_payloads: Vec::new(),
-                }
-                .into())
-            }
+            SdkWorkflowInput::Bytes(val) => ctx.converter.to_payload(ctx, val),
         }
-    }
-}
-
-#[derive(NifTaggedEnum, Clone)]
-pub enum SdkClientPayload<'a> {
-    JSON(Binary<'a>),
-    ErlangExternalTerm(Binary<'a>),
-    Bytes(Binary<'a>),
-}
-
-impl<'a> Into<Payload> for SdkClientPayload<'a> {
-    fn into(self) -> Payload {
-        match self {
-            Self::JSON(val) => {
-                let mut metadata = HashMap::new();
-                metadata.insert("encoding".to_owned(), "json/plain".as_bytes().to_vec());
-
-                Payload {
-                    metadata,
-                    data: val.as_slice().to_vec(),
-                    external_payloads: vec![],
-                }
-            }
-            Self::ErlangExternalTerm(val) => {
-                let mut metadata = HashMap::new();
-                metadata.insert(
-                    "encoding".to_owned(),
-                    "application/x-erlang-term".as_bytes().to_vec(),
-                );
-
-                Payload {
-                    metadata,
-                    data: val.as_slice().to_vec(),
-                    external_payloads: vec![],
-                }
-            }
-            Self::Bytes(val) => {
-                let mut metadata = HashMap::new();
-                metadata.insert("encoding".to_owned(), "binary/plain".as_bytes().to_vec());
-
-                Payload {
-                    metadata,
-                    data: val.as_slice().to_vec(),
-                    external_payloads: vec![],
-                }
-            }
-        }
-    }
-}
-
-impl<'a> TemporalSerializable for SdkClientPayload<'a> {
-    fn to_payload(
-        &self,
-        _ctx: &SerializationContext<'_>,
-    ) -> Result<Payload, PayloadConversionError> {
-        Ok(self.clone().into())
     }
 }
 
