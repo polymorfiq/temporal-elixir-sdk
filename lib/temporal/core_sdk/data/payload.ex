@@ -72,7 +72,7 @@ defmodule Temporal.CoreSdk.Data.Payload do
 
   def from_workflow_input({:erlang_external_term, val}),
     do: %__MODULE__{
-      data: :binary.bin_to_list(val),
+      data: val,
       metadata: %{"encoding" => String.to_charlist("application/x-erlang-term")}
     }
 
