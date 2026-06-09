@@ -56,6 +56,8 @@ defmodule Temporal.Workflow.WorkflowExecutor do
         Enum.map(initialize.arguments, fn
           %{metadata: %{"encoding" => ~c"json/plain"}, data: data} ->
             Jason.decode!(to_string(data))
+          %{metadata: %{"encoding" => ~c"application/x-erlang-term"}, data: data} ->
+            :erlang.binary_to_term(:binary.list_to_bin(data))
         end)
 
       case apply(mod, :execute, [ctx] ++ inputs) do
