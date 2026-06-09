@@ -3959,6 +3959,7 @@ pub enum SdkWorkflowInput {
     Float(f64),
     String(String),
     JSON(String),
+    ErlangExternalTerm(Vec<u8>),
     Bytes(Vec<u8>),
 }
 
@@ -3974,7 +3975,9 @@ impl TemporalDeserializable for SdkWorkflowInput {
             None => String::from("bytes/plain"),
         };
 
+        println!("ENCODING SEEN: {}", encoding);
         match encoding.as_str() {
+            "application/x-erlang-term" => Ok(Self::ErlangExternalTerm(payload.data)),
             "json/plain" => {
                 let json_str = String::from_utf8(payload.data).expect("JSON payload was not UTF8");
                 let v: serde_json::Value =
@@ -4014,6 +4017,20 @@ impl TemporalSerializable for SdkWorkflowInput {
                 Ok(SdkPayload {
                     metadata,
                     data: val.as_bytes().to_vec(),
+                    external_payloads: Vec::new(),
+                }
+                .into())
+            }
+            SdkWorkflowInput::ErlangExternalTerm(val) => {
+                let mut metadata = HashMap::new();
+                metadata.insert(
+                    "encoding".to_owned(),
+                    "application/x-erlang-term".as_bytes().to_vec(),
+                );
+
+                Ok(SdkPayload {
+                    metadata,
+                    data: val.clone(),
                     external_payloads: Vec::new(),
                 }
                 .into())

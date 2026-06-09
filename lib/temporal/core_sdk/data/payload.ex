@@ -39,6 +39,9 @@ defmodule Temporal.CoreSdk.Data.Payload do
   def to_value(%{metadata: %{"encoding" => ~c"json/plain"}} = payload),
     do: Jason.decode!(to_string(payload.data))
 
+  def to_value(%{metadata: %{"encoding" => ~c"application/x-erlang-term"}} = payload),
+    do: :erlang.binary_to_term(:binary.list_to_bin(payload.data))
+
   def to_value(payload),
     do: :binary.list_to_bin(payload.data)
 
@@ -65,6 +68,12 @@ defmodule Temporal.CoreSdk.Data.Payload do
     do: %__MODULE__{
       data: String.to_charlist(val),
       metadata: %{"encoding" => String.to_charlist("json/plain")}
+    }
+
+  def from_workflow_input({:erlang_external_term, val}),
+    do: %__MODULE__{
+      data: :binary.bin_to_list(val),
+      metadata: %{"encoding" => String.to_charlist("application/x-erlang-term")}
     }
 
   def from_workflow_input({:bytes, bytes}), do: %__MODULE__{data: bytes}
