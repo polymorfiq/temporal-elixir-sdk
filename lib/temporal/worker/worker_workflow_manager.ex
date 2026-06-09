@@ -5,6 +5,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   alias Temporal.Worker
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Supervisor.WorkerSupervisor
+  alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
 
   require Logger
@@ -35,8 +36,27 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
      )}
   end
 
-  def process_activation(pid, activation),
-    do: GenServer.call(pid, {:process_activation, activation}, :infinity)
+  def process_activation(pid, activation) do
+    lock_token =
+      with {:ok, token} <- WorkflowFlowController.acquire_progress_lock(activation.run_id) do
+        token
+      else
+        {:error, :flow_control_not_running} ->
+          nil
+
+        {:error, err} ->
+          Logger.warning(
+            "Could not receive lock token for #{activation.run_id} - #{inspect(err)}"
+          )
+
+          nil
+      end
+
+    resp = GenServer.call(pid, {:process_activation, activation}, :infinity)
+    if lock_token, do: WorkflowFlowController.release_progress_lock(activation.run_id, lock_token)
+
+    resp
+  end
 
   def register(pid, name, module), do: GenServer.cast(pid, {:register, name, module})
 
