@@ -2,6 +2,7 @@ defmodule Temporal.WorkflowTest do
   use ExUnit.Case
   doctest Temporal.Workflow
   alias Temporal.Client
+  alias Temporal.Runtime
   alias Temporal.TaskQueue
   alias Temporal.Workflow
   alias Temporal.Worker
@@ -150,8 +151,10 @@ defmodule Temporal.WorkflowTest do
   end
 
   defp setup_create_task_queue(ctx) do
-    {:ok, client} = Client.new("localhost:7233")
+    {:ok, runtime} = Runtime.with_id(System.unique_integer())
+    {:ok, client} = Client.new("localhost:7233", runtime: runtime)
     on_exit(fn -> Client.stop(client) end)
+    on_exit(fn -> Runtime.stop(runtime) end)
 
     queue = create_basic_queue(client, "workflow_test")
 

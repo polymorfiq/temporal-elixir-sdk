@@ -15,7 +15,7 @@ defmodule Temporal.Runtime do
 
   @spec with_id(CoreRuntime.runtime_id(), CoreRuntime.runtime_opts()) ::
           {:ok, t()} | {:error, term()}
-  def with_id(runtime_id, opts) do
+  def with_id(runtime_id, opts \\ []) do
     reg_name = via_registry({:runtime, runtime_id})
 
     if _pid = GenServer.whereis(reg_name) do
@@ -39,6 +39,14 @@ defmodule Temporal.Runtime do
         {:error, err} ->
           {:error, err}
       end
+    end
+  end
+
+  def stop(runtime) do
+    if sup = GenServer.whereis({:via, Registry, {RuntimeRegistry, runtime.id}}) do
+      Supervisor.stop(sup, :shutdown, :infinity)
+    else
+      {:error, :runtime_already_stopped}
     end
   end
 

@@ -46,9 +46,9 @@ defmodule Temporal.Client do
     end
   end
 
-  def stop(client) do
+  def stop(client, opts \\ []) do
     if sup = GenServer.whereis({:via, Registry, {ClientRegistry, {:client, client.identity}}}) do
-      Supervisor.stop(sup, :shutdown, :infinity)
+      Supervisor.stop(sup, :shutdown, Keyword.get(opts, :timeout, :infinity))
     else
       {:error, :client_already_stopped}
     end

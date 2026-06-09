@@ -3,6 +3,7 @@ defmodule Temporal.ClientTest do
   doctest Temporal.Client
 
   alias Temporal.Client
+  alias Temporal.Runtime
   alias Temporal.Workflows.WorkflowHandle
 
   test "initializes with only target host" do
@@ -49,8 +50,10 @@ defmodule Temporal.ClientTest do
   end
 
   defp setup_create_client(ctx) do
-    {:ok, client} = Client.new("localhost:7233")
+    {:ok, runtime} = Runtime.with_id(System.unique_integer())
+    {:ok, client} = Client.new("localhost:7233", runtime: runtime)
     on_exit(fn -> Client.stop(client) end)
+    on_exit(fn -> Runtime.stop(runtime) end)
 
     Map.put(ctx, :client, client)
   end
