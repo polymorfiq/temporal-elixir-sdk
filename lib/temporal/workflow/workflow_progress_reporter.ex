@@ -2,7 +2,6 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   use GenServer
 
   alias Temporal.CoreSdk
-  alias Temporal.CoreSdk.Data.ActivityResolutionStatus
   alias Temporal.CoreSdk.Data.Payload
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletion
   alias Temporal.CoreSdk.Data.WorkflowActivationCompletionSuccessStatus, as: SuccessStatus
@@ -68,17 +67,15 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         :infinity
       )
 
-  @spec resolve_activity(
-          pid(),
-          activity_seq_num :: integer(),
-          status :: ActivityResolutionStatus.t()
-        ) :: :ok | {:error, term()}
-  def resolve_activity(reporter, seq_num, status),
-    do: GenServer.call(reporter, {:resolve_activity, seq_num, status}, :infinity)
+  def process_activation(activation) do
+    with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(activation.run_id) do
+      GenServer.call(reporter, {:process_activation, activation}, :infinity)
+    end
+  end
 
   def report_completed_success(reporter, result) do
     output = WorkflowInput.with_opts!(result) |> Payload.from_workflow_input()
-    GenServer.call(reporter, {:report_completed_success, output}, :infinity)
+    GenServer.cast(reporter, {:report_completed_success, output})
   end
 
   def send_heartbeat_for_id(run_id) do
@@ -114,70 +111,177 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
      progress_state(state, command_batch: command_batch, next_seq: next_seq + 1)}
   end
 
-  def handle_call({:resolve_activity, seq_num, result}, _from, state) do
+  def handle_call({:process_activation, activation}, _from, state) do
+    activity_resolve_jobs =
+      activation.jobs
+      |> Enum.filter(&match?(%{variant: {:resolve_activity, _}}, &1))
+      |> Enum.map(&elem(&1.variant, 1))
+
     sequences = progress_state(state, :sequences)
-    run_id = progress_state(state, :run_id)
 
-    output =
-      case result do
-        {:completed, completed} ->
-          {:ok, completed.result |> Payload.to_value()}
+    will_unlock_anything? =
+      WorkflowFlowController.will_resolutions_unlock?(
+        activation.run_id,
+        Enum.map(activity_resolve_jobs, fn job ->
+          %{activity_id: activity_id} = sequences[job.seq]
+          activity_id
+        end)
+      )
 
-        {:failed, failure} ->
-          {:error, failure.failure.message}
+    variants = Enum.map(activation.jobs, & &1.variant)
 
-        {:cancelled, failure} ->
-          {:error, {:cancelled, failure.failure.message}}
+    # These are in a specific order
+    # https://typescript.temporal.io/api/classes/proto.coresdk.workflow_activation.WorkflowActivation
+    {patch_updates, variants} =
+      Enum.split_with(variants, fn
+        {:set_patch_marker, _} -> true
+        _ -> false
+      end)
 
-        {:will_complete_async, _} ->
-          :ok
+    {update_seeds, variants} =
+      Enum.split_with(variants, fn
+        {:update_random_seed, _} -> true
+        _ -> false
+      end)
+
+    {signals_updates, variants} =
+      Enum.split_with(variants, fn
+        {:signal_workflow, _} -> true
+        {:resolve_signal_external_workflow, _} -> true
+        {:do_update, _} -> true
+        _ -> false
+      end)
+
+    {activity_resolutions, variants} =
+      Enum.split_with(variants, fn
+        {:resolve_activity, _} -> true
+        _ -> false
+      end)
+
+    {:ok, state} = resolve_activities(activity_resolutions, activation, state)
+
+    {queries, variants} =
+      Enum.split_with(variants, fn
+        {:query_workflow, _} -> true
+        _ -> false
+      end)
+
+    {evictions, variants} =
+      Enum.split_with(variants, fn
+        {:remove_from_cache, _} -> true
+        _ -> false
+      end)
+
+    everything = patch_updates ++ update_seeds ++ signals_updates ++ queries ++ evictions ++ variants
+
+    processed =
+      everything
+      |> Enum.reduce({:ok, state}, fn
+        {variant, job}, {:ok, state} ->
+          Logger.error("Received unexpected job variant (#{inspect(variant)} - #{inspect(job)}")
+          {:ok, state}
+
+        _, {:error, err} ->
+          {:error, err}
+      end)
+
+    with {:ok, new_state} <- processed do
+      if !will_unlock_anything? do
+        {:reply, :ok, new_state, {:continue, :heartbeat}}
+      else
+        {:reply, :ok, new_state}
       end
-
-    resp =
-      case sequences[seq_num] do
-        {:activity, activity_id} ->
-          with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(run_id) do
-            WorkflowFlowController.activity_task_resolved(flow_control, activity_id, output)
-          end
-
-        found ->
-          Logger.error(
-            "Expected to resolve activity (Seq: #{seq_num}) but found #{inspect(found)}"
-          )
-
-          {:error, "Expected activity but found #{inspect(found)}"}
-      end
-
-    {:reply, resp, state}
+    else
+      {:error, err} ->
+        Logger.error("Error when processing activation: #{inspect(err)}")
+    end
   end
 
-  def handle_call({:report_completed_success, output}, _from, state) do
+  def handle_cast({:report_completed_success, output}, state) do
     report_successful_completion(state,
       commands: [{:complete_workflow_execution, [result: output]}]
     )
     |> case do
       {:ok, new_state} ->
         send(self(), :stop_workflow)
-        {:reply, :ok, new_state}
+        {:noreply, new_state}
 
       {{:error, err}, _} ->
-        {:reply, {:error, err}, state}
+        Logger.error("Error reporting workflow completion - #{inspect(err)}")
+        {:noreply, state}
     end
   end
 
   def handle_cast(:heartbeat, state) do
-    if Enum.count(progress_state(state, :command_batch)) > 0 do
-      report_successful_completion(state, commands: [])
-      |> case do
-        {:ok, new_state} ->
-          {:noreply, new_state}
+    report_successful_completion(state, commands: [])
+    |> case do
+      {:ok, new_state} ->
+        {:noreply, new_state}
 
-        {{:error, err}, _} ->
-          Logger.error("Workflow heartbeat error: #{inspect(err)}")
-          {:noreply, state}
-      end
+      {{:error, err}, _} ->
+        Logger.error("Workflow heartbeat error: #{inspect(err)}")
+        {:noreply, state}
+    end
+  end
+
+  def handle_continue(:heartbeat, state) do
+    report_successful_completion(state, commands: [])
+    |> case do
+      {:ok, new_state} ->
+        {:reply, :ok, new_state}
+
+      {{:error, err}, _} ->
+        Logger.error("Workflow heartbeat error: #{inspect(err)}")
+        {:reply, {:error, err}, state}
+    end
+  end
+
+  defp resolve_activities(activities, activation, state) do
+    sequences = progress_state(state, :sequences)
+    run_id = progress_state(state, :run_id)
+
+    Enum.each(activities, fn {:resolve_activity, job} ->
+      activity = sequences[job.seq]
+
+      Logger.debug(
+        "Job: resolve_activity (#{activity.activity_type} - #{activity.activity_id}) for #{activation.run_id}"
+      )
+    end)
+
+    results =
+      Enum.map(activities, fn {:resolve_activity, job} ->
+        activity = sequences[job.seq]
+
+        output =
+          case job.result.status do
+            {:completed, completed} ->
+              {:ok, completed.result |> Payload.to_value()}
+
+            {:failed, failure} ->
+              {:error, failure.failure.message}
+
+            {:cancelled, failure} ->
+              {:error, {:cancelled, failure.failure.message}}
+
+            {:will_complete_async, _} ->
+              :ok
+          end
+
+        {activity.activity_id, output}
+      end)
+
+    with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(run_id),
+         :ok <-
+           WorkflowFlowController.activity_tasks_resolved(
+             flow_control,
+             results
+           ) do
+      Logger.warning("Resolving activity...!!!")
+      {:ok, state}
     else
-      {:noreply, state}
+      {:error, err} ->
+        Logger.error("Error resolving activities #{inspect(err)}")
+        {:error, "Error resolving activities #{inspect(err)}"}
     end
   end
 
@@ -193,7 +297,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
           sequences = progress_state(state, :sequences)
 
           progress_state(state,
-            sequences: Map.put(sequences, activity[:seq], {:activity, activity[:activity_id]})
+            sequences: Map.put(sequences, activity[:seq], Map.new(activity))
           )
 
         _, state ->
@@ -202,9 +306,29 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
 
     completion = Keyword.put(completion, :commands, commands)
 
+    resp =
+      send_successful_activation_completion(
+        progress_state(state, :run_id),
+        progress_state(state, :runtime).core,
+        progress_state(state, :worker).core,
+        completion
+      )
+
+    {resp, state}
+  end
+
+  @spec send_successful_activation_completion(
+          run_id :: String.t(),
+          runtime :: term(),
+          worker :: term(),
+          CoreSdk.Data.WorkflowActivationCompletionSuccessStatus.opts()
+        ) :: :ok | {:error, term()}
+  def send_successful_activation_completion(run_id, runtime, worker, completion) do
+    Logger.debug("Completed Activation: #{run_id}")
+
     complete_activation_msg =
       WorkflowActivationCompletion.with_opts!(
-        run_id: progress_state(state, :run_id),
+        run_id: run_id,
         status: {:successful, completion}
       )
 
@@ -213,8 +337,8 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     child =
       spawn_link(fn ->
         CoreSdk._worker_complete_workflow_activation(
-          progress_state(state, :runtime).core,
-          progress_state(state, :worker).core,
+          runtime,
+          worker,
           complete_activation_msg,
           self()
         )
@@ -222,21 +346,21 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
           :ok ->
             receive do
               {:ok, _} ->
-                send(parent, {self(), state, :ok})
+                send(parent, {self(), :ok})
 
               {:error, err} ->
-                send(parent, {self(), state, {:error, err}})
+                send(parent, {self(), {:error, err}})
                 Logger.error("Workflow Complete Activation Error - #{inspect(err)}")
             end
 
           other_resp ->
-            send(parent, {self(), state, other_resp})
+            send(parent, {self(), other_resp})
         end
       end)
 
     receive do
-      {^child, state, resp} ->
-        {resp, state}
+      {^child, resp} ->
+        resp
     end
   end
 

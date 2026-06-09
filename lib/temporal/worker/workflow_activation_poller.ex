@@ -46,9 +46,6 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     else
       {{:error, "core_shutdown"}, _} ->
         {:stop, :shutdown, state}
-
-      {{:error, error}, _} ->
-        {:stop, {:poll_error, error}, state}
     end
   end
 
@@ -65,6 +62,7 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
       spawn_link(fn ->
         Process.set_label({:long_activation_poll, worker_id})
 
+        Logger.debug("POLLING #{worker_id}...")
         case CoreSdk._worker_poll_workflow_activation(runtime_core.core, worker_core.core, self()) do
           :ok ->
             receive do
@@ -92,6 +90,7 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
           send(worker_pid, {:workflow_activation_error, err})
           {:error, err}
       end
+    Logger.debug("POLLED #{worker_id}...")
 
     {poll_resp, state}
   end

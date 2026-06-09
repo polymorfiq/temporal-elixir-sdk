@@ -41,23 +41,12 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
   end
 
   @spec stop_workflow(run_id :: String.t(), opts :: keyword()) :: :ok
-  def stop_workflow(run_id, opts \\ []) do
+  def stop_workflow(run_id, _opts \\ []) do
     sup = GenServer.whereis(process_name(run_id))
 
-    cond do
-      sup && opts[:wait] ->
-        Supervisor.stop(sup, :shutdown, :infinity)
-
-      sup ->
-        spawn(fn ->
-          Supervisor.stop(sup, :shutdown, :infinity)
-        end)
-
-        :ok
-
-      true ->
-        :ok
-    end
+    spawn(fn ->
+      Supervisor.stop(sup, :shutdown, 60_000)
+    end)
   end
 
   @spec progress_reporter_pid(run_id()) :: {:ok, term()} | {:error, term()}

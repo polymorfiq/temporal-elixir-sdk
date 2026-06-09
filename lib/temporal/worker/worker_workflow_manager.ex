@@ -5,7 +5,6 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   alias Temporal.Worker
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Supervisor.WorkerSupervisor
-  alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
 
   require Logger
@@ -37,25 +36,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   end
 
   def process_activation(pid, activation) do
-    lock_token =
-      with {:ok, token} <- WorkflowFlowController.acquire_progress_lock(activation.run_id) do
-        token
-      else
-        {:error, :flow_control_not_running} ->
-          nil
-
-        {:error, err} ->
-          Logger.warning(
-            "Could not receive lock token for #{activation.run_id} - #{inspect(err)}"
-          )
-
-          nil
-      end
-
-    resp = GenServer.call(pid, {:process_activation, activation}, :infinity)
-    if lock_token, do: WorkflowFlowController.release_progress_lock(activation.run_id, lock_token)
-
-    resp
+    GenServer.call(pid, {:process_activation, activation}, :infinity)
   end
 
   def register(pid, name, module), do: GenServer.cast(pid, {:register, name, module})
@@ -72,25 +53,23 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
       end)
     end
 
-    processed =
-      Enum.reduce(activation.jobs, {:ok, state}, fn job, curr ->
-        with {:ok, curr_state} <- curr,
-             {:ok, new_state} <- handle_activation_job(job.variant, activation, curr_state) do
-          {:ok, new_state}
-        end
-      end)
+    processed = handle_activation_jobs(activation.jobs, activation, state)
 
     with {:ok, state} <- processed do
       {:reply, :ok, state}
     end
   end
 
-  def handle_activation_job({:initialize_workflow, initialize}, activation, state) do
+  def handle_activation_jobs([%{variant: {:initialize_workflow, initialize}}], activation, state) do
     exec_ctx = manager_state(state, :exec_ctx)
     registered = manager_state(state, :registered)
 
     resp =
       if workflow_module = registered[initialize.workflow_type] do
+        Logger.debug(
+          "Job: initialize_workflow (#{inspect(workflow_module)} - #{activation.run_id})"
+        )
+
         with {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
           exec_ctx = %{
             exec_ctx
@@ -114,33 +93,29 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     {resp, state}
   end
 
-  def handle_activation_job({:remove_from_cache, job}, activation, state) do
+  def handle_activation_jobs([%{variant: {:remove_from_cache, job}}], activation, state) do
+    Logger.debug("Job: remove_from_cache (#{job.reason} - #{activation.run_id} - #{job.message})")
+
     Logger.info(
       "Removing from cache (#{job.reason} - #{job.message}): Workflow Run (#{activation.run_id})"
     )
 
-    WorkflowSupervisor.stop_workflow(activation.run_id, wait: true)
+    exec_ctx = manager_state(state, :exec_ctx)
+    {:ok, worker} = WorkerSupervisor.core_for_id(exec_ctx.worker_id)
+    WorkflowSupervisor.stop_workflow(activation.run_id)
 
-    {:ok, state}
-  end
-
-  def handle_activation_job({:resolve_activity, job}, activation, state) do
-    with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(activation.run_id) do
-      WorkflowProgressReporter.resolve_activity(reporter, job.seq, job.result.status)
-    else
-      {:error, err} ->
-        Logger.error(
-          "Resolve Activity failed (ID: #{activation.workflow_id}, Run ID: #{activation.run_id}) - #{inspect(err)}"
-        )
-    end
-
-    {:ok, state}
-  end
-
-  def handle_activation_job({variant, job}, activation, state) do
-    Logger.error(
-      "Worker Workflow Manager received unknown workflow activation for (Run ID: #{activation.run_id}): #{inspect(variant)} - #{inspect(job)}"
+    WorkflowProgressReporter.send_successful_activation_completion(
+      activation.run_id,
+      exec_ctx.runtime.core,
+      worker.core,
+      commands: []
     )
+
+    {:ok, state}
+  end
+
+  def handle_activation_jobs(_, activation, state) do
+    WorkflowProgressReporter.process_activation(activation)
 
     {:ok, state}
   end
@@ -161,7 +136,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
           :ok
 
         {:error, {:already_started, _}} ->
-          WorkflowSupervisor.stop_workflow(exec_ctx.run_id, wait: true)
+          WorkflowSupervisor.stop_workflow(exec_ctx.run_id)
           start_or_restart_workflow(exec_ctx)
 
         {:error, err} ->

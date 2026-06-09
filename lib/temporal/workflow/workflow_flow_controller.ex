@@ -4,17 +4,14 @@ defmodule Temporal.Workflow.WorkflowFlowController do
   require Logger
   require Record
 
-  alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Supervisor.WorkflowSupervisor
+  alias Temporal.Workflow.WorkflowProgressReporter
 
   Record.defrecordp(:flow_state, [
     :id,
     :run_id,
     awaiting_activities: %{},
-    activity_results: %{},
-    progress_lock_token: 0,
-    progress_lock_given: false,
-    awaiting_progress_lock: []
+    activity_results: %{}
   ])
 
   def start_link({exec_ctx, server_opts}) do
@@ -30,107 +27,60 @@ defmodule Temporal.Workflow.WorkflowFlowController do
     {:ok, flow_state(id: exec_ctx.run_id, run_id: exec_ctx.run_id)}
   end
 
-  @spec activity_task_resolved(
-          pid(),
-          activity_id :: String.t(),
-          result :: :ok | {:ok, term()} | {:error, term()}
-        ) :: :ok
-  def activity_task_resolved(pid, activity_id, result),
-    do: GenServer.cast(pid, {:activity_task_resolved, activity_id, result})
+  def activity_tasks_resolved(pid, results),
+    do: GenServer.call(pid, {:activity_tasks_resolved, results})
 
-  @spec acquire_progress_lock(run_id :: String.t()) :: {:ok, term()} | {:error, term()}
-  def acquire_progress_lock(run_id) do
-    with {:ok, flow} <- WorkflowSupervisor.flow_control_pid(run_id) do
-      GenServer.call(flow, :acquire_progress_lock, :infinity)
-    end
-  end
-
-  @spec release_progress_lock(run_id :: String.t(), lock_token :: term()) ::
-          :ok | {:error, term()}
-  def release_progress_lock(run_id, token) do
-    with {:ok, flow} <- WorkflowSupervisor.flow_control_pid(run_id) do
-      GenServer.call(flow, {:release_progress_lock, token}, :infinity)
-    end
-  end
-
-  def await_activity_result(pid, run_id, activity_id) do
-    WorkflowProgressReporter.send_heartbeat_for_id(run_id)
+  def await_activity_result(pid, _run_id, activity_id) do
     GenServer.call(pid, {:await_activity_result, activity_id}, :infinity)
   end
 
-  def handle_cast({:activity_task_resolved, activity_id, result}, state) do
+  def will_resolutions_unlock?(run_id, activity_ids) do
+    with {:ok, flow} <- WorkflowSupervisor.flow_control_pid(run_id) do
+      GenServer.call(flow, {:will_resolutions_unlock?, activity_ids}, :infinity)
+    end
+  end
+
+  def handle_call({:activity_tasks_resolved, results}, _, state) do
     awaiting = flow_state(state, :awaiting_activities)
+    activity_ids = Enum.map(results, fn {activity_id, _} -> activity_id end)
 
-    awaiting =
-      if Map.has_key?(awaiting, activity_id) do
-        Enum.each(awaiting[activity_id], fn awaiter ->
-          GenServer.reply(awaiter, result)
-        end)
+    {was_awaiting, still_awaiting} = Map.split(awaiting, activity_ids)
 
-        Map.delete(awaiting, activity_id)
-      else
-        awaiting
-      end
+    was_awaiting
+    |> Enum.map(fn {activity_id, awaiting} ->
+      result = Enum.find_value(results, fn {id, output} -> id == activity_id && output end)
+      Enum.each(awaiting, fn awaiter ->
+        Logger.debug("Awaiting activity (Unlocked): #{inspect(awaiter)} - #{activity_id}")
+        GenServer.reply(awaiter, result)
+      end)
+    end)
 
-    activity_results = Map.put(flow_state(state, :activity_results), activity_id, result)
+    activity_results = Map.merge(flow_state(state, :activity_results), Map.new(results))
 
-    {:noreply,
-     flow_state(state, awaiting_activities: awaiting, activity_results: activity_results)}
+    {:reply, :ok,
+     flow_state(state, awaiting_activities: still_awaiting, activity_results: activity_results)}
   end
 
-  def handle_call(:acquire_progress_lock, from, state) do
-    if flow_state(state, :progress_lock_given) do
-      already_waiting = flow_state(state, :awaiting_progress_lock)
-      {:noreply, flow_state(state, awaiting_progress_lock: already_waiting ++ [from])}
-    else
-      curr_token = flow_state(state, :progress_lock_token)
-      {:reply, {:ok, curr_token}, flow_state(state, progress_lock_given: true)}
-    end
-  end
+  def handle_call({:will_resolutions_unlock?, activity_ids}, _from, state) do
+    awaiting = flow_state(state, :awaiting_activities)
+    is_locked? = Enum.any?(awaiting)
+    still_locked? = Map.drop(awaiting, activity_ids) |> Enum.any?()
 
-  def handle_call({:release_progress_lock, token}, _from, state) do
-    awaiting = flow_state(state, :awaiting_progress_lock)
-    curr_token = flow_state(state, :progress_lock_token)
-
-    cond do
-      curr_token != token ->
-        {:error, "Wrong token. Given #{token} when it is #{curr_token}"}
-
-      Enum.count(awaiting) == 0 ->
-        {:reply, :ok,
-         flow_state(state, progress_lock_given: false, progress_lock_token: curr_token + 1),
-         {:continue, :maybe_heartbeat}}
-
-      true ->
-        new_token = curr_token + 1
-        [first_in_line | rest] = awaiting
-        GenServer.reply(first_in_line, {:ok, new_token})
-
-        {:reply, :ok,
-         flow_state(state, awaiting_progress_lock: rest, progress_lock_token: new_token)}
-    end
+    {:reply, {:ok, is_locked? && !still_locked?}, state}
   end
 
   def handle_call({:await_activity_result, activity_id}, from, state) do
     seen_results = flow_state(state, :activity_results)
-
-    if Map.has_key?(seen_results, activity_id) do
-      {:reply, seen_results[activity_id], state}
-    else
-      {:noreply, append_activity_results_awaiter(state, activity_id, from)}
-    end
-  end
-
-  def handle_continue(:maybe_heartbeat, state) do
-    awaiting_activities = flow_state(state, :awaiting_activities)
     run_id = flow_state(state, :run_id)
 
-    if Enum.count(Map.keys(awaiting_activities)) > 0 do
-      # They are still stuck and will have no events
+    if Map.has_key?(seen_results, activity_id) do
+      Logger.debug("Awaiting activity (Skipped): #{inspect(from)} - #{activity_id}")
+      {:reply, seen_results[activity_id], state}
+    else
+      Logger.debug("Awaiting activity (Locked): #{inspect(from)} - #{activity_id}")
       WorkflowProgressReporter.send_heartbeat_for_id(run_id)
+      {:noreply, append_activity_results_awaiter(state, activity_id, from)}
     end
-
-    {:noreply, state}
   end
 
   defp append_activity_results_awaiter(state, activity_id, from) do
