@@ -14,6 +14,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     :id,
     :task_queue,
     :exec_ctx,
+    :worker,
     registered: %{},
     forward_polled_pid: nil
   ])
@@ -31,6 +32,11 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
        exec_ctx: exec_ctx,
        id: exec_ctx.worker_id,
        task_queue: exec_ctx.task_queue,
+       worker: %Worker{
+         id: exec_ctx.worker_id,
+         channel: exec_ctx.channel,
+         task_queue: exec_ctx.task_queue
+       },
        forward_polled_pid: opts[:forward_polled_messages]
      )}
   end
@@ -46,14 +52,15 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     {:noreply, manager_state(state, registered: Map.put(registered, name, module))}
   end
 
-  def handle_call({:process_activation, activation}, _from, state) do
-    if forward_to = manager_state(state, :forward_polled_pid) do
-      Enum.each(activation.jobs, fn job ->
-        send(forward_to, {:workflow_activation_job, job.variant, activation})
-      end)
-    end
+  def handle_call({:process_activation, {:activation, _, opts} = activation}, _from, state) do
+    jobs = Keyword.fetch!(opts, :jobs)
 
-    processed = handle_activation_jobs(activation.jobs, activation, state)
+    processed =
+      Enum.reduce(jobs, {:ok, state}, fn job, curr ->
+        with {:ok, state} <- curr do
+          handle_activation_job(job, activation, state)
+        end
+      end)
 
     with {:ok, state} <- processed do
       {:reply, :ok, state}
@@ -63,83 +70,80 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     end
   end
 
-  def handle_activation_jobs([%{variant: {:initialize_workflow, initialize}}], activation, state) do
+  def handle_activation_job(
+        {:initialize_workflow, workflow_id, workflow_type, args, initialize},
+        {_, run_id, _},
+        state
+      ) do
     exec_ctx = manager_state(state, :exec_ctx)
     registered = manager_state(state, :registered)
 
     resp =
-      if workflow_module = registered[initialize.workflow_type] do
-        Logger.debug(
-          "Job: initialize_workflow (#{inspect(workflow_module)} - #{activation.run_id})"
-        )
+      if workflow_module = registered[workflow_type] do
+        Logger.debug("Job: initialize_workflow (#{inspect(workflow_module)} - #{run_id})")
 
         with {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
           exec_ctx = %{
             exec_ctx
-            | workflow_id: initialize.workflow_id,
-              run_id: activation.run_id,
+            | workflow_id: workflow_id,
+              run_id: run_id,
               workflow_module: workflow_module,
               workflow_initialize: initialize,
               worker: worker
           }
 
-          start_or_restart_workflow(exec_ctx)
+          start_or_restart_workflow(exec_ctx, args)
         end
       else
-        Logger.warning(
-          "Ignoring unregistered workflow type: #{inspect(initialize.workflow_type)}"
+        Logger.warning("Ignoring unregistered workflow type: #{inspect(workflow_type)}")
+
+        worker = manager_state(state, :worker)
+
+        WorkflowProgressReporter.send_failure_activation_completion(
+          run_id,
+          worker,
+          "Unknown workflow type: #{inspect(workflow_type)}"
         )
 
-        with {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
-          WorkflowProgressReporter.send_failure_activation_completion(
-            activation.run_id,
-            exec_ctx.runtime.core,
-            worker.core,
-            failure: [message: "Unknown workflow type: #{inspect(initialize.workflow_type)}"]
-          )
-
-          :ok
-        end
+        :ok
       end
 
     {resp, state}
   end
 
-  def handle_activation_jobs([%{variant: {:remove_from_cache, job}}], activation, state) do
-    Logger.debug("Job: remove_from_cache (#{job.reason} - #{activation.run_id} - #{job.message})")
+  def handle_activation_job({:remove_from_cache, reason, message}, {_, run_id, _}, state) do
+    Logger.debug("Job: remove_from_cache (#{reason} - #{run_id} - #{message})")
 
-    Logger.info(
-      "Removing from cache (#{job.reason} - #{job.message}): Workflow Run (#{activation.run_id})"
-    )
+    Logger.info("Removing from cache (#{reason} - #{message}): Workflow Run (#{run_id})")
 
-    exec_ctx = manager_state(state, :exec_ctx)
-    {:ok, worker} = WorkerSupervisor.core_for_id(exec_ctx.worker_id)
-    WorkflowSupervisor.stop_workflow(activation.run_id)
+    WorkflowSupervisor.stop_workflow(run_id)
+
+    worker = manager_state(state, :worker)
 
     WorkflowProgressReporter.send_successful_activation_completion(
-      activation.run_id,
-      exec_ctx.runtime.core,
-      worker.core,
-      commands: []
+      run_id,
+      worker,
+      []
     )
 
     {:ok, state}
   end
 
-  def handle_activation_jobs(_, activation, state) do
+  def handle_activation_job(job, activation, state) do
+    Logger.warning("Unexpected job received: #{inspect(job)}")
     WorkflowProgressReporter.process_activation(activation)
 
     {:ok, state}
   end
 
-  @spec start_or_restart_workflow(ExecutionContext.t()) :: :ok | {:error, term()}
-  def start_or_restart_workflow(exec_ctx) do
+  @spec start_or_restart_workflow(ExecutionContext.t(), args :: [term]) :: :ok | {:error, term()}
+  def start_or_restart_workflow(exec_ctx, args) do
     with {:ok, workflows_sup} <- WorkerSupervisor.workflows_sup_for_id(exec_ctx.worker_id) do
       DynamicSupervisor.start_child(
         workflows_sup,
         Supervisor.child_spec(
           {WorkflowSupervisor,
-           {exec_ctx, [name: WorkflowSupervisor.process_name(exec_ctx.run_id)]}},
+           {exec_ctx, args, [name: WorkflowSupervisor.process_name(exec_ctx.run_id)]}},
           restart: :temporary
         )
       )
@@ -149,7 +153,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
 
         {:error, {:already_started, _}} ->
           WorkflowSupervisor.stop_workflow(exec_ctx.run_id)
-          start_or_restart_workflow(exec_ctx)
+          start_or_restart_workflow(exec_ctx, args)
 
         {:error, err} ->
           {:error, err}

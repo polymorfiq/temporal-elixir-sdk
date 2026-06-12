@@ -23,8 +23,8 @@ defmodule Temporal.Worker.WorkerActivityManager do
   def register(pid, activity_type, activity_fn),
     do: GenServer.cast(pid, {:register, activity_type, activity_fn})
 
-  def process_task(pid, task),
-    do: GenServer.call(pid, {:process_task, task.variant, task}, :infinity)
+  def process_task(pid, {:activity_task, variant, token}),
+    do: GenServer.call(pid, {:process_task, variant, token}, :infinity)
 
   def handle_cast({:register, activity_type, activity_fn}, state) do
     registered = activities_state(state, :registered)
@@ -33,9 +33,13 @@ defmodule Temporal.Worker.WorkerActivityManager do
      activities_state(state, registered: Map.put(registered, activity_type, activity_fn))}
   end
 
-  def handle_call({:process_task, {:start, start}, task}, _from, state) do
+  def handle_call(
+        {:process_task, {:start, activity_id, activity_type, opts}, token},
+        _from,
+        state
+      ) do
     registered = activities_state(state, :registered)
-    activity_fn = registered[start.activity_type]
+    activity_fn = registered[activity_type]
 
     activity_arity =
       if activity_fn do
@@ -43,12 +47,15 @@ defmodule Temporal.Worker.WorkerActivityManager do
         arity
       end
 
+    input = opts.input
+    {:execution, workflow_id, run_id} = opts.workflow_execution
+
     cond do
       !activity_fn ->
-        {:reply, {:error, "Activity not found: #{inspect(start.activity_type)}"}, state}
+        {:reply, {:error, "Activity not found: #{inspect(activity_type)}"}, state}
 
-      activity_arity != Enum.count(start.input) + 1 ->
-        {:reply, {:error, "Activity of wrong arity: #{inspect(start.activity_type)}"}, state}
+      activity_arity != Enum.count(input) + 1 ->
+        {:reply, {:error, "Activity of wrong arity: #{inspect(activity_type)}"}, state}
 
       true ->
         exec_ctx = activities_state(state, :exec_ctx)
@@ -58,13 +65,13 @@ defmodule Temporal.Worker.WorkerActivityManager do
             exec_ctx = %{
               exec_ctx
               | worker: worker,
-                workflow_id: start.workflow_execution.workflow_id,
-                run_id: start.workflow_execution.run_id,
-                activity_type: start.activity_type,
-                activity_id: start.activity_id,
+                workflow_id: workflow_id,
+                run_id: run_id,
+                activity_type: activity_type,
+                activity_id: activity_id,
                 activity_fn: activity_fn,
-                activity_start: start,
-                activity_task_token: task.task_token
+                activity_start: opts,
+                activity_task_token: token
             }
 
             WorkflowActivityManager.start_or_restart_activity(exec_ctx)
@@ -74,8 +81,8 @@ defmodule Temporal.Worker.WorkerActivityManager do
     end
   end
 
-  def handle_call({:process_task, {:cancel, cancel}, _}, _from, state) do
-    cancel |> IO.inspect(label: "cancel-activity")
+  def handle_call({:process_task, {:cancel, reason, details}, _}, _from, state) do
+    {reason, details} |> IO.inspect(label: "cancel-activity")
 
     {:reply, :ok, state}
   end

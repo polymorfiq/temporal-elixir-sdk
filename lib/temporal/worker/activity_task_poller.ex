@@ -1,9 +1,9 @@
 defmodule Temporal.Worker.ActivityTaskPoller do
   use GenServer
 
-  alias Temporal.CoreSdk
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Worker.WorkerActivityManager
+  alias Temporal.Comms.Channel
 
   require Logger
   require Record
@@ -13,7 +13,9 @@ defmodule Temporal.Worker.ActivityTaskPoller do
     :worker_pid,
     :activity_manager,
     :core_worker,
-    :core_runtime
+    :core_runtime,
+    :channel,
+    :worker
   ])
 
   def start_link({exec_ctx, server_opts}) do
@@ -33,14 +35,16 @@ defmodule Temporal.Worker.ActivityTaskPoller do
          worker_pid: worker_pid,
          activity_manager: activity_manager,
          core_worker: worker,
-         core_runtime: exec_ctx.runtime
+         core_runtime: exec_ctx.runtime,
+         channel: exec_ctx.channel,
+         worker: exec_ctx.worker
        ), {:continue, :poll_for_tasks}}
     end
   end
 
   @doc false
   def handle_continue(:poll_for_tasks, state) do
-    with {{:ok, _}, state} <- poll_and_inform_worker(state) do
+    with {:ok, _} <- poll_and_inform_worker(state) do
       {:noreply, state, {:continue, :poll_for_tasks}}
     else
       {{:error, "core_shutdown"}, _} ->
@@ -52,44 +56,10 @@ defmodule Temporal.Worker.ActivityTaskPoller do
   end
 
   defp poll_and_inform_worker(state) do
-    worker_id = poll_state(state, :worker_id)
-    runtime_core = poll_state(state, :core_runtime)
-    worker_core = poll_state(state, :core_worker)
-    worker_pid = poll_state(state, :worker_pid)
+    worker = poll_state(state, :worker)
+    channel = poll_state(state, :channel)
 
-    parent = self()
-
-    child =
-      spawn_link(fn ->
-        Process.set_label({:long_activity_task_poll, worker_id})
-
-        CoreSdk._worker_poll_activity_task(runtime_core.core, worker_core.core, self())
-        |> case do
-          :ok ->
-            receive do
-              {:ok, task} ->
-                send(parent, {self(), {:ok, task}})
-
-              {:error, error} ->
-                send(parent, {self(), {:error, error}})
-            end
-
-          resp ->
-            send(parent, {self(), {:error, "Error polling activity tasks: #{inspect(resp)}"}})
-        end
-      end)
-
-    poll_resp =
-      receive do
-        {^child, {:ok, task}} ->
-          process_activity_task(task, state)
-
-        {^child, {:error, err}} ->
-          send(worker_pid, {:activity_task_error, err})
-          {:error, err}
-      end
-
-    {poll_resp, state}
+    Channel.poll_activity_task(channel, worker) |> process_activity_task(state)
   end
 
   defp process_activity_task(task, state) do

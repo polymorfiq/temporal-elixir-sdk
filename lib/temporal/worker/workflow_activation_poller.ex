@@ -1,7 +1,7 @@
 defmodule Temporal.Worker.WorkflowActivationPoller do
   use GenServer
 
-  alias Temporal.CoreSdk
+  alias Temporal.Comms.Channel
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Worker.WorkerWorkflowManager
   alias Temporal.Supervisor.ExecutionContext
@@ -14,7 +14,9 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     :worker_pid,
     :manager_pid,
     :core_worker,
-    :core_runtime
+    :core_runtime,
+    :channel,
+    :worker
   ])
 
   def start_link({exec_ctx, server_opts}) do
@@ -34,14 +36,16 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
          worker_pid: worker_pid,
          manager_pid: manager_pid,
          core_worker: worker,
-         core_runtime: exec_ctx.runtime
+         core_runtime: exec_ctx.runtime,
+         channel: exec_ctx.channel,
+         worker: exec_ctx.worker
        ), {:continue, :poll_for_activations}}
     end
   end
 
   @doc false
   def handle_continue(:poll_for_activations, state) do
-    with {:ok, state} <- poll_and_inform_worker(state) do
+    with :ok <- poll_and_inform_worker(state) do
       {:noreply, state, {:continue, :poll_for_activations}}
     else
       {{:error, "core_shutdown"}, _} ->
@@ -50,50 +54,11 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
   end
 
   defp poll_and_inform_worker(state) do
-    worker_id = poll_state(state, :worker_id)
-    runtime_core = poll_state(state, :core_runtime)
-    worker_core = poll_state(state, :core_worker)
-    worker_pid = poll_state(state, :worker_pid)
+    channel = poll_state(state, :channel)
+    worker = poll_state(state, :worker)
     manager_pid = poll_state(state, :manager_pid)
 
-    parent = self()
-
-    child =
-      spawn_link(fn ->
-        Process.set_label({:long_activation_poll, worker_id})
-
-        Logger.debug("POLLING #{worker_id}...")
-
-        case CoreSdk._worker_poll_workflow_activation(runtime_core.core, worker_core.core, self()) do
-          :ok ->
-            receive do
-              {:ok, activation} ->
-                send(parent, {self(), {:ok, activation}})
-
-              {:error, error} ->
-                send(parent, {self(), {:error, error}})
-            end
-
-          resp ->
-            send(
-              parent,
-              {self(), {:error, "Error polling workflow activations: #{inspect(resp)}"}}
-            )
-        end
-      end)
-
-    poll_resp =
-      receive do
-        {^child, {:ok, activation}} ->
-          WorkerWorkflowManager.process_activation(manager_pid, activation)
-
-        {^child, {:error, err}} ->
-          send(worker_pid, {:workflow_activation_error, err})
-          {:error, err}
-      end
-
-    Logger.debug("POLLED #{worker_id}...")
-
-    {poll_resp, state}
+    activation = Channel.poll_activation(channel, worker)
+    WorkerWorkflowManager.process_activation(manager_pid, activation)
   end
 end

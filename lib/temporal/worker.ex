@@ -1,7 +1,8 @@
 defmodule Temporal.Worker do
-  defstruct [:id, :task_queue]
+  defstruct [:id, :channel, :task_queue]
 
   alias Temporal.Activity
+  alias Temporal.Comms.Channel
   alias Temporal.Client
   alias Temporal.Internal.Hash
   alias Temporal.TaskQueue
@@ -22,12 +23,13 @@ defmodule Temporal.Worker do
   @type register_workflow_opts :: [{:name, WorkflowName.t()}]
 
   @spec new(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}
-  def new(task_queue, opts \\ []) do
-    initialize_worker(task_queue, opts)
+  def new(task_queue, channel, opts \\ []) do
+    initialize_worker(task_queue, channel, opts)
   end
 
-  @spec initialize_worker(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}
-  defp initialize_worker(task_queue, opts) do
+  @spec initialize_worker(TaskQueue.t(), Channel.t(), worker_opts()) ::
+          {:ok, t()} | {:error, term()}
+  defp initialize_worker(task_queue, channel, opts) do
     opts = task_queue.default_worker_opts ++ opts
     {extra_opts, core_opts} = Keyword.split(opts, [:forward_polled_messages])
 
@@ -78,12 +80,16 @@ defmodule Temporal.Worker do
          {:ok, workers_sup} <- ClientSupervisor.workers_sup_for_identity(client.identity) do
       reg_name = {:via, Registry, {WorkerRegistry, {:worker, worker_id}}}
 
+      worker = %__MODULE__{id: worker_id, channel: channel, task_queue: task_queue}
+
       exec_ctx = %ExecutionContext{
         namespace: client.namespace,
         worker_id: worker_id,
         task_queue: task_queue,
         runtime: core_runtime,
-        client: core_client
+        client: core_client,
+        channel: channel,
+        worker: worker
       }
 
       child_started =
@@ -101,7 +107,7 @@ defmodule Temporal.Worker do
         )
 
       with {:ok, _} <- child_started do
-        {:ok, %__MODULE__{id: worker_id, task_queue: task_queue}}
+        {:ok, worker}
       end
     end
   end

@@ -1,6 +1,7 @@
 defmodule Temporal.Workflow.WorkflowExecutor do
   use GenServer
 
+  alias Temporal.Comms.Payload
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Workflow.WorkflowContext
@@ -14,24 +15,26 @@ defmodule Temporal.Workflow.WorkflowExecutor do
     :worker_id,
     :module,
     :exec_ctx,
+    :args,
     :initialize
   ])
 
-  def start_link({exec_ctx, server_opts}) do
+  def start_link({exec_ctx, args, server_opts}) do
     GenServer.start_link(
       __MODULE__,
-      exec_ctx,
+      {exec_ctx, args},
       server_opts
     )
   end
 
-  def init(exec_ctx) do
+  def init({exec_ctx, args}) do
     Process.set_label({:workflow_executor, exec_ctx.run_id})
     Process.flag(:trap_exit, true)
 
     {:ok,
      workflow_state(
        id: exec_ctx.run_id,
+       args: args,
        workflow_id: exec_ctx.workflow_id,
        worker_id: exec_ctx.worker_id,
        module: exec_ctx.workflow_module,
@@ -47,19 +50,11 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
     run_id = workflow_state(state, :id)
     mod = workflow_state(state, :module)
-    initialize = workflow_state(state, :initialize)
     exec_ctx = workflow_state(state, :exec_ctx)
 
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(run_id),
          {:ok, ctx} <- WorkflowContext.new(exec_ctx) do
-      inputs =
-        Enum.map(initialize.arguments, fn
-          %{metadata: %{"encoding" => ~c"json/plain"}, data: data} ->
-            Jason.decode!(to_string(data))
-
-          %{metadata: %{"encoding" => ~c"application/x-erlang-term"}, data: data} ->
-            :erlang.binary_to_term(:binary.list_to_bin(data))
-        end)
+      inputs = Enum.map(workflow_state(state, :args), &Payload.to_value/1)
 
       case apply(mod, :execute, [ctx] ++ inputs) do
         {:ok, result} ->

@@ -2,9 +2,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
   use GenServer
 
   alias Temporal.CoreSdk
-  alias Temporal.CoreSdk.Data.ActivityTaskCompletion
-  alias Temporal.CoreSdk.Data.WorkflowInput
-  alias Temporal.CoreSdk.Data.Payload
+  alias Temporal.Comms.Activities.TaskCompletion
   alias Temporal.Supervisor.ActivitySupervisor
 
   require Logger
@@ -48,13 +46,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
   def handle_call({:report_success, result}, _from, state) do
     task_token = progress_state(state, :task_token)
 
-    output = WorkflowInput.with_opts!(result) |> Payload.from_workflow_input()
-
-    completion =
-      ActivityTaskCompletion.with_opts!(
-        task_token: task_token,
-        result: {:completed, [result: output]}
-      )
+    completion = TaskCompletion.send_to_engine({:completed, result, task_token})
 
     parent = self()
 

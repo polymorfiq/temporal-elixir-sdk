@@ -7,6 +7,7 @@ defmodule Temporal.CoreSdk do
   alias Temporal.CoreSdk.Data.ClientOpts
   alias Temporal.CoreSdk.Data.RuntimeOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
+  alias Temporal.Comms.Activities.TaskCompletion
 
   @doc false
   @spec _create_runtime(opts :: RuntimeOpts.t()) :: {:ok, term()} | {:error, term()}
@@ -65,7 +66,7 @@ defmodule Temporal.CoreSdk do
   @spec _worker_complete_activity_task(
           runtime :: term(),
           worker :: term(),
-          completion :: Temporal.CoreSdk.Data.ActivityTaskCompletion.t(),
+          completion :: TaskCompletion.t(),
           resp_pid :: pid()
         ) ::
           {:ok, bool()} | {:error, term()}

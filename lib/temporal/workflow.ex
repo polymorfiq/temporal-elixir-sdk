@@ -119,7 +119,7 @@ defmodule Temporal.Workflow do
           end
 
         is_atom(activity_type) ->
-          {:ok, "#{activity_type}"}
+          :ok
       end
 
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(ctx.run_id),
@@ -134,7 +134,7 @@ defmodule Temporal.Workflow do
                reporter,
                activity_type,
                args,
-               opts
+               Map.new(opts)
              ) do
         {:ok,
          %ActivityExecHandle{

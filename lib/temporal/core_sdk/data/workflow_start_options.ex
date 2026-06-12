@@ -21,6 +21,10 @@ defmodule Temporal.CoreSdk.Data.WorkflowStartOptions do
   ]
 
   alias Temporal.CoreSdk.Data
+  alias Temporal.Comms.Payload
+  alias Temporal.Comms.Shared.Duration
+  alias Temporal.Comms.Shared.Priority
+  alias Temporal.Comms.Shared.RetryPolicy
 
   @type id_conflict_policy :: :unspecified | :fail | :use_existing | :terminate_existing
   @type id_reuse_policy ::
@@ -35,17 +39,17 @@ defmodule Temporal.CoreSdk.Data.WorkflowStartOptions do
           workflow_id: String.t(),
           id_reuse_policy: id_reuse_policy(),
           id_conflict_policy: id_conflict_policy(),
-          execution_timeout: Data.Duration.t() | nil,
-          run_timeout: Data.Duration.t() | nil,
-          task_timeout: Data.Duration.t() | nil,
+          execution_timeout: Duration.t() | nil,
+          run_timeout: Duration.t() | nil,
+          task_timeout: Duration.t() | nil,
           cron_schedule: String.t() | nil,
-          search_attributes: %{String.t() => Data.Payload.t()} | nil,
+          search_attributes: %{String.t() => Payload.t()} | nil,
           enable_eager_workflow_start: bool(),
-          retry_policy: Data.RetryPolicy.t() | nil,
+          retry_policy: RetryPolicy.t() | nil,
           start_signal: Data.WorkflowStartSignal.t() | nil,
           links: [Data.Link.t()],
           completion_callbacks: [Data.Callback.t()],
-          priority: Data.Priority.t(),
+          priority: Priority.t(),
           header: Data.Header.t() | nil,
           static_summary: String.t() | nil,
           static_details: String.t() | nil
@@ -54,12 +58,12 @@ defmodule Temporal.CoreSdk.Data.WorkflowStartOptions do
   @type opts :: [
           {:task_queue, String.t()}
           | {:workflow_id, String.t()}
-          | {:execution_timeout, Data.Duration.opts()}
-          | {:run_timeout, Data.Duration.opts()}
-          | {:task_timeout, Data.Duration.opts()}
+          | {:execution_timeout, Duration.duration()}
+          | {:run_timeout, Duration.duration()}
+          | {:task_timeout, Duration.duration()}
           | {:cron_schedule, String.t()}
-          | {:search_attributes, %{String.t() => Data.Payload.t()}}
-          | {:retry_policy, Data.RetryPolicy.opts()}
+          | {:search_attributes, %{String.t() => Payload.payload()}}
+          | {:retry_policy, RetryPolicy.retry_policy()}
           | {:start_signal, Data.WorkflowStartSignal.opts()}
           | {:static_summary, String.t()}
           | {:static_details, String.t()}
@@ -69,12 +73,12 @@ defmodule Temporal.CoreSdk.Data.WorkflowStartOptions do
           | {:links, [Link.opts()]}
           | {:header, Data.Header.opts()}
           | {:completion_callbacks, [Callback.opts()]}
-          | {:priority, ClientPriority.opts()}
+          | {:priority, Priority.priority()}
         ]
 
   def with_opts!(opts) do
     start_opts = struct!(__MODULE__, opts)
-    start_opts = update_in(start_opts, [Access.key(:priority)], &Data.ClientPriority.with_opts!/1)
+    start_opts = update_in(start_opts, [Access.key(:priority)], &Priority.send_to_engine/1)
 
     start_opts =
       update_in(start_opts, [Access.key(:links)], fn links ->
@@ -95,28 +99,28 @@ defmodule Temporal.CoreSdk.Data.WorkflowStartOptions do
 
     start_opts =
       if opts[:execution_timeout] do
-        update_in(start_opts, [Access.key(:execution_timeout)], &Data.Duration.with_opts!/1)
+        update_in(start_opts, [Access.key(:execution_timeout)], &Duration.send_to_engine/1)
       else
         start_opts
       end
 
     start_opts =
       if opts[:run_timeout] do
-        update_in(start_opts, [Access.key(:run_timeout)], &Data.Duration.with_opts!/1)
+        update_in(start_opts, [Access.key(:run_timeout)], &Duration.send_to_engine/1)
       else
         start_opts
       end
 
     start_opts =
       if opts[:task_timeout] do
-        update_in(start_opts, [Access.key(:task_timeout)], &Data.Duration.with_opts!/1)
+        update_in(start_opts, [Access.key(:task_timeout)], &Duration.send_to_engine/1)
       else
         start_opts
       end
 
     start_opts =
       if opts[:retry_policy] do
-        update_in(start_opts, [Access.key(:retry_policy)], &Data.RetryPolicy.with_opts!/1)
+        update_in(start_opts, [Access.key(:retry_policy)], &RetryPolicy.send_to_engine/1)
       else
         start_opts
       end

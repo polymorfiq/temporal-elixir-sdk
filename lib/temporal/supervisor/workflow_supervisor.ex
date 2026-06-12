@@ -14,16 +14,16 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
   @type worker_id :: String.t()
 
   @spec start_link({ExecutionContext.t(), keyword()}) :: {:ok, pid()} | {:error, term()}
-  def start_link({exec_ctx, server_opts}) do
+  def start_link({exec_ctx, args, server_opts}) do
     Supervisor.start_link(
       __MODULE__,
-      exec_ctx,
+      {exec_ctx, args},
       server_opts
     )
   end
 
   @impl true
-  def init(exec_ctx) do
+  def init({exec_ctx, args}) do
     Process.set_label({:workflow_supervisor, exec_ctx.workflow_id})
 
     run_id = exec_ctx.run_id
@@ -34,7 +34,7 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
        {exec_ctx, [name: via_registry({:progress_reporter, run_id}), shutdown: 5_000]}},
       {WorkflowFlowController, {exec_ctx, [name: via_registry({:flow_control, run_id})]}},
       {WorkflowContext, {exec_ctx, [name: via_registry({:context, run_id})]}},
-      {WorkflowExecutor, {exec_ctx, [name: via_registry({:executor, run_id})]}}
+      {WorkflowExecutor, {exec_ctx, args, [name: via_registry({:executor, run_id})]}}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
