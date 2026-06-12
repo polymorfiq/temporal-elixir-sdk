@@ -49,6 +49,7 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
       {:noreply, state, {:continue, :poll_for_activations}}
     else
       {{:error, "core_shutdown"}, _} ->
+        Logger.debug("Activation Poller shutdown triggered...")
         {:stop, :shutdown, state}
     end
   end
@@ -58,7 +59,10 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     worker = poll_state(state, :worker)
     manager_pid = poll_state(state, :manager_pid)
 
-    activation = Channel.poll_activation(channel, worker)
-    WorkerWorkflowManager.process_activation(manager_pid, activation)
+    if activation = Channel.poll_activation(channel, worker) do
+      WorkerWorkflowManager.process_activation(manager_pid, activation)
+    else
+      :ok
+    end
   end
 end

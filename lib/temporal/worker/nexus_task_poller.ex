@@ -5,6 +5,7 @@ defmodule Temporal.Worker.NexusTaskPoller do
   alias Temporal.CoreSdk.CoreWorker
   alias Temporal.Supervisor.WorkerSupervisor
 
+  require Logger
   require Record
   Record.defrecordp(:poll_state, [:worker_id, :worker_pid, :core_worker, :core_runtime])
 
@@ -34,6 +35,7 @@ defmodule Temporal.Worker.NexusTaskPoller do
       {:noreply, state, {:continue, :poll_for_tasks}}
     else
       {{:error, "core_shutdown"}, _} ->
+        Logger.debug("Nexus Task Poller shutdown triggered...")
         {:stop, :shutdown, state}
 
       {{:error, error}, _} ->

@@ -6,35 +6,35 @@ defmodule Temporal.Comms.Activities.TaskCompletion do
   alias Temporal.Comms.Shared.Failure
 
   @type completion ::
-          {:completed, Payload.payload() | term(), task_token()}
-          | {:failed, Failure.failure(), task_token()}
-          | {:cancelled, Failure.failure(), task_token()}
-          | {:will_complete_async, task_token()}
+          {:activity, :completed, Payload.payload() | term(), task_token()}
+          | {:activity, :failed, Failure.failure(), task_token()}
+          | {:activity, :cancelled, Failure.failure(), task_token()}
+          | {:activity, :will_complete_async, task_token()}
 
   @type task_token :: binary()
 
-  def send_to_engine({:completed, result, token}) do
+  def send_to_engine({:activity, :completed, result, token}) do
     %__MODULE__{
       result: ExecutionResult.send_to_engine({:completed, result}),
       task_token: :binary.bin_to_list(token)
     }
   end
 
-  def send_to_engine({:failed, failure, token}) do
+  def send_to_engine({:activity, :failed, failure, token}) do
     %__MODULE__{
       result: ExecutionResult.send_to_engine({:failed, failure}),
       task_token: :binary.bin_to_list(token)
     }
   end
 
-  def send_to_engine({:cancelled, failure, token}) do
+  def send_to_engine({:activity, :cancelled, failure, token}) do
     %__MODULE__{
       result: ExecutionResult.send_to_engine({:cancelled, failure}),
       task_token: :binary.bin_to_list(token)
     }
   end
 
-  def send_to_engine({:will_complete_async, token}) do
+  def send_to_engine({:activity, :will_complete_async, token}) do
     %__MODULE__{
       result: ExecutionResult.send_to_engine(:will_complete_async),
       task_token: :binary.bin_to_list(token)

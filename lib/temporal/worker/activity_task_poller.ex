@@ -48,6 +48,7 @@ defmodule Temporal.Worker.ActivityTaskPoller do
       {:noreply, state, {:continue, :poll_for_tasks}}
     else
       {{:error, "core_shutdown"}, _} ->
+        Logger.debug("Activity Task Poller shutdown triggered...")
         {:stop, :shutdown, state}
 
       {{:error, error}, _} ->
@@ -61,6 +62,8 @@ defmodule Temporal.Worker.ActivityTaskPoller do
 
     Channel.poll_activity_task(channel, worker) |> process_activity_task(state)
   end
+
+  defp process_activity_task(nil, _), do: {:ok, nil}
 
   defp process_activity_task(task, state) do
     activity_manager = poll_state(state, :activity_manager)

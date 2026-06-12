@@ -1,10 +1,18 @@
 defmodule Temporal.Comms.Channel do
-  defstruct [:task_queue, :runtime, :pid]
+  defstruct [
+    :task_queue,
+    :runtime,
+    :pid,
+    silence_activity_tasks: false,
+    silence_workflow_activations: false
+  ]
+
   use GenServer
 
   require Logger
   require Record
 
+  alias Temporal.Comms.Activities.TaskCompletion
   alias Temporal.Client
   alias Temporal.Comms.Payload
   alias Temporal.CoreSdk.CoreWorker
@@ -19,6 +27,9 @@ defmodule Temporal.Comms.Channel do
   def init(_) do
     {:ok, channel_state()}
   end
+
+  def silence_activity_tasks(channel), do: %{channel | silence_activity_tasks: true}
+  def silence_workflow_activations(channel), do: %{channel | silence_workflow_activations: true}
 
   def add_listener(channel, pid, types \\ nil) do
     GenServer.cast(channel.pid, {:add_listener, pid, types})
@@ -40,7 +51,7 @@ defmodule Temporal.Comms.Channel do
             GenServer.cast(
               channel.pid,
               {:to_client, :job,
-                {:initialize_workflow, id, type, Enum.map(args, &Payload.to_value/1), opts}}
+               {:initialize_workflow, id, type, Enum.map(args, &Payload.to_value/1), opts}}
             )
 
           {:resolve_activity, seq, {:completed, result}, opts} ->
@@ -53,6 +64,12 @@ defmodule Temporal.Comms.Channel do
           job ->
             GenServer.cast(channel.pid, {:to_client, :job, job})
         end)
+
+      {:activity_task, task, task_token} ->
+        GenServer.cast(
+          channel.pid,
+          {:to_client, :activity_task, {task, task_token}}
+        )
 
       other ->
         GenServer.cast(channel.pid, {:to_client, :unknown, other})
@@ -139,7 +156,12 @@ defmodule Temporal.Comms.Channel do
   def send_to_engine(:activation_completion, channel, worker, tuple),
     do:
       ActivationCompletion.send_to_engine(tuple)
-      |> send_activation_completion(channel, worker, tuple)
+      |> send_activation_completion(channel, worker)
+
+  def send_to_engine(:activity, channel, worker, tuple),
+    do:
+      TaskCompletion.send_to_engine(tuple)
+      |> send_activity_task_completion(channel, worker)
 
   def send_to_sdk(channel, %mod{} = msg) do
     tuple = mod.send_to_sdk(msg)
@@ -175,7 +197,8 @@ defmodule Temporal.Comms.Channel do
 
       receive do
         {^child, {:ok, task}} ->
-          send_to_sdk(channel, task)
+          resp = send_to_sdk(channel, task)
+          if !channel.silence_activity_tasks, do: resp, else: nil
 
         {^child, {:error, err}} ->
           {:error, err}
@@ -190,7 +213,7 @@ defmodule Temporal.Comms.Channel do
 
       child =
         spawn_link(fn ->
-          Process.set_label({:long_activity_task_poll, worker.id})
+          Process.set_label({:long_activations_poll, worker.id})
 
           CoreSdk._worker_poll_workflow_activation(channel.runtime.core, core_worker.core, self())
           |> case do
@@ -210,7 +233,8 @@ defmodule Temporal.Comms.Channel do
 
       receive do
         {^child, {:ok, task}} ->
-          send_to_sdk(channel, task)
+          resp = send_to_sdk(channel, task)
+          if !channel.silence_workflow_activations, do: resp, else: nil
 
         {^child, {:error, err}} ->
           {:error, err}
@@ -218,7 +242,7 @@ defmodule Temporal.Comms.Channel do
     end
   end
 
-  defp send_activation_completion(msg, channel, worker, _tuple) do
+  defp send_activation_completion(msg, channel, worker) do
     with {:ok, core_worker_pid} <- WorkerSupervisor.worker_pid(worker.id),
          {:ok, core_worker} = CoreWorker.get_core(core_worker_pid) do
       parent = self()
@@ -244,6 +268,43 @@ defmodule Temporal.Comms.Channel do
 
             other_resp ->
               send(parent, {self(), other_resp})
+          end
+        end)
+
+      receive do
+        {^child, resp} ->
+          resp
+      end
+    end
+  end
+
+  defp send_activity_task_completion(completion, channel, worker) do
+    parent = self()
+
+    with {:ok, core_worker_pid} <- WorkerSupervisor.worker_pid(worker.id),
+         {:ok, core_worker} = CoreWorker.get_core(core_worker_pid) do
+      child =
+        spawn_link(fn ->
+          CoreSdk._worker_complete_activity_task(
+            channel.runtime.core,
+            core_worker.core,
+            completion,
+            self()
+          )
+          |> case do
+            :ok ->
+              send(parent, {self(), :ok})
+
+            other_resp ->
+              send(parent, {self(), other_resp})
+          end
+
+          receive do
+            :ok ->
+              :ok
+
+            {:error, err} ->
+              Logger.error("Workflow Complete Activation Error - #{inspect(err)}")
           end
         end)
 

@@ -1,8 +1,7 @@
 defmodule Temporal.Activity.ActivityProgressReporter do
   use GenServer
 
-  alias Temporal.CoreSdk
-  alias Temporal.Comms.Activities.TaskCompletion
+  alias Temporal.Comms.Channel
   alias Temporal.Supervisor.ActivitySupervisor
 
   require Logger
@@ -12,6 +11,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
     :activity_id,
     :task_token,
     :runtime,
+    :channel,
     :worker
   ])
 
@@ -35,6 +35,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
        activity_id: exec_ctx.activity_id,
        task_token: exec_ctx.activity_task_token,
        runtime: exec_ctx.runtime,
+       channel: exec_ctx.channel,
        worker: exec_ctx.worker
      )}
   end
@@ -45,40 +46,11 @@ defmodule Temporal.Activity.ActivityProgressReporter do
 
   def handle_call({:report_success, result}, _from, state) do
     task_token = progress_state(state, :task_token)
+    worker = progress_state(state, :worker)
 
-    completion = TaskCompletion.send_to_engine({:completed, result, task_token})
-
-    parent = self()
-
-    child =
-      spawn_link(fn ->
-        CoreSdk._worker_complete_activity_task(
-          progress_state(state, :runtime).core,
-          progress_state(state, :worker).core,
-          completion,
-          self()
-        )
-        |> case do
-          :ok ->
-            send(parent, {self(), :ok})
-
-          other_resp ->
-            send(parent, {self(), other_resp})
-        end
-
-        receive do
-          :ok ->
-            :ok
-
-          {:error, err} ->
-            Logger.error("Workflow Complete Activation Error - #{inspect(err)}")
-        end
-      end)
-
-    receive do
-      {^child, resp} ->
-        {:reply, resp, state, {:continue, :stop_activity}}
-    end
+    channel = progress_state(state, :channel)
+    resp = Channel.send_to_engine(channel, worker, {:activity, :completed, result, task_token})
+    {:reply, resp, state, {:continue, :stop_activity}}
   end
 
   def handle_continue(:stop_activity, state) do

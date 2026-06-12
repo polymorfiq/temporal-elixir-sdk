@@ -32,7 +32,7 @@ defmodule Temporal.Comms.Shared.Failure do
 
   @spec send_to_sdk(t()) :: failure()
   def send_to_sdk(failure) do
-    opts = failure |> Map.from_struct() |> Map.drop(:message)
+    opts = failure |> Map.from_struct() |> Map.drop([:message])
 
     opts =
       if opts[:encoded_attributes] do

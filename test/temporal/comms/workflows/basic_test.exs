@@ -58,7 +58,9 @@ defmodule Temporal.ClientTest do
       ctx.queue,
       unique_name("basic-test"),
       WorkflowWithActivities,
-      ["Testing"], id_conflict_policy: :terminate_existing)
+      ["Testing"],
+      id_conflict_policy: :terminate_existing
+    )
 
     assert_engine_sends_jobs(ctx, [
       {:initialize_workflow, _id, "WorkflowWithActivities", ["Testing"], _opts}
