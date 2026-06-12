@@ -30,9 +30,9 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
 
     children = [
       {ActivityList, [name: via_registry({:activities, run_id})]},
+      {WorkflowFlowController, {exec_ctx, [name: via_registry({:flow_control, run_id})]}},
       {WorkflowProgressReporter,
        {exec_ctx, [name: via_registry({:progress_reporter, run_id}), shutdown: 5_000]}},
-      {WorkflowFlowController, {exec_ctx, [name: via_registry({:flow_control, run_id})]}},
       {WorkflowContext, {exec_ctx, [name: via_registry({:context, run_id})]}},
       {WorkflowExecutor, {exec_ctx, args, [name: via_registry({:executor, run_id})]}}
     ]
