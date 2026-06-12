@@ -23,7 +23,9 @@ defmodule Temporal.Worker do
   @type register_workflow_opts :: [{:name, WorkflowName.t()}]
 
   @spec new(TaskQueue.t(), worker_opts()) :: {:ok, t()} | {:error, term()}
-  def new(task_queue, channel, opts \\ []) do
+  def new(task_queue, channel \\ nil, opts \\ []) do
+    channel = channel || Channel.new(task_queue)
+
     initialize_worker(task_queue, channel, opts)
   end
 

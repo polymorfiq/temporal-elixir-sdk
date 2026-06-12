@@ -1,8 +1,8 @@
 defmodule Temporal.Worker.WorkerActivityManager do
   use GenServer
 
+  alias Temporal.Worker
   alias Temporal.Supervisor.ExecutionContext
-  alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Workflow.WorkflowActivityManager
 
   require Logger
@@ -60,24 +60,23 @@ defmodule Temporal.Worker.WorkerActivityManager do
       true ->
         exec_ctx = activities_state(state, :exec_ctx)
 
-        resp =
-          with {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
-            exec_ctx = %{
-              exec_ctx
-              | worker: worker,
-                workflow_id: workflow_id,
-                run_id: run_id,
-                activity_type: activity_type,
-                activity_id: activity_id,
-                activity_fn: activity_fn,
-                activity_start: opts,
-                activity_task_token: token
-            }
+        exec_ctx = %{
+          exec_ctx
+          | worker: %Worker{
+              id: exec_ctx.worker_id,
+              channel: exec_ctx.channel,
+              task_queue: exec_ctx.task_queue
+            },
+            workflow_id: workflow_id,
+            run_id: run_id,
+            activity_type: activity_type,
+            activity_id: activity_id,
+            activity_fn: activity_fn,
+            activity_start: opts,
+            activity_task_token: token
+        }
 
-            WorkflowActivityManager.start_or_restart_activity(exec_ctx)
-          end
-
-        {:reply, resp, state}
+        {:reply, WorkflowActivityManager.start_or_restart_activity(exec_ctx), state}
     end
   end
 

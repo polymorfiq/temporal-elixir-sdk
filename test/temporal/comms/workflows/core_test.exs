@@ -1,5 +1,6 @@
-defmodule Temporal.ClientTest do
+defmodule Temporal.CoreTest do
   use ExUnit.Case
+  use ChannelHelpers
   doctest Temporal.Client
 
   alias Temporal.{Client, Runtime, TaskQueue, Worker}
@@ -7,30 +8,6 @@ defmodule Temporal.ClientTest do
 
   setup_all [:setup_worker]
   setup [:reroute_channel]
-
-  defmacro assert_client_sends_commands(_ctx, cmd_patterns) do
-    Enum.map(cmd_patterns, fn pattern ->
-      quote do
-        assert_receive {:to_engine, :command, unquote(pattern)}, 5000
-      end
-    end)
-  end
-
-  defmacro assert_engine_sends_jobs(_ctx, job_patterns) do
-    Enum.map(job_patterns, fn pattern ->
-      quote do
-        assert_receive {:to_client, :job, unquote(pattern)}, 5000
-      end
-    end)
-  end
-
-  defmacro assert_engine_sends_activity_tasks(_ctx, task_patterns) do
-    Enum.map(task_patterns, fn pattern ->
-      quote do
-        assert_receive {:to_client, :activity_task, unquote(pattern)}, 5000
-      end
-    end)
-  end
 
   test "can simulate a workflow", ctx do
     TaskQueue.start_workflow(
@@ -96,10 +73,10 @@ defmodule Temporal.ClientTest do
       ctx.channel,
       ctx.worker,
       {:activation_completion, run_id,
-        {:success,
-          [
-            {:complete_workflow_execution, {:json, Jason.encode!("Workflow output")}}
-          ]}}
+       {:success,
+        [
+          {:complete_workflow_execution, {:json, Jason.encode!("Workflow output")}}
+        ]}}
     )
 
     assert_engine_sends_jobs(ctx, [{:remove_from_cache, :workflow_execution_ending, _}])
