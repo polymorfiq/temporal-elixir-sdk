@@ -84,9 +84,9 @@ defmodule Temporal.Workflows.CoreTest do
 
   def setup_worker(ctx) do
     {:ok, runtime} = Runtime.with_id("#{__MODULE__}")
-    {:ok, client} = Client.new("localhost:7233", runtime: runtime)
+    {:ok, client} = Client.new("localhost:7233", runtime: runtime, identity: "#{__MODULE__}")
 
-    queue = TaskQueue.new(client, "default")
+    queue = TaskQueue.new(client, "#{__MODULE__}")
     channel = Channel.new(queue)
 
     channel =

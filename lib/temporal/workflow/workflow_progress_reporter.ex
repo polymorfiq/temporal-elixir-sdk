@@ -137,7 +137,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         end)
       )
 
-    Logger.info("Will resolution unlock? #{inspect(will_unlock_anything?)}")
+    Logger.debug("Will resolution unlock? #{inspect(will_unlock_anything?)}")
 
     # These are in a specific order
     # https://typescript.temporal.io/api/classes/proto.coresdk.workflow_activation.WorkflowActivation
@@ -212,7 +212,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     report_successful_completion(state, [{:complete_workflow_execution, output}])
     |> case do
       {:ok, new_state} ->
-        {:noreply, new_state}
+        {:stop, :shutdown, new_state}
 
       {{:error, err}, _} ->
         Logger.error("Error reporting workflow completion - #{inspect(err)}")

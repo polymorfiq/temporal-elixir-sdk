@@ -162,4 +162,9 @@ defmodule Temporal.Client do
 
     WorkflowHandle.new(client, handle_opts ++ opts)
   end
+
+  @spec stop_all_workers(t()) :: :ok
+  def stop_all_workers(client) do
+    ClientSupervisor.stop_all_workers(client.identity)
+  end
 end

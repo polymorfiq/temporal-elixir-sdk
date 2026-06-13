@@ -50,8 +50,8 @@ defmodule Temporal.ClientTest do
   end
 
   defp setup_create_client(ctx) do
-    {:ok, runtime} = Runtime.with_id(System.unique_integer())
-    {:ok, client} = Client.new("localhost:7233", runtime: runtime)
+    {:ok, runtime} = Runtime.with_id("#{__MODULE__}")
+    {:ok, client} = Client.new("localhost:7233", runtime: runtime, identity: "#{__MODULE__}")
     on_exit(fn -> Client.stop(client) end)
     on_exit(fn -> Runtime.stop(runtime) end)
 

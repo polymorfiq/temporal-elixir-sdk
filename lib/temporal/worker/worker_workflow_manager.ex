@@ -135,8 +135,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     {:ok, state}
   end
 
-  def handle_activation_job(job, activation, state) do
-    Logger.warning("Unexpected job received: #{inspect(job)}")
+  def handle_activation_job(_job, activation, state) do
     WorkflowProgressReporter.process_activation(activation)
 
     {:ok, state}

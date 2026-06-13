@@ -30,5 +30,22 @@ defmodule Temporal.Supervisor.ClientSupervisor do
     end
   end
 
+  @spec stop_all_workers(client_identity :: String.t()) :: :ok
+  def stop_all_workers(client_identity) do
+    with {:ok, workers_sup} <- workers_sup_for_identity(client_identity) do
+      DynamicSupervisor.which_children(workers_sup)
+      |> Enum.each(fn
+        {_, worker_sup, :supervisor, _} ->
+          Supervisor.stop(worker_sup, :shutdown, :infinity)
+
+        _ -> :ok
+      end)
+
+      :ok
+    else
+      {:error, _} -> :ok
+    end
+  end
+
   defp via_registry(name), do: {:via, Registry, {ClientRegistry, name}}
 end
