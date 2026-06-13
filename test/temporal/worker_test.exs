@@ -28,10 +28,12 @@ defmodule Temporal.WorkerTest do
 
   test "stops worker supervisor when Core Worker is shutdown", ctx do
     {:ok, worker} = Worker.new(ctx.queue)
-    Worker.shutdown(worker)
-    Process.sleep(1000)
+    sup_pid = Worker.worker_supervisor_pid(worker.id)
+    ref = Process.monitor(sup_pid)
 
-    assert false == Worker.alive_with_id?(worker.id)
+    Worker.shutdown(worker)
+
+    assert_receive {:DOWN, ^ref, :process, ^sup_pid, _}, 1000
   end
 
   test "shuts down Core Worker when supervisor is stopped", ctx do

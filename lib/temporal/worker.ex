@@ -189,11 +189,11 @@ defmodule Temporal.Worker do
     end
   end
 
-  def alive_with_id?(worker_id) do
+  def worker_supervisor_pid(worker_id) do
     if pid = GenServer.whereis({:via, Registry, {WorkerRegistry, {:worker, worker_id}}}) do
-      Process.alive?(pid)
+      pid
     else
-      false
+      nil
     end
   end
 end
