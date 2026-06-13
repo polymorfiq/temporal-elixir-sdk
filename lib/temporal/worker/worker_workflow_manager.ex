@@ -54,8 +54,8 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   end
 
   def handle_call({:process_activation, {:error, "core_shutdown"}}, _from, state) do
-    Logger.debug("Workflow Manager received a 'core_shutdown' and is shutting down...")
-    {:stop, :shutdown, state}
+    Logger.warning("Workflow Manager received a 'core_shutdown' and is shutting down...")
+    {:noreply, state}
   end
 
   def handle_call({:process_activation, {:activation, _, opts} = activation}, _from, state) do
@@ -157,6 +157,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
           :ok
 
         {:error, {:already_started, _}} ->
+          Logger.warning("Workflow Run (#{exec_ctx.run_id}) initialized after already being started... Restarting...")
           WorkflowSupervisor.stop_workflow(exec_ctx.run_id)
           start_or_restart_workflow(exec_ctx, args)
 

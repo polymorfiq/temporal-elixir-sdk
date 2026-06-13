@@ -60,7 +60,7 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
         restart: :transient
       ),
       Supervisor.child_spec(
-        {WorkerCleanupCrew, {exec_ctx, [name: via_registry({:cleanup_crew, worker_id}), shutdown: 3_000]}},
+        {WorkerCleanupCrew, {exec_ctx, [name: via_registry({:cleanup_crew, worker_id}), shutdown: 60_000]}},
         restart: :transient
       )
     ]

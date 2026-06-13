@@ -104,7 +104,7 @@ defmodule Temporal.Worker do
              {
                exec_ctx,
                extra_opts ++ [config: worker_opts],
-               [name: reg_name, shutdown: 3_000]
+               [name: reg_name, shutdown: 60_000]
              }},
             restart: :transient
           )

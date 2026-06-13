@@ -131,7 +131,7 @@ defmodule Temporal.Client do
              {
                runtime_core,
                client_opts,
-               [name: reg_name, shutdown: 10_000]
+               [name: reg_name, shutdown: 60_000]
              }},
             restart: :transient
           )

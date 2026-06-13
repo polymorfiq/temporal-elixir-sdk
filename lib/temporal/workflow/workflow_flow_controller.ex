@@ -67,7 +67,7 @@ defmodule Temporal.Workflow.WorkflowFlowController do
     is_locked? = Enum.any?(awaiting)
     still_locked? = Map.drop(awaiting, activity_ids) |> Enum.any?()
 
-    {:reply, {:ok, is_locked? && !still_locked?}, state}
+    {:reply, {:ok, {is_locked?, is_locked? && !still_locked?}}, state}
   end
 
   def handle_call({:await_activity_result, activity_id}, from, state) do

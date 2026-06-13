@@ -58,17 +58,17 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
       case apply(mod, :execute, [ctx] ++ inputs) do
         {:ok, result} ->
-          Logger.info(
+          Logger.debug(
             "Workflow finished (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)} -> Reporting Completion..."
           )
 
-          WorkflowProgressReporter.report_completed_success(reporter, result)
+          :ok = WorkflowProgressReporter.report_completed_success(reporter, result)
       end
 
       {:noreply, state}
     else
       {:error, err} ->
-        {:shutdown, {:error, err}}
+        {:stop, {:error, err}, state}
     end
   end
 end

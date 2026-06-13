@@ -80,6 +80,13 @@ defmodule Temporal.Workflows.CoreTest do
     )
 
     assert_engine_sends_jobs(ctx, [{:remove_from_cache, :workflow_execution_ending, _}])
+
+    Channel.send_to_engine(
+      ctx.channel,
+      ctx.worker,
+      {:activation_completion, run_id, {:success, []}}
+    )
+
   end
 
   def setup_worker(ctx) do

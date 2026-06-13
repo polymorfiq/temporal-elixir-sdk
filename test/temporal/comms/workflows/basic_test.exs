@@ -67,6 +67,11 @@ defmodule Temporal.Workflows.BasicTest do
     assert_client_sends_commands(ctx,
       complete_workflow_execution: "Hello, Testing2!"
     )
+
+    assert_engine_sends_jobs(ctx, [{:remove_from_cache, :workflow_execution_ending, _}])
+
+
+    assert_client_sends_completion(ctx, {:activation_completion, _, {:success, []}})
   end
 
   def setup_worker(ctx) do
@@ -94,7 +99,7 @@ defmodule Temporal.Workflows.BasicTest do
 
   defp reroute_channel(%{channel: channel} = ctx) do
     test_pid = self()
-    Channel.add_listener(channel, test_pid, [:command, :job])
+    Channel.add_listener(channel, test_pid, [:command, :completion, :job])
     on_exit(fn -> Channel.remove_listener(channel, test_pid) end)
 
     ctx

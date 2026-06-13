@@ -23,8 +23,6 @@ defmodule Temporal.Workflow do
 
   @type exec_handle() :: WorkflowExecHandle.t() | ActivityExecHandle.t()
 
-  @watch_result_msg :workflow_result
-
   defmacro __using__(opts) do
     activities = Keyword.get(opts, :activities)
 
@@ -81,16 +79,6 @@ defmodule Temporal.Workflow do
           {:error, :timeout}
       end
     end
-  end
-
-  @spec watch_result(workflow_exec_handle(), get_results_opts()) ::
-          {:ok, WorkflowArguments.t()} | {:error, term()}
-  def watch_result(%WorkflowExecHandle{} = handle, opts \\ []) do
-    parent = self()
-
-    spawn_link(fn ->
-      send(parent, {@watch_result_msg, handle, result(handle, opts)})
-    end)
   end
 
   @spec execute_activity(WorkflowContext.t(), term(), [term()], activity_exec_opts()) ::

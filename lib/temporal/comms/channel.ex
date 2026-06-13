@@ -22,7 +22,7 @@ defmodule Temporal.Comms.Channel do
 
   @type t :: %__MODULE__{}
 
-  Record.defrecordp(:channel_state, listeners: [])
+  Record.defrecordp(:channel_state, listeners: [], active_activation_count: %{})
 
   def init(_) do
     Process.flag(:trap_exit, true)
@@ -126,7 +126,16 @@ defmodule Temporal.Comms.Channel do
       end
     end)
 
-    {:noreply, state}
+    activation_counts = if type == :activation do
+      {:activation, run_id, _} = msg
+      counts = channel_state(state, :active_activation_count)
+      curr_count = Map.get(counts, run_id, 0) + 1
+      Map.put(counts, run_id, curr_count)
+    else
+      channel_state(state, :active_activation_count)
+    end
+
+    {:noreply, channel_state(state, active_activation_count: activation_counts)}
   end
 
   def handle_cast({:to_engine, type, msg}, state) do
@@ -139,7 +148,22 @@ defmodule Temporal.Comms.Channel do
       end
     end)
 
-    {:noreply, state}
+
+    activation_counts = if type == :completion do
+      {:activation_completion, run_id, _} = msg
+      counts = channel_state(state, :active_activation_count)
+
+      curr_count = Map.get(counts, run_id, 0) - 1
+      if curr_count < 0 do
+        Logger.error("Responded to more activations than received...\n#{inspect(msg)}")
+      end
+
+      Map.put(counts, run_id, curr_count)
+    else
+      channel_state(state, :active_activation_count)
+    end
+
+    {:noreply, channel_state(state, active_activation_count: activation_counts)}
   end
 
   def new(task_queue) do
@@ -325,8 +349,8 @@ defmodule Temporal.Comms.Channel do
     parent = self()
 
     with {:ok, core_worker} = CoreWorker.existing_for_id(worker.id) do
-      child =
-        spawn_link(fn ->
+      {pid, ref} =
+        spawn_monitor(fn ->
           CoreSdk._worker_complete_activity_task(
             channel.runtime.core,
             core_worker.core,
@@ -351,8 +375,11 @@ defmodule Temporal.Comms.Channel do
         end)
 
       receive do
-        {^child, resp} ->
-          resp
+        {^pid, response} ->
+          response
+
+        {:DOWN, ^ref, :process, ^pid, reason} ->
+          {:error, reason}
       end
     end
   end

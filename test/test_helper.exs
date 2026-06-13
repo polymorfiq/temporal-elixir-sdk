@@ -3,6 +3,12 @@ ExUnit.start()
 defmodule ChannelHelpers do
   defmacro __using__(_opts) do
     quote do
+      defmacro assert_client_sends_completion(_ctx, pattern) do
+        quote do
+          assert_receive {:to_engine, :completion, unquote(pattern)}, 5000
+        end
+      end
+
       defmacro assert_client_sends_commands(_ctx, cmd_patterns) do
         Enum.map(cmd_patterns, fn pattern ->
           quote do

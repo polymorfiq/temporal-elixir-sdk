@@ -39,8 +39,8 @@ defmodule Temporal.Activity.ActivityExecutor do
   end
 
   def handle_continue(:execute, state) do
-    Logger.info(
-      "Activity started (Type: #{activity_state(state, :activity_type)}, ID: #{activity_state(state, :activity_id)}"
+    Logger.debug(
+      "Activity started (Type: #{activity_state(state, :activity_type)}, ID: #{activity_state(state, :activity_id)})"
     )
 
     start = activity_state(state, :start)
@@ -60,7 +60,7 @@ defmodule Temporal.Activity.ActivityExecutor do
     with {:ok, reporter} <- ActivitySupervisor.progress_reporter_pid(activity_id) do
       case ActivityProgressReporter.report_success(reporter, result) do
         :ok ->
-          Logger.info(
+          Logger.debug(
             "Activity completion reported (Type: #{inspect(activity_type)}, ID: #{inspect(activity_id)})"
           )
 

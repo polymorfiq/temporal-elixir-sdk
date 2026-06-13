@@ -80,7 +80,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
 
   def report_completed_success(reporter, result) do
     output = Payload.send_to_engine(result)
-    GenServer.cast(reporter, {:report_completed_success, output})
+    GenServer.call(reporter, {:report_completed_success, output}, :infinity)
   end
 
   def send_heartbeat_for_id(run_id) do
@@ -128,7 +128,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
 
     sequences = progress_state(state, :sequences)
 
-    {:ok, will_unlock_anything?} =
+    {:ok, {locked?, will_unlock_anything?}} =
       WorkflowFlowController.will_resolutions_unlock?(
         run_id,
         Enum.map(activity_resolve_jobs, fn {:resolve_activity, seq, _result, _opts} ->
@@ -196,7 +196,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
       end)
 
     with {:ok, new_state} <- processed do
-      if !will_unlock_anything? do
+      if locked? && !will_unlock_anything? do
         {:reply, :ok, new_state, {:continue, :heartbeat}}
       else
         {:reply, :ok, new_state}
@@ -208,15 +208,15 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     end
   end
 
-  def handle_cast({:report_completed_success, output}, state) do
+  def handle_call({:report_completed_success, output}, _from, state) do
     report_successful_completion(state, [{:complete_workflow_execution, output}])
     |> case do
       {:ok, new_state} ->
-        {:stop, :shutdown, new_state}
+        {:reply, :ok, new_state}
 
       {{:error, err}, _} ->
         Logger.error("Error reporting workflow completion - #{inspect(err)}")
-        {:noreply, state}
+        {:reply, {:error, err}, state}
     end
   end
 
@@ -284,7 +284,6 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
              flow_control,
              results
            ) do
-      Logger.warning("Resolving activity...!!!")
       {:ok, state}
     else
       {:error, err} ->
