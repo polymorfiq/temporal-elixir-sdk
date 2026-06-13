@@ -2,11 +2,11 @@ defmodule Temporal.Workflows.BasicTest do
   use ExUnit.Case
   use ChannelHelpers
 
-  require TestWorkflows.WorkflowWithActivities
+  require TestWorkflows.ActivitiesWithAwait
 
   alias Temporal.{Client, Runtime, TaskQueue, Worker}
   alias Temporal.Comms.Channel
-  alias TestWorkflows.WorkflowWithActivities
+  alias TestWorkflows.ActivitiesWithAwait
 
   setup_all [:setup_worker]
   setup [:reroute_channel]
@@ -15,13 +15,13 @@ defmodule Temporal.Workflows.BasicTest do
     TaskQueue.start_workflow(
       ctx.queue,
       unique_name("basic-test"),
-      WorkflowWithActivities,
+      ActivitiesWithAwait,
       ["Testing"],
       id_conflict_policy: :terminate_existing
     )
 
     assert_engine_sends_jobs(ctx, [
-      {:initialize_workflow, _id, "WorkflowWithActivities", ["Testing"], _opts}
+      {:initialize_workflow, _id, "ActivitiesWithAwait", ["Testing"], _opts}
     ])
 
     assert_client_sends_commands(
@@ -54,7 +54,7 @@ defmodule Temporal.Workflows.BasicTest do
     channel = Channel.new(queue)
 
     {:ok, worker} = Worker.new(queue, channel)
-    Worker.register_workflow(worker, WorkflowWithActivities)
+    Worker.register_workflow(worker, ActivitiesWithAwait)
 
     on_exit(fn -> Worker.shutdown(worker) end)
     on_exit(fn -> Client.stop(client) end)

@@ -2,11 +2,11 @@ defmodule Temporal.Workflows.CoreTest do
   use ExUnit.Case
   use ChannelHelpers
 
-  require TestWorkflows.WorkflowWithActivities
+  require TestWorkflows.ActivitiesWithAwait
 
   alias Temporal.{Client, Runtime, TaskQueue, Worker}
   alias Temporal.Comms.Channel
-  alias TestWorkflows.WorkflowWithActivities
+  alias TestWorkflows.ActivitiesWithAwait
 
   setup_all [:setup_worker]
   setup [:reroute_channel]
@@ -15,7 +15,7 @@ defmodule Temporal.Workflows.CoreTest do
     TaskQueue.start_workflow(
       ctx.queue,
       unique_name("core-test"),
-      WorkflowWithActivities,
+      ActivitiesWithAwait,
       ["Testing"],
       id_conflict_policy: :terminate_existing
     )
@@ -101,7 +101,7 @@ defmodule Temporal.Workflows.CoreTest do
       channel |> Channel.silence_activity_tasks() |> Channel.silence_workflow_activations()
 
     {:ok, worker} = Worker.new(queue, channel)
-    Worker.register_workflow(worker, WorkflowWithActivities)
+    Worker.register_workflow(worker, ActivitiesWithAwait)
 
     on_exit(fn -> Worker.shutdown(worker) end)
     on_exit(fn -> Client.stop(client) end)

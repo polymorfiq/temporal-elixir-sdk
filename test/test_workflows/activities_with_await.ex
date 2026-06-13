@@ -1,4 +1,4 @@
-defmodule TestWorkflows.WorkflowWithActivities do
+defmodule TestWorkflows.ActivitiesWithAwait do
   use Temporal.Workflow,
       activities: [
         {:greet_activity, 2, [name: "activity_a"]},
