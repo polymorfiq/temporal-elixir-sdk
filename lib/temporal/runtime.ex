@@ -40,7 +40,7 @@ defmodule Temporal.Runtime do
   end
 
   def stop(runtime) do
-    if sup = GenServer.whereis({:via, Registry, {RuntimeRegistry, runtime.id}}) do
+    if sup = GenServer.whereis(via_registry({:runtime, runtime.id})) do
       Supervisor.stop(sup, :shutdown, :infinity)
     else
       {:error, :runtime_already_stopped}
