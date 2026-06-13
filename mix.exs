@@ -9,6 +9,7 @@ defmodule Temporal.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       prune_code_paths: false,
+      elixirc_paths: elixirc_paths(Mix.env()),
 
       # Docs
       name: "Temporal SDK",
@@ -22,6 +23,9 @@ defmodule Temporal.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/test_workflows"]
+  defp elixirc_paths(_), do: ["lib"]
+
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
@@ -34,7 +38,8 @@ defmodule Temporal.MixProject do
   defp deps do
     [
       {:rustler, "~> 0.38.0", runtime: false},
-      {:ex_doc, "~> 0.21", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.21", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]

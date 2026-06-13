@@ -1,10 +1,12 @@
 defmodule Temporal.Workflows.CoreTest do
   use ExUnit.Case
   use ChannelHelpers
-  doctest Temporal.Client
+
+  require TestWorkflows.WorkflowWithActivities
 
   alias Temporal.{Client, Runtime, TaskQueue, Worker}
   alias Temporal.Comms.Channel
+  alias TestWorkflows.WorkflowWithActivities
 
   setup_all [:setup_worker]
   setup [:reroute_channel]
