@@ -30,9 +30,5 @@ defmodule Temporal.Supervisor.ClientSupervisor do
     end
   end
 
-  @spec core_for_identity(identity :: String.t()) :: {:ok, term()} | {:error, term()}
-  def core_for_identity(identity),
-    do: CoreClient.get_core(via_registry({:core, identity}))
-
   defp via_registry(name), do: {:via, Registry, {ClientRegistry, name}}
 end

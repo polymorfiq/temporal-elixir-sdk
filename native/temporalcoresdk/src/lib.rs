@@ -672,59 +672,40 @@ fn _worker_poll_workflow_activation(
 
 #[rustler::nif(schedule = "DirtyIo")]
 fn _worker_initiate_shutdown(
-    worker: ResourceArc<ElixirWorker>,
-    resp_pid: LocalPid,
+    worker: ResourceArc<ElixirWorker>
 ) -> NifResult<Atom> {
     let rt = Runtime::new().unwrap();
-    let _ = rt.spawn(async move {
-        let mut owned_env = OwnedEnv::new();
-        match worker.worker.as_ref() {
-            Some(core_worker) => {
+    match worker.worker.as_ref() {
+        Some(core_worker) => {
+            rt.block_on(async move {
                 core_worker.initiate_shutdown();
-
-                let msg: Result<bool, String> = Ok(true);
-                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
-            }
-
-            None => {
-                let msg: Result<bool, String> =
-                    Err(String::from("Core Worker instance unavailable..."));
-                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
-            }
+            });
+            Ok(atoms::ok())
         }
-    });
 
-    Ok(atoms::ok())
+        None => {
+            Err(rustler::Error::Term(Box::new("Core Worker instance unavailable...")))
+        }
+    }
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
 fn _worker_finalize_shutdown(
-    worker: ResourceArc<ElixirWorker>,
-    resp_pid: LocalPid,
+    worker: ResourceArc<ElixirWorker>
 ) -> NifResult<Atom> {
     let worker_mut = worker.deref() as *const ElixirWorker as *mut ElixirWorker;
     let stolen_core = unsafe { (*worker_mut).worker.take() };
 
-    let rt = Runtime::new().unwrap();
-    let _ = rt.spawn(async move {
-        let mut owned_env = OwnedEnv::new();
-        match stolen_core {
-            Some(core_worker) => {
-                core_worker.finalize_shutdown().await;
-
-                let msg: Atom = atoms::ok();
-                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
-            }
-
-            None => {
-                let msg: Result<bool, String> =
-                    Err(String::from("Core Worker instance unavailable..."));
-                let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
-            }
+    match stolen_core {
+        Some(core_worker) => {
+            let _ = core_worker.finalize_shutdown();
+            Ok(atoms::ok())
         }
-    });
 
-    Ok(atoms::ok())
+        None => {
+            Err(rustler::Error::Term(Box::new("Core Worker instance unavailable...")))
+        }
+    }
 }
 
 #[rustler::nif]

@@ -10,9 +10,6 @@ defmodule Temporal.Runtime do
 
   @global_name :_global
 
-  def core_for_id(runtime_id),
-    do: RuntimeSupervisor.core_for_id(runtime_id)
-
   @spec with_id(CoreRuntime.runtime_id(), CoreRuntime.runtime_opts()) ::
           {:ok, t()} | {:error, term()}
   def with_id(runtime_id, opts \\ []) do
@@ -25,7 +22,7 @@ defmodule Temporal.Runtime do
         DynamicSupervisor.start_child(
           Runtimes,
           Supervisor.child_spec(
-            {RuntimeSupervisor, opts ++ [name: reg_name, runtime_id: runtime_id]},
+            {RuntimeSupervisor, opts ++ [name: reg_name, runtime_id: runtime_id, shutdown: 10_000]},
             restart: :transient
           )
         )

@@ -15,6 +15,8 @@ defmodule Temporal.CoreSdk.CoreRuntime do
         ]
   @type t :: %__MODULE__{core: term()}
 
+  @runtime_store Temporal.Application.runtime_store()
+
   @spec start_link(runtime_opts() | keyword()) :: {:ok, pid()} | {:error, term()}
   def start_link(opts) do
     {runtime_opts, server_opts} = Keyword.split(opts, [:runtime_id, :heartbeat_interval_secs])
@@ -31,6 +33,7 @@ defmodule Temporal.CoreSdk.CoreRuntime do
   @impl true
   @spec init(runtime_opts()) :: {:ok, pid} | {:error, term()}
   def init(opts) do
+
     runtime_opts = %RuntimeOpts{
       heartbeat_interval_secs: Keyword.get(opts, :heartbeat_interval_secs)
     }
@@ -38,18 +41,28 @@ defmodule Temporal.CoreSdk.CoreRuntime do
     runtime_id = Keyword.fetch!(opts, :runtime_id)
     Process.set_label({:runtime, runtime_id})
 
+    try do
+      :ets.new(@runtime_store, [:set, :public, :named_table, read_concurrency: true])
+    rescue
+      ArgumentError ->
+        # Table already exists
+        :ok
+    end
+
     with {:ok, core} <- CoreSdk._create_runtime(runtime_opts) do
+      :ets.insert(@runtime_store, {{:core, runtime_id}, core})
+
       {:ok, server_state(id: runtime_id, core: core)}
     end
   end
 
-  def get_core(pid), do: GenServer.call(pid, :get_core)
-  def get_id(pid), do: GenServer.call(pid, :get_id)
+  def existing_for_id(runtime_id) do
+    case :ets.lookup(@runtime_store, {:core, runtime_id}) do
+      [{_, core}] ->
+        {:ok, %__MODULE__{core: core}}
 
-  @impl true
-  def handle_call(:get_core, _from, state),
-    do: {:reply, {:ok, %__MODULE__{core: server_state(state, :core)}}, state}
-
-  @impl true
-  def handle_call(:get_id, _from, state), do: {:reply, {:ok, server_state(state, :id)}, state}
+      _ ->
+        {:error, :core_runtime_not_online}
+    end
+  end
 end

@@ -3,6 +3,7 @@ defmodule Temporal.TaskQueue do
 
   alias Temporal.Client
   alias Temporal.CoreSdk
+  alias Temporal.CoreSdk.CoreClient
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkflowDefinition
   alias Temporal.CoreSdk.Data.WorkflowStartOptions
@@ -54,7 +55,7 @@ defmodule Temporal.TaskQueue do
       {pid, ref} =
         spawn_monitor(fn ->
           with {:ok, runtime_core} <- Client.core_runtime(queue.client),
-               {:ok, client_core} <- Client.core_for_identity(queue.client.identity) do
+               {:ok, client_core} <- CoreClient.existing_for_identity(queue.client.identity) do
             CoreSdk._client_start_workflow(
               runtime_core.core,
               client_core.core,

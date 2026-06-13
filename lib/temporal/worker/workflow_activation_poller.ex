@@ -11,10 +11,7 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
 
   Record.defrecordp(:poll_state, [
     :worker_id,
-    :worker_pid,
     :manager_pid,
-    :core_worker,
-    :core_runtime,
     :channel,
     :worker
   ])
@@ -25,18 +22,14 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
 
   @spec init(ExecutionContext.t()) :: {:ok, pid()} | {:error, term()}
   def init(exec_ctx) do
+    Process.flag(:trap_exit, true)
     Process.set_label({:workflow_activation_poller, exec_ctx.worker_id})
 
-    with {:ok, worker_pid} <- WorkerSupervisor.worker_pid(exec_ctx.worker_id),
-         {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(exec_ctx.worker_id),
-         {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
+    with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(exec_ctx.worker_id) do
       {:ok,
        poll_state(
          worker_id: exec_ctx.worker_id,
-         worker_pid: worker_pid,
          manager_pid: manager_pid,
-         core_worker: worker,
-         core_runtime: exec_ctx.runtime,
          channel: exec_ctx.channel,
          worker: exec_ctx.worker
        ), {:continue, :poll_for_activations}}
@@ -48,9 +41,26 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     with :ok <- poll_and_inform_worker(state) do
       {:noreply, state, {:continue, :poll_for_activations}}
     else
-      {{:error, "core_shutdown"}, _} ->
-        Logger.debug("Activation Poller shutdown triggered...")
+      {:error, "core_shutdown"} ->
+        Logger.debug("Workflow Activation Poller shutdown triggered...")
+
+        with {:ok, core_pid} <- WorkerSupervisor.core_worker_pid(poll_state(state, :worker_id)) do
+          send(core_pid, {:shutdown_complete, :activation_poller})
+        else
+          {:error, err} ->
+            Logger.warning(
+              "Workflow Activation Poller failed to notify worker of shutdown #{inspect(err)}"
+            )
+        end
+
         {:stop, :shutdown, state}
+
+      {:error, :core_worker_not_online} ->
+        Logger.warning("Worker Activation Poller was polling after core worker shutdown. Shutting poller down....")
+        {:stop, :shutdown, state}
+
+      {:error, error} ->
+        {:stop, {:poll_error, error}, state}
     end
   end
 
@@ -59,10 +69,18 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     worker = poll_state(state, :worker)
     manager_pid = poll_state(state, :manager_pid)
 
-    if activation = Channel.poll_activation(channel, worker) do
-      WorkerWorkflowManager.process_activation(manager_pid, activation)
-    else
-      :ok
+    case Channel.poll_activation(channel, worker) do
+      {:ok, nil} -> :ok
+      {:ok, activation} -> WorkerWorkflowManager.process_activation(manager_pid, activation)
+      {:error, err} -> {:error, err}
     end
+  end
+
+  def terminate(reason, state) do
+    Logger.debug(
+      "Workflow Activation Poller (#{poll_state(state, :worker_id)}) terminating... #{inspect(reason)}"
+    )
+
+    reason
   end
 end

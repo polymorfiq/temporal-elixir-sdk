@@ -4,8 +4,10 @@ defmodule Temporal.Worker do
   alias Temporal.Activity
   alias Temporal.Comms.Channel
   alias Temporal.Client
+  alias Temporal.CoreSdk.CoreClient
   alias Temporal.Internal.Hash
   alias Temporal.TaskQueue
+  alias Temporal.CoreSdk.CoreWorker
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.Supervisor.ClientSupervisor
   alias Temporal.Supervisor.ExecutionContext
@@ -78,7 +80,7 @@ defmodule Temporal.Worker do
       )
 
     with {:ok, core_runtime} <- Client.core_runtime(client),
-         {:ok, core_client} <- Client.core_for_identity(client.identity),
+         {:ok, core_client} <- CoreClient.existing_for_identity(client.identity),
          {:ok, workers_sup} <- ClientSupervisor.workers_sup_for_identity(client.identity) do
       reg_name = {:via, Registry, {WorkerRegistry, {:worker, worker_id}}}
 
@@ -102,7 +104,7 @@ defmodule Temporal.Worker do
              {
                exec_ctx,
                extra_opts ++ [config: worker_opts],
-               [name: reg_name]
+               [name: reg_name, shutdown: 3_000]
              }},
             restart: :transient
           )
@@ -114,11 +116,21 @@ defmodule Temporal.Worker do
     end
   end
 
-  def stop(worker) do
-    if sup = GenServer.whereis({:via, Registry, {WorkerRegistry, {:worker, worker.id}}}) do
+  @spec stop_with_id(worker_id :: String.t()) :: :ok | {:error, term()}
+  def stop_with_id(worker_id) do
+    if sup = GenServer.whereis({:via, Registry, {WorkerRegistry, {:worker, worker_id}}}) do
       Supervisor.stop(sup, :shutdown, :infinity)
     else
       {:error, :worker_already_stopped}
+    end
+  end
+
+  @spec shutdown(t()) :: :ok | {:error, term()}
+  def shutdown(worker) do
+    if core_worker = GenServer.whereis({:via, Registry, {WorkerRegistry, {:core, worker.id}}}) do
+      CoreWorker.shutdown(core_worker)
+    else
+      {:error, :core_worker_already_shutdown}
     end
   end
 
@@ -174,6 +186,14 @@ defmodule Temporal.Worker do
 
     with {:ok, manager_pid} <- WorkerSupervisor.activity_manager_pid(worker.id) do
       WorkerActivityManager.register(manager_pid, activity_type, activity_fn)
+    end
+  end
+
+  def alive_with_id?(worker_id) do
+    if pid = GenServer.whereis({:via, Registry, {WorkerRegistry, {:worker, worker_id}}}) do
+      Process.alive?(pid)
+    else
+      false
     end
   end
 end

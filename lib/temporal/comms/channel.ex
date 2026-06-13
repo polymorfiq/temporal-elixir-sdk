@@ -4,7 +4,8 @@ defmodule Temporal.Comms.Channel do
     :runtime,
     :pid,
     silence_activity_tasks: false,
-    silence_workflow_activations: false
+    silence_workflow_activations: false,
+    silence_nexus_tasks: false
   ]
 
   use GenServer
@@ -18,18 +19,19 @@ defmodule Temporal.Comms.Channel do
   alias Temporal.CoreSdk.CoreWorker
   alias Temporal.CoreSdk
   alias Temporal.Comms.Workflows.ActivationCompletion
-  alias Temporal.Supervisor.WorkerSupervisor
 
   @type t :: %__MODULE__{}
 
   Record.defrecordp(:channel_state, listeners: [])
 
   def init(_) do
+    Process.flag(:trap_exit, true)
     {:ok, channel_state()}
   end
 
   def silence_activity_tasks(channel), do: %{channel | silence_activity_tasks: true}
   def silence_workflow_activations(channel), do: %{channel | silence_workflow_activations: true}
+  def silence_nexus_tasks(channel), do: %{channel | silence_nexus_tasks: true}
 
   def add_listener(channel, pid, types \\ nil) do
     GenServer.cast(channel.pid, {:add_listener, pid, types})
@@ -170,14 +172,16 @@ defmodule Temporal.Comms.Channel do
     tuple
   end
 
+  @spec poll_activity_task(t(), Worker.t()) :: {:ok, term()} | {:error, term()}
   def poll_activity_task(channel, worker) do
-    with {:ok, core_worker_pid} <- WorkerSupervisor.worker_pid(worker.id),
-         {:ok, core_worker} = CoreWorker.get_core(core_worker_pid) do
+    with {:ok, core_worker} <- CoreWorker.existing_for_id(worker.id) do
       parent = self()
 
       child =
         spawn_link(fn ->
           Process.set_label({:long_activity_task_poll, worker.id})
+
+          Logger.debug("Polling activity tasks...")
 
           CoreSdk._worker_poll_activity_task(channel.runtime.core, core_worker.core, self())
           |> case do
@@ -198,7 +202,7 @@ defmodule Temporal.Comms.Channel do
       receive do
         {^child, {:ok, task}} ->
           resp = send_to_sdk(channel, task)
-          if !channel.silence_activity_tasks, do: resp, else: nil
+          if !channel.silence_activity_tasks, do: {:ok, resp}, else: {:ok, nil}
 
         {^child, {:error, err}} ->
           {:error, err}
@@ -206,14 +210,54 @@ defmodule Temporal.Comms.Channel do
     end
   end
 
+  @spec poll_nexus_task(t(), Worker.t()) :: {:ok, term()} | {:error, term()}
+  def poll_nexus_task(channel, worker) do
+    with {:ok, core_worker} <- CoreWorker.existing_for_id(worker.id) do
+      parent = self()
+
+      child =
+        spawn_link(fn ->
+          Process.set_label({:long_nexus_task_poll, worker.id})
+
+          Logger.debug("Polling nexus tasks...")
+
+          CoreSdk._worker_poll_nexus_task(channel.runtime.core, core_worker.core, self())
+          |> case do
+            :ok ->
+              receive do
+                {:ok, task} ->
+                  send(parent, {self(), {:ok, task}})
+
+                {:error, error} ->
+                  send(parent, {self(), {:error, error}})
+              end
+
+            resp ->
+              send(parent, {self(), {:error, "Error polling nexus tasks: #{inspect(resp)}"}})
+          end
+        end)
+
+      receive do
+        {^child, {:ok, task}} ->
+          resp = send_to_sdk(channel, task)
+          if !channel.silence_nexus_tasks, do: {:ok, resp}, else: {:ok, nil}
+
+        {^child, {:error, err}} ->
+          {:error, err}
+      end
+    end
+  end
+
+  @spec poll_activation(t(), Worker.t()) :: {:ok, term()} | {:error, term()}
   def poll_activation(channel, worker) do
-    with {:ok, core_worker_pid} <- WorkerSupervisor.worker_pid(worker.id),
-         {:ok, core_worker} = CoreWorker.get_core(core_worker_pid) do
+    with {:ok, core_worker} <- CoreWorker.existing_for_id(worker.id) do
       parent = self()
 
       child =
         spawn_link(fn ->
           Process.set_label({:long_activations_poll, worker.id})
+
+          Logger.debug("Polling workflow activations...")
 
           CoreSdk._worker_poll_workflow_activation(channel.runtime.core, core_worker.core, self())
           |> case do
@@ -234,7 +278,7 @@ defmodule Temporal.Comms.Channel do
       receive do
         {^child, {:ok, task}} ->
           resp = send_to_sdk(channel, task)
-          if !channel.silence_workflow_activations, do: resp, else: nil
+          if !channel.silence_workflow_activations, do: {:ok, resp}, else: {:ok, nil}
 
         {^child, {:error, err}} ->
           {:error, err}
@@ -243,8 +287,7 @@ defmodule Temporal.Comms.Channel do
   end
 
   defp send_activation_completion(msg, channel, worker) do
-    with {:ok, core_worker_pid} <- WorkerSupervisor.worker_pid(worker.id),
-         {:ok, core_worker} = CoreWorker.get_core(core_worker_pid) do
+    with {:ok, core_worker} <- CoreWorker.existing_for_id(worker.id) do
       parent = self()
 
       child =
@@ -281,8 +324,7 @@ defmodule Temporal.Comms.Channel do
   defp send_activity_task_completion(completion, channel, worker) do
     parent = self()
 
-    with {:ok, core_worker_pid} <- WorkerSupervisor.worker_pid(worker.id),
-         {:ok, core_worker} = CoreWorker.get_core(core_worker_pid) do
+    with {:ok, core_worker} = CoreWorker.existing_for_id(worker.id) do
       child =
         spawn_link(fn ->
           CoreSdk._worker_complete_activity_task(
@@ -313,5 +355,10 @@ defmodule Temporal.Comms.Channel do
           resp
       end
     end
+  end
+
+  def terminate(reason, _state) do
+    Logger.debug("Channel terminating... #{inspect(reason)}")
+    reason
   end
 end

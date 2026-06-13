@@ -10,6 +10,7 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
   alias Temporal.Worker.WorkflowActivationPoller
   alias Temporal.Worker.ActivityTaskPoller
   alias Temporal.Worker.NexusTaskPoller
+  alias Temporal.Worker.WorkerCleanupCrew
   alias Temporal.Worker.WorkerActivityManager
   alias Temporal.Worker.WorkerWorkflowManager
   alias Temporal.Worker
@@ -35,22 +36,40 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
     Process.set_label({:worker_supervisor, worker_id})
 
     children = [
-      {CoreWorker, {exec_ctx, opts, [name: via_registry({:core, worker_id}), shutdown: 10_000]}},
+      Supervisor.child_spec(
+        {CoreWorker,
+         {exec_ctx, opts, [name: via_registry({:core, worker_id})]}},
+        restart: :transient
+      ),
       {WorkflowList, [name: via_registry({:workflows, worker_id})]},
       {WorkerWorkflowManager,
        {exec_ctx, opts, [name: via_registry({:workflow_manager, worker_id})]}},
       {WorkerActivityManager, {exec_ctx, [name: via_registry({:activity_manager, worker_id})]}},
-      {WorkflowActivationPoller,
-       {exec_ctx, [name: via_registry({:workflow_activation_poller, worker_id})]}},
-      {ActivityTaskPoller, {exec_ctx, [name: via_registry({:activity_task_poller, worker_id})]}},
-      {NexusTaskPoller, {exec_ctx, [name: via_registry({:nexus_operation_poller, worker_id})]}}
+      Supervisor.child_spec(
+        {WorkflowActivationPoller,
+         {exec_ctx, [name: via_registry({:workflow_activation_poller, worker_id})]}},
+        restart: :transient
+      ),
+      Supervisor.child_spec(
+        {ActivityTaskPoller,
+         {exec_ctx, [name: via_registry({:activity_task_poller, worker_id})]}},
+        restart: :transient
+      ),
+      Supervisor.child_spec(
+        {NexusTaskPoller, {exec_ctx, [name: via_registry({:nexus_operation_poller, worker_id})]}},
+        restart: :transient
+      ),
+      Supervisor.child_spec(
+        {WorkerCleanupCrew, {exec_ctx, [name: via_registry({:cleanup_crew, worker_id}), shutdown: 3_000]}},
+        restart: :transient
+      )
     ]
 
-    Supervisor.init(children, strategy: :one_for_all)
+    Supervisor.init(children, strategy: :one_for_one)
   end
 
-  @spec worker_pid(worker_id()) :: {:ok, term()} | {:error, term()}
-  def worker_pid(worker_id) do
+  @spec core_worker_pid(worker_id()) :: {:ok, term()} | {:error, term()}
+  def core_worker_pid(worker_id) do
     if pid = GenServer.whereis(via_registry({:core, worker_id})) do
       {:ok, pid}
     else
@@ -75,14 +94,6 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
       {:error, :activity_manager_not_running}
     end
   end
-
-  @spec core_for_id(worker_id()) :: {:ok, term()} | {:error, term()}
-  def core_for_id(worker_id),
-    do: CoreWorker.get_core(via_registry({:core, worker_id}))
-
-  @spec runtime_for_id(worker_id()) :: {:ok, term()} | {:error, term()}
-  def runtime_for_id(worker_id),
-    do: CoreWorker.get_runtime(via_registry({:core, worker_id}))
 
   @spec workflows_sup_for_id(worker_id()) :: {:ok, term()} | {:error, term()}
   def workflows_sup_for_id(worker_id) do

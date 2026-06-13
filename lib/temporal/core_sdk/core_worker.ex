@@ -7,8 +7,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.Supervisor.ExecutionContext
-  alias Temporal.Supervisor.WorkerSupervisor
-  alias Temporal.Worker.WorkerWorkflowManager
+  alias Temporal.Worker
 
   require Record
   require Logger
@@ -21,6 +20,8 @@ defmodule Temporal.CoreSdk.CoreWorker do
     :runtime,
     :client,
     :core,
+    shutdowns: %{},
+    waiting_on_shutdown: [],
     forward_polled_pid: nil
   ])
 
@@ -30,6 +31,8 @@ defmodule Temporal.CoreSdk.CoreWorker do
         }
 
   @type worker_opts :: [{:config, WorkerOpts.t()} | {:forward_polled_messages, pid()}]
+
+  @worker_store Temporal.Application.worker_store()
 
   @spec start_link({ExecutionContext.t(), worker_opts(), keyword()}) ::
           {:ok, pid()} | {:error, term()}
@@ -43,38 +46,58 @@ defmodule Temporal.CoreSdk.CoreWorker do
   @spec init({ExecutionContext.t(), WorkerOpts.t(), worker_opts()}) ::
           {:ok, t()} | {:error, term()}
   def init({exec_ctx, config, opts}) do
-    Process.flag(:trap_exit, true)
-    parent = self()
-
-    {pid, ref} =
-      spawn_monitor(fn ->
-        CoreSdk._create_worker(exec_ctx.runtime.core, exec_ctx.client.core, config, self())
-        |> case do
-          {:ok, _} -> :ok
-          {:error, err} -> raise "Could initialize worker from Core SDK: #{inspect(err)}"
-        end
-
-        receive do
-          {:ok, worker} ->
-            send(parent, {self(), {:ok, worker}})
-
-          {:error, err} ->
-            send(parent, {self(), {:error, err}})
-        end
-      end)
-
-    worker_resp =
-      receive do
-        {^pid, response} ->
-          response
-
-        {:DOWN, ^ref, :process, ^pid, reason} ->
-          {:error, reason}
-      end
-
     Process.set_label({:worker, exec_ctx.worker_id})
 
+    try do
+      :ets.new(@worker_store, [:set, :public, :named_table, read_concurrency: true])
+    rescue
+      ArgumentError ->
+        # Table already exists
+        :ok
+    end
+
+    existing_core_worker =
+      case :ets.lookup(@worker_store, {:core, exec_ctx.worker_id}) do
+        [{_, core}] -> core
+        _ -> nil
+      end
+
+    worker_resp =
+      if existing_core_worker do
+        {:ok, existing_core_worker}
+      else
+        parent = self()
+
+        {pid, ref} =
+          spawn_monitor(fn ->
+            CoreSdk._create_worker(exec_ctx.runtime.core, exec_ctx.client.core, config, self())
+            |> case do
+              {:ok, _} -> :ok
+              {:error, err} -> raise "Could initialize worker from Core SDK: #{inspect(err)}"
+            end
+
+            receive do
+              {:ok, worker} ->
+                send(parent, {self(), {:ok, worker}})
+
+              {:error, err} ->
+                send(parent, {self(), {:error, err}})
+            end
+          end)
+
+        receive do
+          {^pid, response} ->
+            response
+
+          {:DOWN, ^ref, :process, ^pid, reason} ->
+            {:error, reason}
+        end
+      end
+
     with {:ok, core} <- worker_resp, :ok <- validate(core, exec_ctx.runtime) do
+      :ets.insert(@worker_store, {{:core, exec_ctx.worker_id}, core})
+      :ets.insert(@worker_store, {{:runtime, exec_ctx.worker_id}, exec_ctx.runtime})
+
       {:ok,
        server_state(
          id: exec_ctx.worker_id,
@@ -125,12 +148,27 @@ defmodule Temporal.CoreSdk.CoreWorker do
     end
   end
 
-  def get_core(pid), do: GenServer.call(pid, :get_core)
-  def get_runtime(pid), do: GenServer.call(pid, :get_runtime)
+  def existing_for_id(worker_id) do
+    case :ets.lookup(@worker_store, {:core, worker_id}) do
+      [{_, core}] ->
+        {:ok, %__MODULE__{core: core}}
 
-  def process_workflow_activation(pid, activation) do
-    GenServer.call(pid, {:process_workflow_activation, activation}, :infinity)
+      _ ->
+        {:error, :core_worker_not_online}
+    end
   end
+
+  def runtime_for_id(worker_id) do
+    case :ets.lookup(@worker_store, {:runtime, worker_id}) do
+      [{_, core}] ->
+        {:ok, %CoreRuntime{core: core}}
+
+      _ ->
+        {:error, :core_worker_runtime_not_online}
+    end
+  end
+
+  def shutdown(pid), do: GenServer.call(pid, :shutdown, :infinity)
 
   def process_activity_task(pid, task) do
     GenServer.call(pid, {:process_activity_task, task}, :infinity)
@@ -138,19 +176,6 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   def process_nexus_task(pid, task) do
     GenServer.call(pid, {:process_nexus_task, task}, :infinity)
-  end
-
-  @impl true
-  def handle_call({:process_workflow_activation, activation}, _from, state) do
-    if forward_to = server_state(state, :forward_polled_pid) do
-      Enum.each(activation.jobs, fn job ->
-        send(forward_to, {:workflow_activation_job, job.variant, activation})
-      end)
-    end
-
-    process_activation(activation, state)
-
-    {:reply, :ok, state}
   end
 
   @impl true
@@ -172,105 +197,83 @@ defmodule Temporal.CoreSdk.CoreWorker do
   end
 
   @impl true
-  def handle_call(:get_core, _from, state),
-    do: {:reply, {:ok, %__MODULE__{core: server_state(state, :core)}}, state}
+  def handle_call(:shutdown, from, state) do
+    Logger.debug("Worker (#{friendly_name(state)}) shutting down...")
+    with :ok <- initiate_shutdown(state) do
+      waiting = server_state(state, :waiting_on_shutdown)
+      waiting = [from | waiting]
 
-  @impl true
-  def handle_call(:get_runtime, _from, state),
-    do: {:reply, {:ok, server_state(state, :runtime)}, state}
+      {:noreply, server_state(state, waiting_on_shutdown: waiting)}
+    else
+      {:error, err} ->
+        {:reply, {:error, err}, state}
+    end
+  end
 
   @impl true
   def handle_info({:DOWN, _ref, :process, _pid, :normal}, state),
     do: {:noreply, state}
 
-  defp process_activation(activation, state) do
-    worker_id = server_state(state, :id)
-    workflow_manager_pid = WorkerSupervisor.workflow_manager_pid(worker_id)
-    WorkerWorkflowManager.process_activation(workflow_manager_pid, activation)
-  end
+  def handle_info({:shutdown_complete, poller}, state) do
+    shutdowns = server_state(state, :shutdowns)
+    shutdowns = Map.put(shutdowns, poller, true)
+    state = server_state(state, shutdowns: shutdowns)
 
-  @impl true
-  def terminate(reason, state) do
-    Logger.debug("Worker (#{friendly_name(state)}) terminating: #{inspect(reason)}")
+    if shutdowns[:activity_task_poller] && shutdowns[:nexus_task_poller] &&
+         shutdowns[:activation_poller] do
+      Logger.debug(
+        "Worker (#{friendly_name(state)}) received all shutdown verifications. Finalizing..."
+      )
 
-    with :ok <- initiate_shutdown(state),
-         :ok <- finalize_shutdown(state) do
-      :shutdown
+      :ets.delete(@worker_store, {:core, server_state(state, :id)})
+      :ets.delete(@worker_store, {:runtime, server_state(state, :id)})
+      with :ok <- finalize_shutdown(state) do
+        server_state(state, :waiting_on_shutdown)
+        |> Enum.each(& GenServer.reply(&1, :ok))
+
+        Logger.debug("Worker (#{friendly_name(state)}) finalized shutdown!")
+
+        spawn(fn ->
+          Worker.stop_with_id(server_state(state, :id))
+        end)
+
+        {:stop, :shutdown, state}
+      else
+        err ->
+          server_state(state, :waiting_on_shutdown)
+          |> Enum.each(& GenServer.reply(&1, {:error, err}))
+
+          Logger.error(
+            "Worker (#{friendly_name(state)}) failed to finalize shutdown... Still proceeding. #{inspect(err)}"
+          )
+
+          {:stop, :shutdown, state}
+      end
+    else
+      {:noreply, state}
     end
   end
 
   defp initiate_shutdown(state) do
     worker_core = server_state(state, :core)
 
-    parent = self()
+    with :ok <- CoreSdk._worker_initiate_shutdown(worker_core) do
+      Logger.debug("Worker (#{friendly_name(state)}) shutdown initiated.")
+      :ok
+    else
+      {:error, err} ->
+        Logger.error(
+          "Worker (#{friendly_name(state)}) shutdown initiation errored (#{inspect(err)})."
+        )
 
-    child =
-      spawn_link(fn ->
-        case CoreSdk._worker_initiate_shutdown(worker_core, self()) do
-          :ok ->
-            receive do
-              {:ok, success} ->
-                Logger.debug("Worker (#{friendly_name(state)}) shutdown initiated.")
-                send(parent, {self(), {:ok, success}})
-
-              {:error, error} ->
-                Logger.debug(
-                  "Worker (#{friendly_name(state)}) shutdown initiation errored (#{inspect(error)})."
-                )
-
-                send(parent, {self(), {:error, error}})
-            end
-
-          resp ->
-            send(parent, {self(), {:error, "Error initiating shutdown: #{inspect(resp)}"}})
-        end
-      end)
-
-    receive do
-      {^child, {:ok, _}} ->
-        :ok
-
-      {^child, {:error, err}} ->
         {:error, err}
+
     end
   end
 
   defp finalize_shutdown(state) do
     worker_core = server_state(state, :core)
-
-    parent = self()
-
-    child =
-      spawn_link(fn ->
-        Logger.debug("Worker (#{friendly_name(state)}) finalizing shutdown...")
-
-        case CoreSdk._worker_finalize_shutdown(worker_core, self()) do
-          :ok ->
-            receive do
-              {:ok, success} ->
-                Logger.debug("Worker (#{friendly_name(state)}) shutdown finalized.")
-                send(parent, {self(), {:ok, success}})
-
-              {:error, error} ->
-                Logger.debug(
-                  "Worker (#{friendly_name(state)}) shutdown finalization errored (#{inspect(error)})."
-                )
-
-                send(parent, {self(), {:error, error}})
-            end
-
-          resp ->
-            send(parent, {self(), {:error, "Error finalizing shutdown: #{inspect(resp)}"}})
-        end
-      end)
-
-    receive do
-      {^child, {:ok, _}} ->
-        :ok
-
-      {^child, {:error, err}} ->
-        {:error, err}
-    end
+    CoreSdk._worker_finalize_shutdown(worker_core)
   end
 
   defp friendly_name(state), do: server_state(state, :id)

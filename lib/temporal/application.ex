@@ -5,8 +5,21 @@ defmodule Temporal.Application do
 
   use Application
 
+  @runtime_store Temporal.RuntimeLookup
+  def runtime_store, do: @runtime_store
+
+  @worker_store Temporal.WorkerLookup
+  def worker_store, do: @worker_store
+
+  @client_store Temporal.ClientLookup
+  def client_store, do: @client_store
+
   @impl true
   def start(_type, _args) do
+    :ets.new(@runtime_store, [:set, :public, :named_table, read_concurrency: true])
+    :ets.new(@client_store, [:set, :public, :named_table, read_concurrency: true])
+    :ets.new(@worker_store, [:set, :public, :named_table, read_concurrency: true])
+
     children = [
       {Registry, keys: :unique, name: Temporal.RuntimeRegistry},
       {Registry, keys: :unique, name: Temporal.ClientRegistry},

@@ -10,10 +10,7 @@ defmodule Temporal.Worker.ActivityTaskPoller do
 
   Record.defrecordp(:poll_state, [
     :worker_id,
-    :worker_pid,
     :activity_manager,
-    :core_worker,
-    :core_runtime,
     :channel,
     :worker
   ])
@@ -24,18 +21,14 @@ defmodule Temporal.Worker.ActivityTaskPoller do
 
   @spec init({CoreRuntime.t(), CoreClient.t(), WorkerOpts.t()}) :: {:ok, pid()} | {:error, term()}
   def init(exec_ctx) do
+    Process.flag(:trap_exit, true)
     Process.set_label({:activity_task_poller, exec_ctx.worker_id})
 
-    with {:ok, worker_pid} <- WorkerSupervisor.worker_pid(exec_ctx.worker_id),
-         {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id),
-         {:ok, activity_manager} <- WorkerSupervisor.activity_manager_pid(exec_ctx.worker_id) do
+    with {:ok, activity_manager} <- WorkerSupervisor.activity_manager_pid(exec_ctx.worker_id) do
       {:ok,
        poll_state(
          worker_id: exec_ctx.worker_id,
-         worker_pid: worker_pid,
          activity_manager: activity_manager,
-         core_worker: worker,
-         core_runtime: exec_ctx.runtime,
          channel: exec_ctx.channel,
          worker: exec_ctx.worker
        ), {:continue, :poll_for_tasks}}
@@ -44,14 +37,28 @@ defmodule Temporal.Worker.ActivityTaskPoller do
 
   @doc false
   def handle_continue(:poll_for_tasks, state) do
-    with {:ok, _} <- poll_and_inform_worker(state) do
+    with :ok <- poll_and_inform_worker(state) do
       {:noreply, state, {:continue, :poll_for_tasks}}
     else
-      {{:error, "core_shutdown"}, _} ->
+      {:error, "core_shutdown"} ->
         Logger.debug("Activity Task Poller shutdown triggered...")
+
+        with {:ok, core_pid} <- WorkerSupervisor.core_worker_pid(poll_state(state, :worker_id)) do
+          send(core_pid, {:shutdown_complete, :activity_task_poller})
+        else
+          {:error, err} ->
+            Logger.warning(
+              "Activity Task Poller failed to notify worker of shutdown #{inspect(err)}"
+            )
+        end
+
         {:stop, :shutdown, state}
 
-      {{:error, error}, _} ->
+      {:error, :core_worker_not_online} ->
+        Logger.warning("Activity Task Poller was polling after core worker shutdown. Shutting poller down....")
+        {:stop, :shutdown, state}
+
+      {:error, error} ->
         {:stop, {:poll_error, error}, state}
     end
   end
@@ -60,10 +67,14 @@ defmodule Temporal.Worker.ActivityTaskPoller do
     worker = poll_state(state, :worker)
     channel = poll_state(state, :channel)
 
-    Channel.poll_activity_task(channel, worker) |> process_activity_task(state)
+    case Channel.poll_activity_task(channel, worker) do
+      {:ok, nil} -> :ok
+      {:ok, task} -> process_activity_task(task, state)
+      {:error, err} -> {:error, err}
+    end
   end
 
-  defp process_activity_task(nil, _), do: {:ok, nil}
+  defp process_activity_task(nil, _), do: :ok
 
   defp process_activity_task(task, state) do
     activity_manager = poll_state(state, :activity_manager)
@@ -77,8 +88,15 @@ defmodule Temporal.Worker.ActivityTaskPoller do
 
       {:error, err} ->
         Logger.error("Error processing activity task: #{inspect(err)}")
+        {:error, err}
     end
+  end
 
-    {:ok, task}
+  def terminate(reason, state) do
+    Logger.debug(
+      "Activity Task Poller (#{poll_state(state, :worker_id)}) terminating... #{inspect(reason)}"
+    )
+
+    reason
   end
 end

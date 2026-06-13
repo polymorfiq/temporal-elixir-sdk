@@ -1,5 +1,6 @@
 defmodule Temporal.Worker.WorkerWorkflowManager do
   use GenServer
+  alias Temporal.CoreSdk.CoreWorker
   alias Temporal.Supervisor.ExecutionContext
   alias Temporal.TaskQueue
   alias Temporal.Worker
@@ -52,6 +53,11 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     {:noreply, manager_state(state, registered: Map.put(registered, name, module))}
   end
 
+  def handle_call({:process_activation, {:error, "core_shutdown"}}, _from, state) do
+    Logger.debug("Workflow Manager received a 'core_shutdown' and is shutting down...")
+    {:stop, :shutdown, state}
+  end
+
   def handle_call({:process_activation, {:activation, _, opts} = activation}, _from, state) do
     jobs = Keyword.fetch!(opts, :jobs)
 
@@ -82,14 +88,14 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
       if workflow_module = registered[workflow_type] do
         Logger.debug("Job: initialize_workflow (#{inspect(workflow_module)} - #{run_id})")
 
-        with {:ok, worker} <- WorkerSupervisor.core_for_id(exec_ctx.worker_id) do
+        with {:ok, worker} <- CoreWorker.existing_for_id(exec_ctx.worker_id) do
           exec_ctx = %{
             exec_ctx
             | workflow_id: workflow_id,
               run_id: run_id,
               workflow_module: workflow_module,
               workflow_initialize: initialize,
-              worker: worker
+              core_worker: worker
           }
 
           start_or_restart_workflow(exec_ctx, args)

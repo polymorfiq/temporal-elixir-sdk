@@ -11,6 +11,8 @@ defmodule Temporal.CoreSdk.CoreClient do
 
   @type t :: %__MODULE__{core: term()}
 
+  @client_store Temporal.Application.client_store()
+
   @spec start_link({CoreRuntime.t(), ClientOpts.t(), keyword()}) ::
           {:ok, pid()} | {:error, term()}
   def start_link({runtime, opts, server_opts}) do
@@ -24,6 +26,14 @@ defmodule Temporal.CoreSdk.CoreClient do
 
     Process.set_label({:core_client, opts.identity})
 
+    try do
+      :ets.new(@client_store, [:set, :public, :named_table, read_concurrency: true])
+    rescue
+      ArgumentError ->
+        # Table already exists
+        :ok
+    end
+
     {pid, ref} =
       spawn_monitor(fn ->
         CoreSdk._create_client(runtime.core, opts, self())
@@ -34,6 +44,7 @@ defmodule Temporal.CoreSdk.CoreClient do
 
         receive do
           {:ok, client} ->
+            :ets.insert(@client_store, {{:core, opts.identity}, client})
             send(parent, {self(), {:ok, client}})
 
           {:error, err} ->
@@ -55,16 +66,15 @@ defmodule Temporal.CoreSdk.CoreClient do
     end
   end
 
-  def get_core(pid), do: GenServer.call(pid, :get_core)
-  def get_identity(pid), do: GenServer.call(pid, :get_identity)
+  def existing_for_identity(identity) do
+    case :ets.lookup(@client_store, {:core, identity}) do
+      [{_, core}] ->
+        {:ok, %__MODULE__{core: core}}
 
-  @impl true
-  def handle_call(:get_core, _from, state),
-    do: {:reply, {:ok, %__MODULE__{core: server_state(state, :core)}}, state}
-
-  @impl true
-  def handle_call(:get_identity, _from, state),
-    do: {:reply, {:ok, server_state(state, :identity)}, state}
+      _ ->
+        {:error, :core_client_not_online}
+    end
+  end
 
   @impl true
   def handle_info({:DOWN, _ref, :process, _pid, :normal}, state),

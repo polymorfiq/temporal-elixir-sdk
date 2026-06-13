@@ -3,8 +3,6 @@ ExUnit.start()
 defmodule ChannelHelpers do
   defmacro __using__(_opts) do
     quote do
-      import ExUnit.Assertions, only: [assert_receive: 2]
-
       defmacro assert_client_sends_commands(_ctx, cmd_patterns) do
         Enum.map(cmd_patterns, fn pattern ->
           quote do

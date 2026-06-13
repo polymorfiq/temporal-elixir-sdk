@@ -99,19 +99,15 @@ defmodule Temporal.CoreSdk do
 
   @doc false
   @spec _worker_initiate_shutdown(
-          worker :: term(),
-          resp_pid :: pid()
+          worker :: term()
         ) ::
           {:ok, bool()} | {:error, term()}
-  def _worker_initiate_shutdown(_worker, _resp_pid),
+  def _worker_initiate_shutdown(_worker),
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
-  @spec _worker_finalize_shutdown(
-          worker :: term(),
-          resp_pid :: pid()
-        ) ::
+  @spec _worker_finalize_shutdown(worker :: term()) ::
           {:ok, bool()} | {:error, term()}
-  def _worker_finalize_shutdown(_worker, _resp_pid),
+  def _worker_finalize_shutdown(_worker),
     do: :erlang.nif_error(:nif_not_loaded)
 end

@@ -1,4 +1,4 @@
-defmodule Temporal.CoreTest do
+defmodule Temporal.Workflows.CoreTest do
   use ExUnit.Case
   use ChannelHelpers
   doctest Temporal.Client
@@ -83,7 +83,7 @@ defmodule Temporal.CoreTest do
   end
 
   def setup_worker(ctx) do
-    {:ok, runtime} = Runtime.with_id(System.unique_integer())
+    {:ok, runtime} = Runtime.with_id("#{__MODULE__}")
     {:ok, client} = Client.new("localhost:7233", runtime: runtime)
 
     queue = TaskQueue.new(client, "default")
@@ -95,7 +95,7 @@ defmodule Temporal.CoreTest do
     {:ok, worker} = Worker.new(queue, channel)
     Worker.register_workflow(worker, WorkflowWithActivities)
 
-    on_exit(fn -> Worker.stop(worker) end)
+    on_exit(fn -> Worker.shutdown(worker) end)
     on_exit(fn -> Client.stop(client) end)
     on_exit(fn -> Runtime.stop(runtime) end)
 

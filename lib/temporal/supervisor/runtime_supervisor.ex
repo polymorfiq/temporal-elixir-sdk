@@ -23,10 +23,6 @@ defmodule Temporal.Supervisor.RuntimeSupervisor do
     Supervisor.init(children, strategy: :one_for_all)
   end
 
-  @spec core_for_id(runtime_id :: CoreRuntime.runtime_id()) :: {:ok, term()} | {:error, term()}
-  def core_for_id(runtime_id),
-    do: CoreRuntime.get_core(via_registry({:core, runtime_id}))
-
   @spec clients_sup_for_id(runtime_id :: CoreRuntime.runtime_id()) ::
           {:ok, pid()} | {:error, term()}
   def clients_sup_for_id(runtime_id) do

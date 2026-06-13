@@ -1,6 +1,7 @@
 defmodule Temporal.Client do
   defstruct [:identity, :namespace, :runtime_id]
 
+  alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.ClientRegistry
   alias Temporal.Constants
   alias Temporal.Internal.Hash
@@ -55,10 +56,7 @@ defmodule Temporal.Client do
   end
 
   def core_runtime(client),
-    do: Runtime.core_for_id(client.runtime_id)
-
-  def core_for_identity(identity),
-    do: ClientSupervisor.core_for_identity(identity)
+    do: CoreRuntime.existing_for_id(client.runtime_id)
 
   @spec validate_opts(keyword()) :: {:ok, client_opts()} | {:error, term()}
   defp validate_opts(opts) do
@@ -123,7 +121,7 @@ defmodule Temporal.Client do
     reg_name = {:via, Registry, {ClientRegistry, {:client, identity}}}
 
     with {:ok, runtime} <- runtime_resp,
-         {:ok, runtime_core} <- Runtime.core_for_id(runtime.id),
+         {:ok, runtime_core} <- CoreRuntime.existing_for_id(runtime.id),
          {:ok, clients_sup} <- RuntimeSupervisor.clients_sup_for_id(runtime.id) do
       child_started =
         DynamicSupervisor.start_child(
@@ -133,7 +131,7 @@ defmodule Temporal.Client do
              {
                runtime_core,
                client_opts,
-               [name: reg_name]
+               [name: reg_name, shutdown: 10_000]
              }},
             restart: :transient
           )

@@ -23,8 +23,8 @@ defmodule Temporal.Worker.WorkerActivityManager do
   def register(pid, activity_type, activity_fn),
     do: GenServer.cast(pid, {:register, activity_type, activity_fn})
 
-  def process_task(pid, {:activity_task, variant, token}),
-    do: GenServer.call(pid, {:process_task, variant, token}, :infinity)
+  def process_task(pid, task),
+    do: GenServer.call(pid, {:process_task, task}, :infinity)
 
   def handle_cast({:register, activity_type, activity_fn}, state) do
     registered = activities_state(state, :registered)
@@ -33,8 +33,13 @@ defmodule Temporal.Worker.WorkerActivityManager do
      activities_state(state, registered: Map.put(registered, activity_type, activity_fn))}
   end
 
+  def handle_call({:process_task, {:error, "core_shutdown"}}, _from, state) do
+    Logger.debug("Activity Manager received a 'core_shutdown' and is shutting down...")
+    {:stop, :shutdown, state}
+  end
+
   def handle_call(
-        {:process_task, {:start, activity_id, activity_type, opts}, token},
+        {:process_task, {_, {:start, activity_id, activity_type, opts}, token}},
         _from,
         state
       ) do
@@ -80,7 +85,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
     end
   end
 
-  def handle_call({:process_task, {:cancel, reason, details}, _}, _from, state) do
+  def handle_call({:process_task, {_, {:cancel, reason, details}, _token}}, _from, state) do
     {reason, details} |> IO.inspect(label: "cancel-activity")
 
     {:reply, :ok, state}
