@@ -70,7 +70,6 @@ defmodule Temporal.Workflows.BasicTest do
 
     assert_engine_sends_jobs(ctx, [{:remove_from_cache, :workflow_execution_ending, _}])
 
-
     assert_client_sends_completion(ctx, {:activation_completion, _, {:success, []}})
   end
 

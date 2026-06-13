@@ -45,7 +45,10 @@ defmodule Temporal.Worker.NexusTaskPoller do
         {:stop, :shutdown, state}
 
       {:error, :core_worker_not_online} ->
-        Logger.warning("Nexus Task Poller was polling after core worker shutdown. Shutting poller down....")
+        Logger.warning(
+          "Nexus Task Poller was polling after core worker shutdown. Shutting poller down...."
+        )
+
         {:stop, :shutdown, state}
 
       {:error, error} ->

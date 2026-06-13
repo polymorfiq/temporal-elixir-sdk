@@ -36,9 +36,17 @@ defmodule Temporal.Supervisor.ClientSupervisor do
       DynamicSupervisor.which_children(workers_sup)
       |> Enum.each(fn
         {_, worker_sup, :supervisor, _} ->
-          Supervisor.stop(worker_sup, :shutdown, :infinity)
+          try do
+            Supervisor.stop(worker_sup, :shutdown, :infinity)
+            :ok
+          rescue
+            err ->
+              Logger.error("Received error when killing all workers: #{inspect(err)}")
+              :ok
+          end
 
-        _ -> :ok
+        _ ->
+          :ok
       end)
 
       :ok

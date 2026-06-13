@@ -86,7 +86,6 @@ defmodule Temporal.Workflows.CoreTest do
       ctx.worker,
       {:activation_completion, run_id, {:success, []}}
     )
-
   end
 
   def setup_worker(ctx) do

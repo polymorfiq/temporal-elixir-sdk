@@ -157,7 +157,10 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
           :ok
 
         {:error, {:already_started, _}} ->
-          Logger.warning("Workflow Run (#{exec_ctx.run_id}) initialized after already being started... Restarting...")
+          Logger.warning(
+            "Workflow Run (#{exec_ctx.run_id}) initialized after already being started... Restarting..."
+          )
+
           WorkflowSupervisor.stop_workflow(exec_ctx.run_id)
           start_or_restart_workflow(exec_ctx, args)
 

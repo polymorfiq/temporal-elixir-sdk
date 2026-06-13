@@ -56,7 +56,10 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
         {:stop, :shutdown, state}
 
       {:error, :core_worker_not_online} ->
-        Logger.warning("Worker Activation Poller was polling after core worker shutdown. Shutting poller down....")
+        Logger.warning(
+          "Worker Activation Poller was polling after core worker shutdown. Shutting poller down...."
+        )
+
         {:stop, :shutdown, state}
 
       {:error, error} ->

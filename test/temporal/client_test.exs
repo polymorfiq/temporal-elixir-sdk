@@ -13,7 +13,8 @@ defmodule Temporal.ClientTest do
   end
 
   test "allows custom identity option", %{runtime: runtime} do
-    assert {:ok, _client} = Client.new("localhost:7233", identity: "my-identity", runtime: runtime)
+    assert {:ok, _client} =
+             Client.new("localhost:7233", identity: "my-identity", runtime: runtime)
   end
 
   test "allows custom namespace option", %{runtime: runtime} do

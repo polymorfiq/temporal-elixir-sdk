@@ -126,14 +126,15 @@ defmodule Temporal.Comms.Channel do
       end
     end)
 
-    activation_counts = if type == :activation do
-      {:activation, run_id, _} = msg
-      counts = channel_state(state, :active_activation_count)
-      curr_count = Map.get(counts, run_id, 0) + 1
-      Map.put(counts, run_id, curr_count)
-    else
-      channel_state(state, :active_activation_count)
-    end
+    activation_counts =
+      if type == :activation do
+        {:activation, run_id, _} = msg
+        counts = channel_state(state, :active_activation_count)
+        curr_count = Map.get(counts, run_id, 0) + 1
+        Map.put(counts, run_id, curr_count)
+      else
+        channel_state(state, :active_activation_count)
+      end
 
     {:noreply, channel_state(state, active_activation_count: activation_counts)}
   end
@@ -148,20 +149,21 @@ defmodule Temporal.Comms.Channel do
       end
     end)
 
+    activation_counts =
+      if type == :completion do
+        {:activation_completion, run_id, _} = msg
+        counts = channel_state(state, :active_activation_count)
 
-    activation_counts = if type == :completion do
-      {:activation_completion, run_id, _} = msg
-      counts = channel_state(state, :active_activation_count)
+        curr_count = Map.get(counts, run_id, 0) - 1
 
-      curr_count = Map.get(counts, run_id, 0) - 1
-      if curr_count < 0 do
-        Logger.error("Responded to more activations than received...\n#{inspect(msg)}")
+        if curr_count < 0 do
+          Logger.error("Responded to more activations than received...\n#{inspect(msg)}")
+        end
+
+        Map.put(counts, run_id, curr_count)
+      else
+        channel_state(state, :active_activation_count)
       end
-
-      Map.put(counts, run_id, curr_count)
-    else
-      channel_state(state, :active_activation_count)
-    end
 
     {:noreply, channel_state(state, active_activation_count: activation_counts)}
   end

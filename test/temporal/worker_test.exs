@@ -19,6 +19,7 @@ defmodule Temporal.WorkerTest do
     {:ok, worker} = Worker.new(ctx.queue)
 
     parent = self()
+
     spawn_link(fn ->
       send(parent, {:shutdown_result, Worker.shutdown(worker)})
     end)

@@ -199,6 +199,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
   @impl true
   def handle_call(:shutdown, from, state) do
     Logger.debug("Worker (#{friendly_name(state)}) shutting down...")
+
     with :ok <- initiate_shutdown(state) do
       waiting = server_state(state, :waiting_on_shutdown)
       waiting = [from | waiting]
@@ -227,9 +228,10 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
       :ets.delete(@worker_store, {:core, server_state(state, :id)})
       :ets.delete(@worker_store, {:runtime, server_state(state, :id)})
+
       with :ok <- finalize_shutdown(state) do
         server_state(state, :waiting_on_shutdown)
-        |> Enum.each(& GenServer.reply(&1, :ok))
+        |> Enum.each(&GenServer.reply(&1, :ok))
 
         Logger.debug("Worker (#{friendly_name(state)}) finalized shutdown!")
 
@@ -241,7 +243,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
       else
         err ->
           server_state(state, :waiting_on_shutdown)
-          |> Enum.each(& GenServer.reply(&1, {:error, err}))
+          |> Enum.each(&GenServer.reply(&1, {:error, err}))
 
           Logger.error(
             "Worker (#{friendly_name(state)}) failed to finalize shutdown... Still proceeding. #{inspect(err)}"
@@ -267,7 +269,6 @@ defmodule Temporal.CoreSdk.CoreWorker do
         )
 
         {:error, err}
-
     end
   end
 

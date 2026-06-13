@@ -98,9 +98,7 @@ defmodule Temporal.CoreSdk do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
-  @spec _worker_initiate_shutdown(
-          worker :: term()
-        ) ::
+  @spec _worker_initiate_shutdown(worker :: term()) ::
           {:ok, bool()} | {:error, term()}
   def _worker_initiate_shutdown(_worker),
     do: :erlang.nif_error(:nif_not_loaded)

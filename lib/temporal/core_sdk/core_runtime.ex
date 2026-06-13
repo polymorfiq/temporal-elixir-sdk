@@ -33,7 +33,6 @@ defmodule Temporal.CoreSdk.CoreRuntime do
   @impl true
   @spec init(runtime_opts()) :: {:ok, pid} | {:error, term()}
   def init(opts) do
-
     runtime_opts = %RuntimeOpts{
       heartbeat_interval_secs: Keyword.get(opts, :heartbeat_interval_secs)
     }

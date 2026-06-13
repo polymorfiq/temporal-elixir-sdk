@@ -37,8 +37,7 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
 
     children = [
       Supervisor.child_spec(
-        {CoreWorker,
-         {exec_ctx, opts, [name: via_registry({:core, worker_id})]}},
+        {CoreWorker, {exec_ctx, opts, [name: via_registry({:core, worker_id})]}},
         restart: :transient
       ),
       {WorkflowList, [name: via_registry({:workflows, worker_id})]},
@@ -60,7 +59,8 @@ defmodule Temporal.Supervisor.WorkerSupervisor do
         restart: :transient
       ),
       Supervisor.child_spec(
-        {WorkerCleanupCrew, {exec_ctx, [name: via_registry({:cleanup_crew, worker_id}), shutdown: 60_000]}},
+        {WorkerCleanupCrew,
+         {exec_ctx, [name: via_registry({:cleanup_crew, worker_id}), shutdown: 60_000]}},
         restart: :transient
       )
     ]
