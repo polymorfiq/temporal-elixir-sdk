@@ -19,7 +19,6 @@ defmodule Temporal.Supervisor.ExecutionContext do
             workflow_initialize: nil,
             channel: nil
 
-  alias Temporal.Comms.Channel
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.CoreClient
   alias Temporal.CoreSdk.CoreWorker

@@ -6,9 +6,12 @@ end
 
 defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
   import TemporalEngine.Client
+  import TemporalEngine.Data.Priority
 
   alias TemporalEngineNif.Core
   alias TemporalEngineNif.Data.Duration
+  alias TemporalEngineNif.Data.Payload
+  alias TemporalEngineNif.Data.Priority
   alias TemporalEngineNif.Data.WorkerOpts
   alias TemporalEngineNif.Data.WorkerDeploymentOpts
   alias TemporalEngineNif.Data.WorkerDeploymentVersion
@@ -16,7 +19,11 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
   alias TemporalEngineNif.Data.WorkerPollerSimpleMaximumOpts
   alias TemporalEngineNif.Data.WorkerTunerOpts
   alias TemporalEngineNif.Data.WorkerTunerResourceOpts
+  alias TemporalEngineNif.Data.WorkflowArguments
+  alias TemporalEngineNif.Data.WorkflowDefinition
+  alias TemporalEngineNif.Data.WorkflowStartOptions
   alias TemporalEngineNif.Runtime
+  alias TemporalEngineNif.WorkflowHandle
   alias TemporalEngineNif.Worker
 
   @impl true
@@ -71,7 +78,14 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
             with :ok <- validate(worker, client.runtime) do
               send(
                 parent,
-                {self(), {:ok, %Worker{id: worker_opts(opts, :id), core: worker, client: client, runtime: client.runtime}}}
+                {self(),
+                 {:ok,
+                  %Worker{
+                    id: worker_opts(opts, :id),
+                    core: worker,
+                    client: client,
+                    runtime: client.runtime
+                  }}}
               )
             else
               {:error, err} ->
@@ -129,9 +143,81 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
   end
 
   @impl true
-  def start_workflow(runtime, definition, args, opts) do
-    {:error, :not_implemented}
+  def start_workflow(client, definition, args, opts) do
+    parent = self()
+
+    wf_def = %WorkflowDefinition{name: definition(definition, :name)}
+    inputs = %WorkflowArguments{args: Enum.map(args, &Payload.from_record/1)}
+
+    start_opts = %WorkflowStartOptions{
+      task_queue: workflow_start_opts(opts, :task_queue),
+      workflow_id: workflow_start_opts(opts, :task_queue),
+      id_reuse_policy: workflow_start_opts(opts, :id_reuse_policy),
+      id_conflict_policy: workflow_start_opts(opts, :id_conflict_policy),
+      enable_eager_workflow_start: workflow_start_opts(opts, :enable_eager_workflow_start),
+      priority: workflow_start_opts(opts, :priority) |> maybe_opts(),
+      links: if(links = workflow_start_opts(opts, :links), do: Enum.map(links, &maybe_opts/1)),
+      completion_callbacks:
+        if(cbs = workflow_start_opts(opts, :completion_callbacks),
+          do: Enum.map(cbs, &maybe_opts/1)
+        ),
+      execution_timeout: Duration.from_record(workflow_start_opts(opts, :execution_timeout)),
+      run_timeout: Duration.from_record(workflow_start_opts(opts, :run_timeout)),
+      task_timeout: Duration.from_record(workflow_start_opts(opts, :task_timeout)),
+      cron_schedule: workflow_start_opts(opts, :cron_schedule),
+      search_attributes: workflow_start_opts(opts, :search_attributes) |> maybe_opts,
+      retry_policy: workflow_start_opts(opts, :retry_policy) |> maybe_opts(),
+      start_signal: workflow_start_opts(opts, :start_signal) |> maybe_opts(),
+      header: workflow_start_opts(opts, :header),
+      static_summary: workflow_start_opts(opts, :static_summary),
+      static_details: workflow_start_opts(opts, :static_details)
+    }
+
+    {pid, ref} =
+      spawn_monitor(fn ->
+        Core._client_start_workflow(
+          client.runtime.core,
+          client.core,
+          wf_def,
+          inputs,
+          start_opts,
+          self()
+        )
+        |> case do
+          :ok -> :ok
+          {:error, err} -> raise "Could not start workflow via Core SDK: #{inspect(err)}"
+        end
+
+        receive do
+          {:ok, workflow_handle} ->
+            send(
+              parent,
+              {self(),
+               {:ok,
+                %WorkflowHandle{
+                  client: client,
+                  core: workflow_handle,
+                  workflow_name: definition(definition, :name),
+                  workflow_id: workflow_start_opts(opts, :workflow_id),
+                  task_queue: workflow_start_opts(opts, :task_queue)
+                }}}
+            )
+
+          {:error, err} ->
+            send(parent, {self(), {:error, err}})
+        end
+      end)
+
+    receive do
+      {^pid, response} ->
+        response
+
+      {:DOWN, ^ref, :process, ^pid, reason} ->
+        {:error, reason}
+    end
   end
+
+  defp maybe_opts(nil), do: nil
 
   defp maybe_opts(deployment() = deploy) do
     %WorkerDeploymentOpts{
@@ -145,6 +231,14 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
     %WorkerDeploymentVersion{
       build_id: version(vers, :build_id),
       deployment_name: version(vers, :deployment_name)
+    }
+  end
+
+  defp maybe_opts(priority() = p) do
+    %Priority{
+      priority_key: priority(p, :priority_key),
+      fairness_key: priority(p, :fairness_key),
+      fairness_weight: priority(p, :fairness_weight)
     }
   end
 

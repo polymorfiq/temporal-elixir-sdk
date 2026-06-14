@@ -47,20 +47,4 @@ defmodule TemporalEngineNif.Data.WorkflowActivationCompletionFailureStatus do
           | :feature_disabled
           | :grpc_message_too_large
           | :payloads_too_large
-
-  @type opts :: [{:failure, Data.WorkflowFailure.opts()}, {:force_cause, cause()}]
-
-  @spec with_opts!(opts()) :: t()
-  def with_opts!(opts) do
-    status = struct!(__MODULE__, opts)
-
-    status =
-      if opts[:failure] do
-        update_in(status, [Access.key(:failure)], &Data.WorkflowFailure.with_opts!/1)
-      else
-        status
-      end
-
-    status
-  end
 end

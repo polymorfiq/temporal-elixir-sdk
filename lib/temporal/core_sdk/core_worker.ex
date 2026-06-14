@@ -4,7 +4,6 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   import TemporalEngine.Client
 
-  alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
@@ -46,7 +45,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
   @impl true
   @spec init({ExecutionContext.t(), WorkerOpts.t(), worker_opts()}) ::
           {:ok, t()} | {:error, term()}
-  def init({exec_ctx, config, opts}) do
+  def init({exec_ctx, config, _opts}) do
     Process.set_label({:worker, exec_ctx.worker_id})
 
     try do
@@ -67,7 +66,6 @@ defmodule Temporal.CoreSdk.CoreWorker do
       if existing_core_worker do
         {:ok, existing_core_worker}
       else
-        parent = self()
         TemporalEngine.Client.create_worker(exec_ctx.client.core, config)
       end
 
@@ -119,12 +117,12 @@ defmodule Temporal.CoreSdk.CoreWorker do
   end
 
   @impl true
-  def handle_call({:process_activity_task, _task} = msg, _from, state) do
+  def handle_call({:process_activity_task, _task}, _from, state) do
     {:reply, :ok, state}
   end
 
   @impl true
-  def handle_call({:process_nexus_task, _task} = msg, _from, state) do
+  def handle_call({:process_nexus_task, _task}, _from, state) do
     {:reply, :ok, state}
   end
 

@@ -2,7 +2,6 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
   use GenServer
 
   alias TemporalEngine.Worker
-  alias Temporal.Comms.Channel
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Worker.WorkerWorkflowManager
   alias Temporal.Supervisor.ExecutionContext
@@ -14,7 +13,6 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
   Record.defrecordp(:poll_state, [
     :worker_id,
     :manager_pid,
-    :channel,
     :worker,
     :core_worker
   ])
@@ -34,7 +32,6 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
        poll_state(
          worker_id: exec_ctx.worker_id,
          manager_pid: manager_pid,
-         channel: exec_ctx.channel,
          worker: exec_ctx.worker,
          core_worker: core_worker
        ), {:continue, :poll_for_activations}}
@@ -73,7 +70,6 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
   end
 
   defp poll_and_inform_worker(state) do
-    channel = poll_state(state, :channel)
     core_worker = poll_state(state, :core_worker)
     manager_pid = poll_state(state, :manager_pid)
 

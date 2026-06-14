@@ -26,19 +26,19 @@ defmodule Temporal.ClientTest do
     assert {:ok, _client} =
              Client.new("localhost:7233",
                runtime: runtime,
-               rpc: [
-                 initial_interval_secs: 30.0,
+               rpc_retry: [
+                 initial_interval: {30, :seconds},
                  randomization_factor: 5.0,
                  multiplier: 2.0,
-                 max_interval_secs: 60.0,
-                 max_elapsed_time_secs: 60.0,
+                 max_interval: {60, :seconds},
+                 max_elapsed_time: {60, :seconds},
                  max_retries: 30
                ]
              )
   end
 
   test "has options validation", %{runtime: runtime} do
-    assert {:error, {:invalid_opts, [:invalid_b, :invalid_a]}} =
+    assert {:error, {:invalid_opts, %{key: [:invalid_a, :invalid_b]}}} =
              Client.new("localhost:7233",
                invalid_a: 123,
                invalid_b: 456,

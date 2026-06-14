@@ -59,7 +59,7 @@ defmodule TemporalEngine.Data.ActivityTask do
   @type run :: record(:run, workflow_id: String.t(), run_id: String.t())
 
   Record.defrecord(:cancel_activity, [:reason, details: nil, task_token: nil])
-  @type cancel_activity :: record(:cancel_activity, reason: cancel_reason(), task_token: binary(),)
+  @type cancel_activity :: record(:cancel_activity, reason: cancel_reason(), task_token: binary())
 
   @type cancel_reason() ::
           :not_found | :cancelled | :timed_out | :worker_shutdown | :paused | :reset

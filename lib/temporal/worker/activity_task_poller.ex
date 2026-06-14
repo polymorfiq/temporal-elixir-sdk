@@ -4,7 +4,6 @@ defmodule Temporal.Worker.ActivityTaskPoller do
   alias TemporalEngine.Worker
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Worker.WorkerActivityManager
-  alias Temporal.Comms.Channel
   alias Temporal.CoreSdk.CoreWorker
 
   require Logger
@@ -13,7 +12,6 @@ defmodule Temporal.Worker.ActivityTaskPoller do
   Record.defrecordp(:poll_state, [
     :worker_id,
     :activity_manager,
-    :channel,
     :worker,
     :core_worker
   ])
@@ -33,7 +31,6 @@ defmodule Temporal.Worker.ActivityTaskPoller do
        poll_state(
          worker_id: exec_ctx.worker_id,
          activity_manager: activity_manager,
-         channel: exec_ctx.channel,
          worker: exec_ctx.worker,
          core_worker: core_worker
        ), {:continue, :poll_for_tasks}}
@@ -73,7 +70,6 @@ defmodule Temporal.Worker.ActivityTaskPoller do
 
   defp poll_and_inform_worker(state) do
     core_worker = poll_state(state, :core_worker)
-    channel = poll_state(state, :channel)
 
     case Worker.poll_activity_task(core_worker.core) do
       {:ok, nil} -> :ok

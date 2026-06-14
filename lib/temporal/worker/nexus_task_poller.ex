@@ -2,13 +2,12 @@ defmodule Temporal.Worker.NexusTaskPoller do
   use GenServer
 
   alias TemporalEngine.Worker
-  alias Temporal.Comms.Channel
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.CoreSdk.CoreWorker
 
   require Logger
   require Record
-  Record.defrecordp(:poll_state, [:worker_id, :worker, :core_worker, :channel])
+  Record.defrecordp(:poll_state, [:worker_id, :worker, :core_worker])
 
   def start_link({exec_ctx, server_opts}) do
     GenServer.start_link(__MODULE__, exec_ctx, server_opts)
@@ -24,8 +23,7 @@ defmodule Temporal.Worker.NexusTaskPoller do
        poll_state(
          worker_id: exec_ctx.worker_id,
          worker: exec_ctx.worker,
-         core_worker: core_worker,
-         channel: exec_ctx.channel
+         core_worker: core_worker
        ), {:continue, :poll_for_tasks}}
     end
   end
@@ -63,7 +61,6 @@ defmodule Temporal.Worker.NexusTaskPoller do
 
   defp poll_and_inform_worker(state) do
     core_worker = poll_state(state, :core_worker)
-    channel = poll_state(state, :channel)
 
     case Worker.poll_nexus_task(core_worker.core) do
       {:ok, nil} -> :ok

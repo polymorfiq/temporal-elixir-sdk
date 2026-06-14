@@ -72,7 +72,7 @@ impl Into<prost_wkt_types::Timestamp> for SdkTimestamp {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Payload"]
+#[module = "TemporalEngineNif.Data.Payload"]
 pub struct SdkPayload {
     pub metadata: HashMap<String, Vec<u8>>,
     pub data: Vec<u8>,
@@ -166,19 +166,19 @@ impl Into<temporal_api::common::v1::Payloads> for &SdkPayloads {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Shared.Priority"]
+#[module = "TemporalEngineNif.Data.Priority"]
 pub struct SdkPriority {
-    pub priority_key: i32,
-    pub fairness_key: String,
-    pub fairness_weight: f32,
+    pub priority_key: Option<i32>,
+    pub fairness_key: Option<String>,
+    pub fairness_weight: Option<f32>,
 }
 
 impl From<temporal_api::common::v1::Priority> for SdkPriority {
     fn from(external: temporal_api::common::v1::Priority) -> Self {
         Self {
-            priority_key: external.priority_key,
-            fairness_key: external.fairness_key,
-            fairness_weight: external.fairness_weight,
+            priority_key: Some(external.priority_key),
+            fairness_key: Some(external.fairness_key),
+            fairness_weight: Some(external.fairness_weight),
         }
     }
 }
@@ -186,9 +186,12 @@ impl From<temporal_api::common::v1::Priority> for SdkPriority {
 impl From<temporalio_sdk_client::Priority> for SdkPriority {
     fn from(external: temporalio_sdk_client::Priority) -> Self {
         Self {
-            priority_key: external.priority_key.unwrap_or(1u32) as i32,
-            fairness_key: external.fairness_key.unwrap_or(String::from("")),
-            fairness_weight: external.fairness_weight.unwrap_or(1f32),
+            priority_key: match external.priority_key {
+                None => None,
+                Some(val) => Some(val as i32)
+            },
+            fairness_key: external.fairness_key,
+            fairness_weight: external.fairness_weight,
         }
     }
 }
@@ -196,9 +199,9 @@ impl From<temporalio_sdk_client::Priority> for SdkPriority {
 impl Into<temporal_api::common::v1::Priority> for SdkPriority {
     fn into(self) -> temporal_api::common::v1::Priority {
         temporal_api::common::v1::Priority {
-            priority_key: self.priority_key,
-            fairness_key: self.fairness_key,
-            fairness_weight: self.fairness_weight,
+            priority_key: self.priority_key.unwrap_or(1),
+            fairness_key: self.fairness_key.unwrap_or("".to_string()),
+            fairness_weight: self.fairness_weight.unwrap_or(1.0),
         }
     }
 }
@@ -206,9 +209,12 @@ impl Into<temporal_api::common::v1::Priority> for SdkPriority {
 impl Into<temporalio_sdk_client::Priority> for SdkPriority {
     fn into(self) -> temporalio_sdk_client::Priority {
         temporalio_sdk_client::Priority {
-            priority_key: Some(self.priority_key as u32),
-            fairness_key: Some(self.fairness_key),
-            fairness_weight: Some(self.fairness_weight),
+            priority_key: match self.priority_key {
+                None => None,
+                Some(val) => Some(val as u32)
+            },
+            fairness_key: self.fairness_key,
+            fairness_weight: self.fairness_weight,
         }
     }
 }

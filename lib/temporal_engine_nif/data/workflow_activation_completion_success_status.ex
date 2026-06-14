@@ -9,22 +9,4 @@ defmodule TemporalEngineNif.Data.WorkflowActivationCompletionSuccessStatus do
           used_internal_flags: [pos_integer()],
           versioning_behavior: versioning_behavior()
         }
-
-  @type opts :: [
-          {:commands, [Data.WorkflowCommand.opts()]}
-          | {:used_internal_flags, [pos_integer()]}
-          | {:versioning_behavior, versioning_behavior()}
-        ]
-
-  @spec with_opts!(opts()) :: t()
-  def with_opts!(opts) do
-    status = struct!(__MODULE__, opts)
-
-    status =
-      update_in(status, [Access.key(:commands)], fn commands ->
-        Enum.map(commands, &Data.WorkflowCommand.with_opts!/1)
-      end)
-
-    status
-  end
 end

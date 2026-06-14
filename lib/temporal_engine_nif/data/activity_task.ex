@@ -24,7 +24,10 @@ defmodule TemporalEngineNif.Data.ActivityTask do
       activity_type: start.activity_type,
       run_id: start.run_id,
       workflow_type: start.workflow_type,
-      workflow_execution: if(exec = start.workflow_execution, do: run(workflow_id: exec.workflow_id, run_id: exec.run_id)),
+      workflow_execution:
+        if(exec = start.workflow_execution,
+          do: run(workflow_id: exec.workflow_id, run_id: exec.run_id)
+        ),
       header_fields: start.header_fields,
       input: Enum.map(start.input, &Payload.to_record/1),
       heartbeat_details: Enum.map(start.heartbeat_details, &Payload.to_record/1),
@@ -46,14 +49,18 @@ defmodule TemporalEngineNif.Data.ActivityTask do
     cancel_activity(
       task_token: :binary.list_to_bin(token),
       reason: cancel.reason,
-      details: if(details = cancel.details, do: details(
-        is_not_found: details.is_not_found,
-        is_cancelled: details.is_cancelled,
-        is_paused: details.is_paused,
-        is_timed_out: details.is_timed_out,
-        is_worker_shutdown: details.is_worker_shutdown,
-        is_reset: details.is_reset
-      ))
+      details:
+        if(details = cancel.details,
+          do:
+            details(
+              is_not_found: details.is_not_found,
+              is_cancelled: details.is_cancelled,
+              is_paused: details.is_paused,
+              is_timed_out: details.is_timed_out,
+              is_worker_shutdown: details.is_worker_shutdown,
+              is_reset: details.is_reset
+            )
+        )
     )
   end
 end

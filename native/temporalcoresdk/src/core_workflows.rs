@@ -3782,7 +3782,7 @@ pub struct SdkWorkflowStartOptions {
     pub task_timeout: Option<SdkDuration>,
     pub cron_schedule: Option<String>,
     pub search_attributes: Option<HashMap<String, SdkPayload>>,
-    pub enable_eager_workflow_start: bool,
+    pub enable_eager_workflow_start: Option<bool>,
     pub retry_policy: Option<SdkRetryPolicy>,
     pub start_signal: Option<SdkWorkflowStartSignal>,
     pub links: Vec<SdkLink>,
@@ -3813,7 +3813,7 @@ impl From<WorkflowStartOptions> for SdkWorkflowStartOptions {
                 ),
                 None => None,
             },
-            enable_eager_workflow_start: external.enable_eager_workflow_start,
+            enable_eager_workflow_start: Some(external.enable_eager_workflow_start),
             retry_policy: external.retry_policy.try_into_or_none(),
             start_signal: external.start_signal.try_into_or_none(),
             links: external
@@ -3852,7 +3852,7 @@ impl Into<WorkflowStartOptions> for SdkWorkflowStartOptions {
                 ),
                 None => None,
             })
-            .enable_eager_workflow_start(self.enable_eager_workflow_start)
+            .maybe_enable_eager_workflow_start(self.enable_eager_workflow_start)
             .maybe_retry_policy(self.retry_policy.try_into_or_none())
             .maybe_start_signal(self.start_signal.try_into_or_none())
             .links(self.links.into_iter().map(|val| val.into()).collect())
@@ -3948,7 +3948,7 @@ impl HasWorkflowDefinition for SdkWorkflowDefinition {
 #[derive(NifStruct)]
 #[module = "TemporalEngineNif.Data.WorkflowArguments"]
 pub struct SdkWorkflowArguments {
-    pub args: Vec<SdkWorkflowInput>,
+    pub args: Vec<SdkPayload>,
 }
 
 impl TemporalDeserializable for SdkWorkflowArguments {
@@ -3956,12 +3956,9 @@ impl TemporalDeserializable for SdkWorkflowArguments {
         ctx: &SerializationContext<'_>,
         payloads: Vec<Payload>,
     ) -> Result<Self, PayloadConversionError> {
-        let mut args = vec![];
+        let mut args: Vec<SdkPayload> = vec![];
         for (_idx, payload) in payloads.iter().enumerate() {
-            match SdkWorkflowInput::from_payload(ctx, payload.clone()) {
-                Ok(input) => args.push(input),
-                Err(err) => return Err(err),
-            };
+            args.push(payload.clone().into());
         }
 
         Ok(Self { args: args })
@@ -3975,99 +3972,10 @@ impl TemporalSerializable for SdkWorkflowArguments {
     ) -> Result<Vec<Payload>, PayloadConversionError> {
         let mut payloads = vec![];
         for (_idx, arg) in self.args.iter().enumerate() {
-            match ctx.converter.to_payload(ctx, arg) {
-                Ok(payload) => payloads.push(payload),
-                Err(err) => return Err(err),
-            };
+            payloads.push(arg.clone().into())
         }
 
         Ok(payloads)
-    }
-}
-
-#[derive(NifTaggedEnum, Clone)]
-pub enum SdkWorkflowInput {
-    Integer(i64),
-    Float(f64),
-    String(String),
-    JSON(String),
-    ErlangExternalTerm(Vec<u8>),
-    Bytes(Vec<u8>),
-}
-
-impl TemporalDeserializable for SdkWorkflowInput {
-    fn from_payload(
-        _ctx: &SerializationContext<'_>,
-        payload: Payload,
-    ) -> Result<Self, PayloadConversionError> {
-        let encoding = match payload.metadata.get("encoding") {
-            Some(encoding) => {
-                String::from_utf8(encoding.clone()).expect("Encoding of payload was not UTF8")
-            }
-            None => String::from("bytes/plain"),
-        };
-
-        match encoding.as_str() {
-            "application/x-erlang-term" => Ok(Self::ErlangExternalTerm(payload.data)),
-            "json/plain" => {
-                let json_str = String::from_utf8(payload.data).expect("JSON payload was not UTF8");
-                let v: serde_json::Value =
-                    serde_json::from_str(json_str.as_str()).expect("Could not decode JSON");
-
-                if let Some(float_val) = v.as_f64() {
-                    Ok(Self::Float(float_val))
-                } else if let Some(int_val) = v.as_i64() {
-                    Ok(Self::Integer(int_val))
-                } else if let Some(str_val) = v.as_str() {
-                    Ok(Self::String(String::from(str_val)))
-                } else {
-                    Ok(Self::JSON(json_str))
-                }
-            }
-
-            "bytes/plain" => Ok(Self::Bytes(payload.data)),
-
-            _ => Err(PayloadConversionError::WrongEncoding),
-        }
-    }
-}
-
-impl TemporalSerializable for SdkWorkflowInput {
-    fn to_payload(
-        &self,
-        ctx: &SerializationContext<'_>,
-    ) -> Result<Payload, PayloadConversionError> {
-        match self {
-            SdkWorkflowInput::Integer(val) => ctx.converter.to_payload(ctx, val),
-            SdkWorkflowInput::Float(val) => ctx.converter.to_payload(ctx, val),
-            SdkWorkflowInput::String(val) => ctx.converter.to_payload(ctx, val),
-            SdkWorkflowInput::JSON(val) => {
-                let mut metadata = HashMap::new();
-                metadata.insert("encoding".to_owned(), "json/plain".as_bytes().to_vec());
-
-                Ok(SdkPayload {
-                    metadata,
-                    data: val.as_bytes().to_vec(),
-                    external_payloads: Vec::new(),
-                }
-                .into())
-            }
-            SdkWorkflowInput::ErlangExternalTerm(val) => {
-                let mut metadata = HashMap::new();
-                metadata.insert(
-                    "encoding".to_owned(),
-                    "application/x-erlang-term".as_bytes().to_vec(),
-                );
-
-                Ok(SdkPayload {
-                    metadata,
-                    data: val.clone(),
-                    external_payloads: Vec::new(),
-                }
-                .into())
-            }
-            SdkWorkflowInput::Bytes(val) => ctx.converter.to_payload(ctx, val),
-        }
     }
 }
 

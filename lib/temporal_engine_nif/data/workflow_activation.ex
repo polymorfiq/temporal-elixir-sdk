@@ -18,7 +18,7 @@ defmodule TemporalEngineNif.Data.WorkflowActivation do
 
   alias TemporalEngineNif.Data.Timestamp
   alias TemporalEngineNif.Data.WorkflowActivationJob
-  alias TemporalEngineNif.Data.WorkflowDeploymentVersion
+  alias TemporalEngineNif.Data.WorkerDeploymentVersion
 
   @type t :: %__MODULE__{
           run_id: String.t(),
@@ -29,7 +29,7 @@ defmodule TemporalEngineNif.Data.WorkflowActivation do
           available_internal_flags: [pos_integer()],
           history_size_bytes: pos_integer(),
           continue_as_new_suggested: bool(),
-          deployment_version_for_current_task: WorkflowDeploymentVersion.t() | nil,
+          deployment_version_for_current_task: WorkerDeploymentVersion.t() | nil,
           last_sdk_version: String.t(),
           suggest_continue_as_new_reasons: [integer()],
           target_worker_deployment_version_changed: bool()
@@ -47,7 +47,7 @@ defmodule TemporalEngineNif.Data.WorkflowActivation do
       history_size_bytes: from_server.history_size_bytes,
       continue_as_new_suggested: from_server.continue_as_new_suggested,
       deployment_version_for_current_task:
-        from_server.deployment_version_for_current_task |> WorkflowDeploymentVersion.to_record(),
+        from_server.deployment_version_for_current_task |> WorkerDeploymentVersion.to_record(),
       last_sdk_version: from_server.last_sdk_version,
       suggest_continue_as_new_reasons: from_server.suggest_continue_as_new_reasons,
       target_worker_deployment_version_changed:

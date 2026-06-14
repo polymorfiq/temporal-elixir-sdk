@@ -6,15 +6,4 @@ defmodule TemporalEngineNif.Data.ClientPriority do
           fairness_key: String.t() | nil,
           fairness_weight: float() | nil
         }
-
-  @type opts :: [
-          {:priority_key, pos_integer()}
-          | {:fairness_key, String.t()}
-          | {:fairness_weight, float()}
-        ]
-
-  @spec with_opts!(opts()) :: t()
-  def with_opts!(opts) do
-    struct!(__MODULE__, opts)
-  end
 end

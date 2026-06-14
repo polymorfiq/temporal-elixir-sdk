@@ -128,12 +128,18 @@ defmodule TemporalEngine.Data.Failure do
   @type child_execution ::
           record(:child_execution,
             namespace: String.t(),
-            workflow_execution: WorkflowExecution.t() | nil,
-            workflow_type: WorkflowType.t() | nil,
+            workflow_execution: run() | nil,
+            workflow_type: workflow_type() | nil,
             initiated_event_id: integer(),
             started_event_id: integer(),
             retry_state: retry_state()
           )
+
+  Record.defrecord(:run, [:workflow_id, :run_id])
+  @type run :: record(:run, workflow_id: String.t(), run_id: String.t())
+
+  Record.defrecord(:workflow_type, [:name])
+  @type workflow_type :: record(:workflow_type, name: String.t())
 
   Record.defrecord(:nexus_operation, [
     :scheduled_event_id,

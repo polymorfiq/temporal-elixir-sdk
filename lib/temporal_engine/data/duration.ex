@@ -58,6 +58,11 @@ defmodule TemporalEngine.Data.Duration do
     end
   end
 
+  @spec to_milliseconds(t()) :: integer
+  def to_milliseconds(duration(seconds: seconds, nanos: nanos)) do
+    seconds * 1000 + Integer.floor_div(nanos, 1_000_000)
+  end
+
   def from_native(%Duration{} = duration) do
     if duration.month > 0 || duration.year > 0 do
       raise "Durations may not contain years or months, as those durations are very variable. Stick to weeks or below."

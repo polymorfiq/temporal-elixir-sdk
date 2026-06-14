@@ -7,7 +7,6 @@ defmodule Temporal.Client do
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.ClientRegistry
   alias Temporal.Constants
-  alias Temporal.Internal.Hash
   alias Temporal.Runtime
   alias Temporal.Supervisor.ClientSupervisor
   alias Temporal.Supervisor.RuntimeSupervisor

@@ -5,9 +5,4 @@ defmodule TemporalEngineNif.Data.WorkflowCommandCancelChildWorkflowExecution do
           child_workflow_seq: integer(),
           reason: String.t()
         }
-
-  @type opts :: [{:child_workflow_seq, integer()} | {:reason, String.t()}]
-
-  @spec with_opts!(opts()) :: t()
-  def with_opts!(opts), do: struct!(__MODULE__, opts)
 end

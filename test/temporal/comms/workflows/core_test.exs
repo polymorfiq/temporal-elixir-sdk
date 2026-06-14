@@ -5,11 +5,9 @@ defmodule Temporal.Workflows.CoreTest do
   require TestWorkflows.ActivitiesWithAwait
 
   alias Temporal.{Client, Runtime, TaskQueue, Worker}
-  alias Temporal.Comms.Channel
   alias TestWorkflows.ActivitiesWithAwait
 
   setup_all [:setup_worker]
-  setup [:reroute_channel]
 
   test "can simulate a workflow", ctx do
     TaskQueue.start_workflow(
@@ -20,7 +18,7 @@ defmodule Temporal.Workflows.CoreTest do
       id_conflict_policy: :terminate_existing
     )
 
-    {:ok, run_id} =
+    {:ok, _run_id} =
       receive do
         {:to_client, :activation, {:activation, run_id, _}} ->
           {:ok, run_id}
@@ -36,24 +34,24 @@ defmodule Temporal.Workflows.CoreTest do
         5000 -> {:error, "Did not receive initialization"}
       end
 
-    Channel.send_to_engine(
-      ctx.channel,
-      ctx.worker,
-      {:activation_completion, run_id,
-       {:success,
-        [
-          {:schedule_activity, 1,
-           %{
-             activity_id: "my-activity",
-             activity_type: "my-activity-type",
-             task_queue: ctx.queue.queue_name,
-             arguments: [],
-             schedule_to_close_timeout: {5, :seconds}
-           }}
-        ]}}
-    )
+#    Channel.send_to_engine(
+#      ctx.channel,
+#      ctx.worker,
+#      {:activation_completion, run_id,
+#       {:success,
+#        [
+#          {:schedule_activity, 1,
+#           %{
+#             activity_id: "my-activity",
+#             activity_type: "my-activity-type",
+#             task_queue: ctx.queue.queue_name,
+#             arguments: [],
+#             schedule_to_close_timeout: {5, :seconds}
+#           }}
+#        ]}}
+#    )
 
-    {:ok, task_token} =
+    {:ok, _task_token} =
       receive do
         {:to_client, :activity_task, {{:start, _id, "my-activity-type", _opts}, task_token}} ->
           {:ok, task_token}
@@ -61,33 +59,33 @@ defmodule Temporal.Workflows.CoreTest do
         5000 -> {:error, "Did not receive activity start"}
       end
 
-    Channel.send_to_engine(
-      ctx.channel,
-      ctx.worker,
-      {:activity, :completed, {:json, Jason.encode!("My test")}, task_token}
-    )
+#    Channel.send_to_engine(
+#      ctx.channel,
+#      ctx.worker,
+#      {:activity, :completed, {:json, Jason.encode!("My test")}, task_token}
+#    )
 
     assert_engine_sends_jobs(ctx, [
       {:resolve_activity, 1, {:completed, "My test"}, _}
     ])
 
-    Channel.send_to_engine(
-      ctx.channel,
-      ctx.worker,
-      {:activation_completion, run_id,
-       {:success,
-        [
-          {:complete_workflow_execution, {:json, Jason.encode!("Workflow output")}}
-        ]}}
-    )
+#    Channel.send_to_engine(
+#      ctx.channel,
+#      ctx.worker,
+#      {:activation_completion, run_id,
+#       {:success,
+#        [
+#          {:complete_workflow_execution, {:json, Jason.encode!("Workflow output")}}
+#        ]}}
+#    )
 
     assert_engine_sends_jobs(ctx, [{:remove_from_cache, :workflow_execution_ending, _}])
 
-    Channel.send_to_engine(
-      ctx.channel,
-      ctx.worker,
-      {:activation_completion, run_id, {:success, []}}
-    )
+#    Channel.send_to_engine(
+#      ctx.channel,
+#      ctx.worker,
+#      {:activation_completion, run_id, {:success, []}}
+#    )
   end
 
   def setup_worker(ctx) do
@@ -95,12 +93,27 @@ defmodule Temporal.Workflows.CoreTest do
     {:ok, client} = Client.new("localhost:7233", runtime: runtime, identity: "#{__MODULE__}")
 
     queue = TaskQueue.new(client, "#{__MODULE__}")
-    channel = Channel.new(queue)
 
-    channel =
-      channel |> Channel.silence_activity_tasks() |> Channel.silence_workflow_activations()
+    {:ok, worker} =
+      Worker.new(queue,
+        max_cached_workflows: 100,
+        deployment_options: [
+          version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
+          use_worker_versioning: true,
+          default_versioning_behavior: :auto_upgrade
+        ],
+        task_types: [
+          enable_workflows: true,
+          enable_local_activities: true,
+          enable_remote_activities: true
+        ],
+        tuner: [
+          workflow_slot_supplier: [fixed_size: 10],
+          activity_slot_supplier: [fixed_size: 10],
+          local_activity_slot_supplier: [fixed_size: 10]
+        ]
+      )
 
-    {:ok, worker} = Worker.new(queue, channel)
     Worker.register_workflow(worker, ActivitiesWithAwait)
 
     on_exit(fn -> Worker.shutdown(worker) end)
@@ -111,17 +124,8 @@ defmodule Temporal.Workflows.CoreTest do
       client: client,
       runtime: runtime,
       queue: queue,
-      worker: worker,
-      channel: channel
+      worker: worker
     })
-  end
-
-  defp reroute_channel(%{channel: channel} = ctx) do
-    test_pid = self()
-    Channel.add_listener(channel, test_pid, [:activation, :command, :job, :activity_task])
-    on_exit(fn -> Channel.remove_listener(channel, test_pid) end)
-
-    ctx
   end
 
   defp unique_name(base_name) do

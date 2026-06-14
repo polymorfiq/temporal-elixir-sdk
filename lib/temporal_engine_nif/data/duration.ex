@@ -8,10 +8,10 @@ defmodule TemporalEngineNif.Data.Duration do
 
   @type t :: %__MODULE__{seconds: integer(), nanos: integer()}
 
-  @spec from_record(t() | nil) :: TemporalEngine.Data.Duration.duration() | nil
-  def from_record(nil), do: nil
+  @spec to_record(t() | nil) :: TemporalEngine.Data.Duration.duration() | nil
+  def to_record(nil), do: nil
 
-  def from_record(%__MODULE__{seconds: seconds, nanos: nanos}) do
+  def to_record(%__MODULE__{seconds: seconds, nanos: nanos}) do
     TemporalEngine.Data.Duration.duration(seconds: seconds, nanos: nanos)
   end
 

@@ -8,11 +8,9 @@ defmodule Temporal.Workflows.BasicTest do
   import TemporalEngine.Data.Jobs
 
   alias Temporal.{Client, Runtime, TaskQueue, Worker}
-  alias Temporal.Comms.Channel
   alias TestWorkflows.{ActivitiesWithAwait, TimerWithAwait}
 
   setup_all [:setup_worker]
-  setup [:reroute_channel]
 
   test "should send the correct messages at the correct time", ctx do
     TaskQueue.start_workflow(
@@ -64,9 +62,27 @@ defmodule Temporal.Workflows.BasicTest do
     {:ok, client} = Client.new("localhost:7233", runtime: runtime, identity: "#{__MODULE__}")
 
     queue = TaskQueue.new(client, "#{__MODULE__}")
-    channel = Channel.new(queue)
 
-    {:ok, worker} = Worker.new(queue, channel)
+    {:ok, worker} =
+      Worker.new(queue,
+        max_cached_workflows: 100,
+        deployment_options: [
+          version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
+          use_worker_versioning: true,
+          default_versioning_behavior: :auto_upgrade
+        ],
+        task_types: [
+          enable_workflows: true,
+          enable_local_activities: true,
+          enable_remote_activities: true
+        ],
+        tuner: [
+          workflow_slot_supplier: [fixed_size: 10],
+          activity_slot_supplier: [fixed_size: 10],
+          local_activity_slot_supplier: [fixed_size: 10]
+        ]
+      )
+
     Worker.register_workflow(worker, ActivitiesWithAwait)
     Worker.register_workflow(worker, TimerWithAwait)
 
@@ -78,17 +94,8 @@ defmodule Temporal.Workflows.BasicTest do
       client: client,
       runtime: runtime,
       queue: queue,
-      worker: worker,
-      channel: channel
+      worker: worker
     })
-  end
-
-  defp reroute_channel(%{channel: channel} = ctx) do
-    test_pid = self()
-    Channel.add_listener(channel, test_pid, [:command, :completion, :job])
-    on_exit(fn -> Channel.remove_listener(channel, test_pid) end)
-
-    ctx
   end
 
   defp unique_name(base_name) do

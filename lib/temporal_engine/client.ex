@@ -205,7 +205,7 @@ defprotocol TemporalEngine.Client do
           record(:start_signal,
             signal_name: String.t(),
             inputs: [Payload.payload()],
-            header: %{String.t() => Data.Payload.t()}
+            header: %{String.t() => Payload.payload()}
           )
 
   Record.defrecord(:link, fields: %{})

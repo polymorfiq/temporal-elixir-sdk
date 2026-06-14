@@ -2,7 +2,6 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   use GenServer
 
   alias Temporal.Worker
-  alias Temporal.Comms.Channel
   alias Temporal.Comms.Payload
   alias Temporal.Comms.Workflows.ActivationCompletion
   alias Temporal.Comms.Workflows.Commands.ScheduleActivity
@@ -20,7 +19,6 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     :next_seq,
     :runtime,
     :worker,
-    :channel,
     command_batch: [],
     sequences: %{}
   ])
@@ -52,8 +50,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
        worker: %Worker{
          id: exec_ctx.worker_id,
          task_queue: exec_ctx.task_queue
-       },
-       channel: exec_ctx.channel
+       }
      )}
   end
 
@@ -343,8 +340,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   def send_successful_activation_completion(run_id, worker, commands) do
     Logger.debug("Completed Activation: #{run_id}")
 
-    Channel.send_to_engine(
-      worker.channel,
+    TemporalEngine.Worker.complete_workflow_activation(
       worker,
       {:activation_completion, run_id, {:success, commands}}
     )
@@ -358,8 +354,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   def send_failure_activation_completion(run_id, worker, completion) do
     Logger.debug("Failed Activation: #{run_id}")
 
-    Channel.send_to_engine(
-      worker.channel,
+    TemporalEngine.Worker.complete_workflow_activation(
       worker,
       {:activation_completion, run_id, {:failure, completion}}
     )

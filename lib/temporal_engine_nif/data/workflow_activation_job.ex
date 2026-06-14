@@ -5,6 +5,7 @@ defmodule TemporalEngineNif.Data.WorkflowActivationJob do
 
   alias TemporalEngineNif.Data.Duration
   alias TemporalEngineNif.Data.Payload
+  alias TemporalEngineNif.Data.Priority
   alias TemporalEngineNif.Data.RetryPolicy
   alias TemporalEngineNif.Data.Timestamp
   alias TemporalEngineNif.Data.WorkflowActivationJobVariant
@@ -17,6 +18,8 @@ defmodule TemporalEngineNif.Data.WorkflowActivationJob do
   @type t :: %__MODULE__{
           variant: WorkflowActivationJobVariant.t() | nil
         }
+
+  def to_record(nil), do: nil
 
   def to_record(%__MODULE__{variant: {:initialize_workflow, job}}) do
     initialize_workflow(

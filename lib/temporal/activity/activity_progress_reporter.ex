@@ -1,7 +1,6 @@
 defmodule Temporal.Activity.ActivityProgressReporter do
   use GenServer
 
-  alias Temporal.Comms.Channel
   alias Temporal.Supervisor.ActivitySupervisor
 
   require Logger
@@ -11,7 +10,6 @@ defmodule Temporal.Activity.ActivityProgressReporter do
     :activity_id,
     :task_token,
     :runtime,
-    :channel,
     :worker
   ])
 
@@ -35,7 +33,6 @@ defmodule Temporal.Activity.ActivityProgressReporter do
        activity_id: exec_ctx.activity_id,
        task_token: exec_ctx.activity_task_token,
        runtime: exec_ctx.runtime,
-       channel: exec_ctx.channel,
        worker: exec_ctx.worker
      )}
   end
@@ -48,8 +45,12 @@ defmodule Temporal.Activity.ActivityProgressReporter do
     task_token = progress_state(state, :task_token)
     worker = progress_state(state, :worker)
 
-    channel = progress_state(state, :channel)
-    resp = Channel.send_to_engine(channel, worker, {:activity, :completed, result, task_token})
+    resp =
+      TemporalEngine.Worker.complete_activity_task(
+        worker,
+        {:activity, :completed, result, task_token}
+      )
+
     {:reply, resp, state, {:continue, :stop_activity}}
   end
 

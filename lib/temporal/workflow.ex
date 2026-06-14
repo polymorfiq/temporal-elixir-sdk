@@ -1,20 +1,14 @@
 defmodule Temporal.Workflow do
   alias Temporal.Activity
   alias Temporal.Activity.ActivityExecHandle
-  alias Temporal.Client
   alias Temporal.Comms.Shared.Duration
-  alias Temporal.CoreSdk
   alias Temporal.CoreSdk.Data.WorkflowStartOptions
-  alias Temporal.CoreSdk.Data.WorkflowArguments
   alias Temporal.Selectors.TimerHandle
   alias Temporal.TaskQueue
-  alias Temporal.Workflows.WorkflowExecHandle
   alias Temporal.Workflow.WorkflowContext
   alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Supervisor.WorkflowSupervisor
-
-  import TemporalEngine.WorkflowHandle
 
   @type workflow_exec_handle() :: WorkflowExecHandle.t()
   @type get_results_opts() :: [
@@ -37,49 +31,9 @@ defmodule Temporal.Workflow do
   end
 
   @spec result(workflow_exec_handle(), get_results_opts()) ::
-          {:ok, WorkflowArguments.t()} | {:error, term()}
-  def result(%WorkflowExecHandle{} = handle, opts \\ []) do
-    with {:ok, opts} <- Keyword.validate(opts, [:follow_runs, :timeout]),
-         {:ok, runtime} <- Client.core_runtime(handle.client) do
-      get_opts = get_result_opts(follow_runs: Keyword.get(opts, :follow_runs, true))
-
-      parent = self()
-
-      {pid, ref} =
-        spawn_monitor(fn ->
-          CoreSdk._workflow_handle_get_result(
-            runtime.core,
-            handle.handle,
-            get_opts,
-            self()
-          )
-          |> case do
-            :ok -> :ok
-            {:error, err} -> raise "Could not get workflow result from Core SDK: #{inspect(err)}"
-          end
-
-          receive do
-            {:ok, result} ->
-              send(parent, {self(), {:ok, result}})
-
-            {:error, err} ->
-              send(parent, {self(), {:error, err}})
-          end
-        end)
-
-      timeout = Keyword.get(opts, :timeout, :infinity)
-
-      receive do
-        {^pid, {:ok, args}} ->
-          args
-
-        {:DOWN, ^ref, :process, ^pid, %RuntimeError{} = rt_err} ->
-          {:error, rt_err}
-      after
-        timeout ->
-          {:error, :timeout}
-      end
-    end
+          {:ok, TemporalEngine.Data.Payload.t()} | {:error, term()}
+  def result(handle, opts \\ []) do
+    TemporalEngine.WorkflowHandle.get_result(handle, opts)
   end
 
   @spec new_timer(WorkflowContext.t(), Duration.duration()) ::
@@ -165,8 +119,6 @@ defmodule Temporal.Workflow do
   end
 
   @spec get(WorkflowContext.t(), exec_handle()) :: {:ok, term()} | {:error, term()}
-  def get(%WorkflowContext{} = _ctx, %WorkflowExecHandle{} = handle), do: handle
-
   def get(%WorkflowContext{} = ctx, %ActivityExecHandle{} = activity) do
     with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(ctx.run_id) do
       WorkflowFlowController.await_activity_result(

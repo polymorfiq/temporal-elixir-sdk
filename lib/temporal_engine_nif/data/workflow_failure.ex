@@ -8,51 +8,31 @@ defmodule TemporalEngineNif.Data.WorkflowFailure do
     failure_info: nil
   ]
 
-  alias TemporalEngineNif.Data
+  import TemporalEngine.Data.Failure
+
+  alias TemporalEngineNif.Data.Payload
+  alias TemporalEngineNif.Data.WorkflowFailureInfo
 
   @type t :: %__MODULE__{
           message: String.t(),
           source: String.t(),
           stack_trace: String.t(),
-          encoded_attributes: Data.Payload.t() | nil,
+          encoded_attributes: Payload.t() | nil,
           cause: t() | nil,
           failure_info: Data.WorkflowFailureInfo.t() | nil
         }
 
-  @type opts :: [
-          {:message, String.t()}
-          | {:source, String.t()}
-          | {:stack_trace, String.t()}
-          | {:encoded_attributes, Data.Payload.opts()}
-          | {:cause, opts()}
-          | {:failure_info, Data.WorkflowFailureInfo.opts()}
-        ]
+  @spec to_record(t() | nil) :: Jobs.namespaced_run() | nil
+  def to_record(nil), do: nil
 
-  @spec with_opts!(opts()) :: t()
-  def with_opts!(opts) do
-    failure = struct!(__MODULE__, opts)
-
-    failure =
-      if opts[:encoded_attributes] do
-        update_in(failure, [Access.key(:encoded_attributes)], &Data.Payload.with_opts!/1)
-      else
-        failure
-      end
-
-    failure =
-      if opts[:cause] do
-        update_in(failure, [Access.key(:cause)], &with_opts!/1)
-      else
-        failure
-      end
-
-    failure =
-      if opts[:failure_info] do
-        update_in(failure, [Access.key(:failure_info)], &Data.WorkflowFailureInfo.with_opts!/1)
-      else
-        failure
-      end
-
-    failure
+  def to_record(%__MODULE__{} = failure) do
+    failure(
+      message: failure.message,
+      source: failure.source,
+      stack_trace: failure.stack_trace,
+      encoded_attributes: Payload.to_record(failure.encoded_attributes),
+      cause: failure.cause,
+      failure_info: WorkflowFailureInfo.to_record(failure.failure_info)
+    )
   end
 end

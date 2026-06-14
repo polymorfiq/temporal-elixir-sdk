@@ -61,7 +61,7 @@ defmodule TemporalEngine.Data.Jobs do
             workflow_execution_expiration_time: Timestamp.timestamp() | nil,
             cron_schedule_to_schedule_interval: Duration.duration() | nil,
             memo: memo() | nil,
-            search_attributes: Data.WorkflowSearchAttributes.t() | nil,
+            search_attributes: search_attribs() | nil,
             start_time: Timestamp.timestamp() | nil,
             root_workflow: run() | nil,
             priority: Priority.priority() | nil

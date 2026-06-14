@@ -12,11 +12,47 @@ defmodule Temporal.WorkerTest do
   setup [:stop_all_workers]
 
   test "initializes for a task queue", %{queue: queue} do
-    assert {:ok, _worker} = Worker.new(queue)
+    assert {:ok, _worker} =
+             Worker.new(queue,
+               max_cached_workflows: 100,
+               deployment_options: [
+                 version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
+                 use_worker_versioning: true,
+                 default_versioning_behavior: :auto_upgrade
+               ],
+               task_types: [
+                 enable_workflows: true,
+                 enable_local_activities: true,
+                 enable_remote_activities: true
+               ],
+               tuner: [
+                 workflow_slot_supplier: [fixed_size: 10],
+                 activity_slot_supplier: [fixed_size: 10],
+                 local_activity_slot_supplier: [fixed_size: 10]
+               ]
+             )
   end
 
   test "shuts down in a reasonable time", ctx do
-    {:ok, worker} = Worker.new(ctx.queue)
+    {:ok, worker} =
+      Worker.new(ctx.queue,
+        max_cached_workflows: 100,
+        deployment_options: [
+          version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
+          use_worker_versioning: true,
+          default_versioning_behavior: :auto_upgrade
+        ],
+        task_types: [
+          enable_workflows: true,
+          enable_local_activities: true,
+          enable_remote_activities: true
+        ],
+        tuner: [
+          workflow_slot_supplier: [fixed_size: 10],
+          activity_slot_supplier: [fixed_size: 10],
+          local_activity_slot_supplier: [fixed_size: 10]
+        ]
+      )
 
     parent = self()
 
@@ -28,7 +64,26 @@ defmodule Temporal.WorkerTest do
   end
 
   test "stops worker supervisor when Core Worker is shutdown", ctx do
-    {:ok, worker} = Worker.new(ctx.queue)
+    {:ok, worker} =
+      Worker.new(ctx.queue,
+        max_cached_workflows: 100,
+        deployment_options: [
+          version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
+          use_worker_versioning: true,
+          default_versioning_behavior: :auto_upgrade
+        ],
+        task_types: [
+          enable_workflows: true,
+          enable_local_activities: true,
+          enable_remote_activities: true
+        ],
+        tuner: [
+          workflow_slot_supplier: [fixed_size: 10],
+          activity_slot_supplier: [fixed_size: 10],
+          local_activity_slot_supplier: [fixed_size: 10]
+        ]
+      )
+
     sup_pid = Worker.worker_supervisor_pid(worker.id)
     ref = Process.monitor(sup_pid)
 
@@ -38,7 +93,26 @@ defmodule Temporal.WorkerTest do
   end
 
   test "shuts down Core Worker when supervisor is stopped", ctx do
-    {:ok, worker} = Worker.new(ctx.queue)
+    {:ok, worker} =
+      Worker.new(ctx.queue,
+        max_cached_workflows: 100,
+        deployment_options: [
+          version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
+          use_worker_versioning: true,
+          default_versioning_behavior: :auto_upgrade
+        ],
+        task_types: [
+          enable_workflows: true,
+          enable_local_activities: true,
+          enable_remote_activities: true
+        ],
+        tuner: [
+          workflow_slot_supplier: [fixed_size: 10],
+          activity_slot_supplier: [fixed_size: 10],
+          local_activity_slot_supplier: [fixed_size: 10]
+        ]
+      )
+
     {:ok, _} = CoreWorker.existing_for_id(worker.id)
 
     Worker.stop_with_id(worker.id)
