@@ -1,9 +1,11 @@
 defmodule Temporal.Worker.ActivityTaskPoller do
   use GenServer
 
+  alias TemporalEngine.Worker
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Worker.WorkerActivityManager
   alias Temporal.Comms.Channel
+  alias Temporal.CoreSdk.CoreWorker
 
   require Logger
   require Record
@@ -12,7 +14,8 @@ defmodule Temporal.Worker.ActivityTaskPoller do
     :worker_id,
     :activity_manager,
     :channel,
-    :worker
+    :worker,
+    :core_worker
   ])
 
   def start_link({exec_ctx, server_opts}) do
@@ -24,13 +27,15 @@ defmodule Temporal.Worker.ActivityTaskPoller do
     Process.flag(:trap_exit, true)
     Process.set_label({:activity_task_poller, exec_ctx.worker_id})
 
-    with {:ok, activity_manager} <- WorkerSupervisor.activity_manager_pid(exec_ctx.worker_id) do
+    with {:ok, activity_manager} <- WorkerSupervisor.activity_manager_pid(exec_ctx.worker_id),
+         {:ok, core_worker} <- CoreWorker.existing_for_id(exec_ctx.worker_id) do
       {:ok,
        poll_state(
          worker_id: exec_ctx.worker_id,
          activity_manager: activity_manager,
          channel: exec_ctx.channel,
-         worker: exec_ctx.worker
+         worker: exec_ctx.worker,
+         core_worker: core_worker
        ), {:continue, :poll_for_tasks}}
     end
   end
@@ -67,10 +72,10 @@ defmodule Temporal.Worker.ActivityTaskPoller do
   end
 
   defp poll_and_inform_worker(state) do
-    worker = poll_state(state, :worker)
+    core_worker = poll_state(state, :core_worker)
     channel = poll_state(state, :channel)
 
-    case Channel.poll_activity_task(channel, worker) do
+    case Worker.poll_activity_task(core_worker.core) do
       {:ok, nil} -> :ok
       {:ok, task} -> process_activity_task(task, state)
       {:error, err} -> {:error, err}

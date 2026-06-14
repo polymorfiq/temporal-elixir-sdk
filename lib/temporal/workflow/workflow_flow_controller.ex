@@ -11,7 +11,9 @@ defmodule Temporal.Workflow.WorkflowFlowController do
     :id,
     :run_id,
     awaiting_activities: %{},
-    activity_results: %{}
+    activity_results: %{},
+    awaiting_timers: %{},
+    fired_timers: %{}
   ])
 
   def start_link({exec_ctx, server_opts}) do
@@ -29,6 +31,10 @@ defmodule Temporal.Workflow.WorkflowFlowController do
 
   def activity_tasks_resolved(pid, results),
     do: GenServer.call(pid, {:activity_tasks_resolved, results})
+
+  def await_timer(pid, _run_id, timer_id) do
+    GenServer.call(pid, {:await_timer, timer_id}, :infinity)
+  end
 
   def await_activity_result(pid, _run_id, activity_id) do
     GenServer.call(pid, {:await_activity_result, activity_id}, :infinity)
@@ -84,11 +90,33 @@ defmodule Temporal.Workflow.WorkflowFlowController do
     end
   end
 
+  def handle_call({:await_timer, timer_id}, from, state) do
+    fired_timers = flow_state(state, :fired_timers)
+    run_id = flow_state(state, :run_id)
+
+    if Map.has_key?(fired_timers, timer_id) do
+      Logger.debug("Awaiting timer (Skipped): #{inspect(from)} - #{timer_id}")
+      {:reply, fired_timers[timer_id], state}
+    else
+      Logger.debug("Awaiting timer (Locked): #{inspect(from)} - #{timer_id}")
+      WorkflowProgressReporter.send_heartbeat_for_id(run_id)
+      {:noreply, append_timer_awaiter(state, timer_id, from)}
+    end
+  end
+
   defp append_activity_results_awaiter(state, activity_id, from) do
     awaiting = flow_state(state, :awaiting_activities)
     awaiters = Map.get(awaiting, activity_id, [])
 
     awaiting = Map.put(awaiting, activity_id, [from | awaiters])
     flow_state(state, awaiting_activities: awaiting)
+  end
+
+  defp append_timer_awaiter(state, timer_id, from) do
+    awaiting = flow_state(state, :awaiting_timers)
+    awaiters = Map.get(awaiting, timer_id, [])
+
+    awaiting = Map.put(awaiting, timer_id, [from | awaiters])
+    flow_state(state, awaiting_timers: awaiting)
   end
 end

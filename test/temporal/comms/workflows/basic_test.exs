@@ -3,10 +3,13 @@ defmodule Temporal.Workflows.BasicTest do
   use ChannelHelpers
 
   require TestWorkflows.ActivitiesWithAwait
+  require TestWorkflows.TimerWithAwait
+
+  import TemporalEngine.Data.Jobs
 
   alias Temporal.{Client, Runtime, TaskQueue, Worker}
   alias Temporal.Comms.Channel
-  alias TestWorkflows.ActivitiesWithAwait
+  alias TestWorkflows.{ActivitiesWithAwait, TimerWithAwait}
 
   setup_all [:setup_worker]
   setup [:reroute_channel]
@@ -21,7 +24,7 @@ defmodule Temporal.Workflows.BasicTest do
     )
 
     assert_engine_sends_jobs(ctx, [
-      {:initialize_workflow, _id, "ActivitiesWithAwait", ["Testing"], _opts}
+      initialize_workflow(arguments: ["Testing"])
     ])
 
     assert_client_sends_commands(
@@ -33,17 +36,27 @@ defmodule Temporal.Workflows.BasicTest do
     )
 
     assert_engine_sends_jobs(ctx, [
-      {:resolve_activity, 1, {:completed, "Hello, Testing1!"}, _},
-      {:resolve_activity, 2, {:completed, "Hello, Testing2!"}, _}
+      resolve_activity(seq: 1, result: activity_completed(result: "Hello, Testing1!")),
+      resolve_activity(seq: 2, result: activity_completed(result: "Hello, Testing2!"))
     ])
 
     assert_client_sends_commands(ctx,
       complete_workflow_execution: "Hello, Testing2!"
     )
 
-    assert_engine_sends_jobs(ctx, [{:remove_from_cache, :workflow_execution_ending, _}])
+    assert_engine_sends_jobs(ctx, [remove_from_cache(reason: :workflow_execution_ending)])
 
     assert_client_sends_completion(ctx, {:activation_completion, _, {:success, []}})
+  end
+
+  test "should respect timers", ctx do
+    TaskQueue.start_workflow(ctx.queue, unique_name("basic-test"), TimerWithAwait, [],
+      id_conflict_policy: :terminate_existing
+    )
+
+    assert_engine_sends_jobs(ctx, [{:initialize_workflow, _id, "TimerWithAwait", [], _opts}])
+
+    assert_engine_sends_jobs(ctx, [{:remove_from_cache, :workflow_execution_ending, _}])
   end
 
   def setup_worker(ctx) do
@@ -55,6 +68,7 @@ defmodule Temporal.Workflows.BasicTest do
 
     {:ok, worker} = Worker.new(queue, channel)
     Worker.register_workflow(worker, ActivitiesWithAwait)
+    Worker.register_workflow(worker, TimerWithAwait)
 
     on_exit(fn -> Worker.shutdown(worker) end)
     on_exit(fn -> Client.stop(client) end)

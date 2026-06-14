@@ -1,3 +1,5 @@
 import Config
 
-config :logger, level: :warning
+config :logger, level: :debug
+
+config :temporal, engine: TemporalEngineNif.Engine

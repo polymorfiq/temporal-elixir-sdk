@@ -1,10 +1,12 @@
 defmodule Temporal.Worker.WorkflowActivationPoller do
   use GenServer
 
+  alias TemporalEngine.Worker
   alias Temporal.Comms.Channel
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Worker.WorkerWorkflowManager
   alias Temporal.Supervisor.ExecutionContext
+  alias Temporal.CoreSdk.CoreWorker
 
   require Logger
   require Record
@@ -13,7 +15,8 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     :worker_id,
     :manager_pid,
     :channel,
-    :worker
+    :worker,
+    :core_worker
   ])
 
   def start_link({exec_ctx, server_opts}) do
@@ -25,13 +28,15 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
     Process.flag(:trap_exit, true)
     Process.set_label({:workflow_activation_poller, exec_ctx.worker_id})
 
-    with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(exec_ctx.worker_id) do
+    with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(exec_ctx.worker_id),
+         {:ok, core_worker} <- CoreWorker.existing_for_id(exec_ctx.worker_id) do
       {:ok,
        poll_state(
          worker_id: exec_ctx.worker_id,
          manager_pid: manager_pid,
          channel: exec_ctx.channel,
-         worker: exec_ctx.worker
+         worker: exec_ctx.worker,
+         core_worker: core_worker
        ), {:continue, :poll_for_activations}}
     end
   end
@@ -69,10 +74,10 @@ defmodule Temporal.Worker.WorkflowActivationPoller do
 
   defp poll_and_inform_worker(state) do
     channel = poll_state(state, :channel)
-    worker = poll_state(state, :worker)
+    core_worker = poll_state(state, :core_worker)
     manager_pid = poll_state(state, :manager_pid)
 
-    case Channel.poll_activation(channel, worker) do
+    case Worker.poll_workflow_activation(core_worker.core) do
       {:ok, nil} -> :ok
       {:ok, activation} -> WorkerWorkflowManager.process_activation(manager_pid, activation)
       {:error, err} -> {:error, err}

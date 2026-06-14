@@ -7,7 +7,7 @@ use temporalio_sdk_common::protos::temporal::api::common::v1::Callback;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Shared.Duration"]
+#[module = "TemporalEngineNif.Data.Duration"]
 pub struct SdkDuration {
     seconds: i64,
     nanos: i32,
@@ -136,7 +136,7 @@ impl Into<temporal_api::common::v1::Payload> for &SdkPayload {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.Payloads"]
+#[module = "TemporalEngineNif.Data.Payloads"]
 pub struct SdkPayloads {
     pub payloads: Vec<SdkPayload>,
 }
@@ -248,7 +248,7 @@ impl Into<temporal_api::common::v1::RetryPolicy> for SdkRetryPolicy {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.Header"]
+#[module = "TemporalEngineNif.Data.Header"]
 pub struct SdkHeader {
     fields: HashMap<String, SdkPayload>,
 }
@@ -278,7 +278,7 @@ impl Into<api_common::v1::Header> for SdkHeader {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.Link"]
+#[module = "TemporalEngineNif.Data.Link"]
 pub struct SdkLink {
     variant: Option<SdkLinkVariant>,
 }
@@ -338,7 +338,7 @@ impl Into<api_common::v1::link::Variant> for SdkLinkVariant {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowEvent"]
+#[module = "TemporalEngineNif.Data.WorkflowEvent"]
 pub struct SdkLinkWorkflowEvent {
     namespace: String,
     workflow_id: String,
@@ -369,7 +369,7 @@ impl Into<api_common::v1::link::WorkflowEvent> for SdkLinkWorkflowEvent {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.LinkActivity"]
+#[module = "TemporalEngineNif.Data.LinkActivity"]
 pub struct SdkLinkBatchJob {
     job_id: String,
 }
@@ -391,7 +391,7 @@ impl Into<api_common::v1::link::BatchJob> for SdkLinkBatchJob {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.LinkActivity"]
+#[module = "TemporalEngineNif.Data.LinkActivity"]
 pub struct SdkLinkActivity {
     namespace: String,
     activity_id: String,
@@ -419,7 +419,7 @@ impl Into<api_common::v1::link::Activity> for SdkLinkActivity {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.LinkNexusOperation"]
+#[module = "TemporalEngineNif.Data.LinkNexusOperation"]
 pub struct SdkLinkNexusOperation {
     namespace: String,
     operation_id: String,
@@ -479,7 +479,7 @@ impl Into<api_common::v1::link::workflow_event::Reference> for SdkWorkflowEventR
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowEventReferenceEvent"]
+#[module = "TemporalEngineNif.Data.WorkflowEventReferenceEvent"]
 pub struct SdkWorkflowEventReferenceEvent {
     event_id: i64,
     event_type: i32,
@@ -504,7 +504,7 @@ impl Into<api_common::v1::link::workflow_event::EventReference> for SdkWorkflowE
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowEventReferenceRequest"]
+#[module = "TemporalEngineNif.Data.WorkflowEventReferenceRequest"]
 pub struct SdkWorkflowEventReferenceRequest {
     request_id: String,
     event_type: i32,
@@ -533,7 +533,7 @@ impl Into<api_common::v1::link::workflow_event::RequestIdReference>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.Callback"]
+#[module = "TemporalEngineNif.Data.Callback"]
 pub struct SdkCallback {
     pub links: Vec<SdkLink>,
     pub variant: Option<SdkCallbackVariant>,
@@ -586,7 +586,7 @@ impl Into<api_common::v1::callback::Variant> for SdkCallbackVariant {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.CallbackNexus"]
+#[module = "TemporalEngineNif.Data.CallbackNexus"]
 pub struct SdkCallbackNexus {
     pub url: String,
     pub header: HashMap<String, String>,
@@ -611,7 +611,7 @@ impl Into<api_common::v1::callback::Nexus> for SdkCallbackNexus {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.CallbackInternal"]
+#[module = "TemporalEngineNif.Data.CallbackInternal"]
 pub struct SdkCallbackInternal {
     pub data: Vec<u8>,
 }

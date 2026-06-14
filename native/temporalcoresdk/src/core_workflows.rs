@@ -52,7 +52,7 @@ pub struct SdkWorkflowActivation {
     pub continue_as_new_suggested: bool,
     pub deployment_version_for_current_task: Option<SdkWorkerDeploymentVersion>,
     pub last_sdk_version: String,
-    pub suggest_continue_as_new_reasons: Vec<i32>,
+    pub suggest_continue_as_new_reasons: Vec<SdkContinueAsNewReason>,
     pub target_worker_deployment_version_changed: bool,
 }
 
@@ -71,15 +71,47 @@ impl From<workflow_activation::WorkflowActivation> for SdkWorkflowActivation {
                 .deployment_version_for_current_task
                 .try_into_or_none(),
             last_sdk_version: external.last_sdk_version,
-            suggest_continue_as_new_reasons: external.suggest_continue_as_new_reasons,
+            suggest_continue_as_new_reasons: external.suggest_continue_as_new_reasons.iter().map(|val| val.clone().into()).collect(),
             target_worker_deployment_version_changed: external
                 .target_worker_deployment_version_changed,
         }
     }
 }
 
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkContinueAsNewReason {
+    Unspecified = 0,
+    HistorySizeTooLarge = 1,
+    TooManyHistoryEvents = 2,
+    TooManyUpdates = 3,
+}
+
+impl Into<i32> for SdkContinueAsNewReason {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::HistorySizeTooLarge => 1,
+            Self::TooManyHistoryEvents => 2,
+            Self::TooManyUpdates => 3,
+        }
+    }
+}
+
+impl From<i32> for SdkContinueAsNewReason {
+    fn from(intent: i32) -> SdkContinueAsNewReason {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::HistorySizeTooLarge,
+            2 => Self::TooManyHistoryEvents,
+            3 => Self::TooManyUpdates,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
 #[derive(NifStruct, Default, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowActivationJob"]
+#[module = "TemporalEngineNif.Data.WorkflowActivationJob"]
 pub struct SdkWorkflowActivationJob {
     variant: Option<SdkWorkflowActivationJobVariant>,
 }
@@ -297,7 +329,7 @@ impl Into<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWo
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationFireTimer"]
+#[module = "Temporal.Comms.Workflows.ActivationJobs.FireTimer"]
 pub struct SdkActivationFireTimer {
     pub seq: u32,
 }
@@ -315,7 +347,7 @@ impl Into<workflow_activation::FireTimer> for SdkActivationFireTimer {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationUpdateRandomSeed"]
+#[module = "TemporalEngineNif.Data.ActivationUpdateRandomSeed"]
 pub struct SdkActivationUpdateRandomSeed {
     pub randomness_seed: u64,
 }
@@ -337,7 +369,7 @@ impl Into<workflow_activation::UpdateRandomSeed> for SdkActivationUpdateRandomSe
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationQueryWorkflow"]
+#[module = "TemporalEngineNif.Data.ActivationQueryWorkflow"]
 pub struct SdkActivationQueryWorkflow {
     pub query_id: String,
     pub query_type: String,
@@ -376,7 +408,7 @@ impl Into<workflow_activation::QueryWorkflow> for SdkActivationQueryWorkflow {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationCancelWorkflow"]
+#[module = "TemporalEngineNif.Data.ActivationCancelWorkflow"]
 pub struct SdkActivationCancelWorkflow {
     pub reason: String,
 }
@@ -398,7 +430,7 @@ impl Into<workflow_activation::CancelWorkflow> for SdkActivationCancelWorkflow {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationSignalWorkflow"]
+#[module = "TemporalEngineNif.Data.ActivationSignalWorkflow"]
 pub struct SdkActivationSignalWorkflow {
     pub signal_name: String,
     pub input: Vec<SdkPayload>,
@@ -465,7 +497,7 @@ impl Into<workflow_activation::ResolveActivity> for SdkActivationResolveActivity
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationNotifyHasPatch"]
+#[module = "TemporalEngineNif.Data.ActivationNotifyHasPatch"]
 pub struct SdkActivationNotifyHasPatch {
     pub patch_id: String,
 }
@@ -487,7 +519,7 @@ impl Into<workflow_activation::NotifyHasPatch> for SdkActivationNotifyHasPatch {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationResolveChildWorkflowExecutionStart"]
+#[module = "TemporalEngineNif.Data.ActivationResolveChildWorkflowExecutionStart"]
 pub struct SdkActivationResolveChildWorkflowExecutionStart {
     pub seq: u32,
     pub status: Option<SdkWorkflowChildExecutionStartStatus>,
@@ -516,7 +548,7 @@ impl Into<workflow_activation::ResolveChildWorkflowExecutionStart>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationResolveChildWorkflowExecution"]
+#[module = "TemporalEngineNif.Data.ActivationResolveChildWorkflowExecution"]
 pub struct SdkActivationResolveChildWorkflowExecution {
     pub seq: u32,
     pub result: Option<SdkWorkflowChildResult>,
@@ -545,7 +577,7 @@ impl Into<workflow_activation::ResolveChildWorkflowExecution>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationResolveSignalExternalWorkflow"]
+#[module = "TemporalEngineNif.Data.ActivationResolveSignalExternalWorkflow"]
 pub struct SdkActivationResolveSignalExternalWorkflow {
     pub seq: u32,
     pub failure: Option<SdkWorkflowFailure>,
@@ -574,7 +606,7 @@ impl Into<workflow_activation::ResolveSignalExternalWorkflow>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationResolveRequestCancelExternalWorkflow"]
+#[module = "TemporalEngineNif.Data.ActivationResolveRequestCancelExternalWorkflow"]
 pub struct SdkActivationResolveRequestCancelExternalWorkflow {
     pub seq: u32,
     pub failure: Option<SdkWorkflowFailure>,
@@ -603,7 +635,7 @@ impl Into<workflow_activation::ResolveRequestCancelExternalWorkflow>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationDoUpdate"]
+#[module = "TemporalEngineNif.Data.ActivationDoUpdate"]
 pub struct SdkActivationDoUpdate {
     pub id: String,
     pub protocol_instance_id: String,
@@ -651,7 +683,7 @@ impl Into<workflow_activation::DoUpdate> for SdkActivationDoUpdate {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationResolveNexusOperationStart"]
+#[module = "TemporalEngineNif.Data.ActivationResolveNexusOperationStart"]
 pub struct SdkActivationResolveNexusOperationStart {
     pub seq: u32,
     pub status: Option<SdkWorkflowResolveNexusOperationStartStatus>,
@@ -680,7 +712,7 @@ impl Into<workflow_activation::ResolveNexusOperationStart>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ActivationResolveNexusOperation"]
+#[module = "TemporalEngineNif.Data.ActivationResolveNexusOperation"]
 pub struct SdkActivationResolveNexusOperation {
     pub seq: u32,
     pub result: Option<SdkWorkflowNexusOperationResult>,
@@ -783,7 +815,7 @@ impl From<i32> for SdkCacheEvictionReason {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowNexusOperationResult"]
+#[module = "TemporalEngineNif.Data.WorkflowNexusOperationResult"]
 pub struct SdkWorkflowNexusOperationResult {
     pub status: Option<SdkWorkflowNexusOperationStatus>,
 }
@@ -882,7 +914,7 @@ impl Into<workflow_activation::resolve_nexus_operation_start::Status>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.UpdateMeta"]
+#[module = "TemporalEngineNif.Data.UpdateMeta"]
 pub struct SdkUpdateMeta {
     pub update_id: String,
     pub identity: String,
@@ -907,7 +939,7 @@ impl Into<temporal_api::update::v1::Meta> for SdkUpdateMeta {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowChildResult"]
+#[module = "TemporalEngineNif.Data.WorkflowChildResult"]
 pub struct SdkWorkflowChildResult {
     pub status: Option<SdkWorkflowChildExecutionStatus>,
 }
@@ -962,7 +994,7 @@ impl Into<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionCompletedStatus"]
+#[module = "TemporalEngineNif.Data.WorkflowChildExecutionCompletedStatus"]
 pub struct SdkWorkflowChildExecutionCompletedStatus {
     pub result: Option<SdkPayload>,
 }
@@ -988,7 +1020,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionFailedStatus"]
+#[module = "TemporalEngineNif.Data.WorkflowChildExecutionFailedStatus"]
 pub struct SdkWorkflowChildExecutionFailedStatus {
     pub failure: Option<SdkWorkflowFailure>,
 }
@@ -1014,7 +1046,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionCancelledStatus"]
+#[module = "TemporalEngineNif.Data.WorkflowChildExecutionCancelledStatus"]
 pub struct SdkWorkflowChildExecutionCancelledStatus {
     pub failure: Option<SdkWorkflowFailure>,
 }
@@ -1091,7 +1123,7 @@ impl Into<workflow_activation::resolve_child_workflow_execution_start::Status>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionStartSucceededStatus"]
+#[module = "TemporalEngineNif.Data.WorkflowChildExecutionStartSucceededStatus"]
 pub struct SdkWorkflowChildExecutionStartSucceededStatus {
     pub run_id: String,
 }
@@ -1117,7 +1149,7 @@ impl Into<workflow_activation::ResolveChildWorkflowExecutionStartSuccess>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionStartFailedStatus"]
+#[module = "TemporalEngineNif.Data.WorkflowChildExecutionStartFailedStatus"]
 pub struct SdkWorkflowChildExecutionStartFailedStatus {
     pub workflow_id: String,
     pub workflow_type: String,
@@ -1175,7 +1207,7 @@ impl From<i32> for SdkStartChildWorkflowExecutionFailedCause {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionStartCancelledStatus"]
+#[module = "TemporalEngineNif.Data.WorkflowChildExecutionStartCancelledStatus"]
 pub struct SdkWorkflowChildExecutionStartCancelledStatus {
     pub failure: Option<SdkWorkflowFailure>,
 }
@@ -1371,7 +1403,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::activity_result::DoBackoff>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowMemo"]
+#[module = "TemporalEngineNif.Data.WorkflowMemo"]
 pub struct SdkWorkflowMemo {
     pub fields: HashMap<String, SdkPayload>,
 }
@@ -1401,7 +1433,7 @@ impl Into<temporal_api::common::v1::Memo> for SdkWorkflowMemo {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowSearchAttributes"]
+#[module = "TemporalEngineNif.Data.WorkflowSearchAttributes"]
 pub struct SdkWorkflowSearchAttributes {
     pub indexed_fields: HashMap<String, SdkPayload>,
 }
@@ -1431,7 +1463,7 @@ impl Into<temporal_api::common::v1::SearchAttributes> for SdkWorkflowSearchAttri
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowNamespacedExecution"]
+#[module = "TemporalEngineNif.Data.WorkflowNamespacedExecution"]
 pub struct SdkWorkflowNamespacedExecution {
     pub namespace: String,
     pub workflow_id: String,
@@ -1465,7 +1497,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::common::NamespacedWorkflowExec
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ExternalPayloadDetails"]
+#[module = "TemporalEngineNif.Data.ExternalPayloadDetails"]
 pub struct SdkExternalPayloadDetails {
     pub size_bytes: i64,
 }
@@ -1596,7 +1628,7 @@ impl Into<FailureInfo> for SdkWorkflowFailureInfo {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowApplicationFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowApplicationFailureInfo"]
 pub struct SdkWorkflowApplicationFailureInfo {
     pub failure_type: String,
     pub non_retryable: bool,
@@ -1656,7 +1688,7 @@ impl From<i32> for SdkApplicationErrorCategory {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowTimeoutFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowTimeoutFailureInfo"]
 pub struct SdkWorkflowTimeoutFailureInfo {
     pub timeout_type: SdkTimeoutType,
     pub last_heartbeat_details: Option<SdkPayloads>,
@@ -1716,7 +1748,7 @@ impl From<i32> for SdkTimeoutType {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCanceledFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowCanceledFailureInfo"]
 pub struct SdkWorkflowCanceledFailureInfo {
     pub details: Option<SdkPayloads>,
     pub identity: String,
@@ -1741,7 +1773,7 @@ impl Into<temporal_api::failure::v1::CanceledFailureInfo> for SdkWorkflowCancele
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowTerminatedFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowTerminatedFailureInfo"]
 pub struct SdkWorkflowTerminatedFailureInfo {
     pub identity: String,
 }
@@ -1763,7 +1795,7 @@ impl Into<temporal_api::failure::v1::TerminatedFailureInfo> for SdkWorkflowTermi
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowServerFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowServerFailureInfo"]
 pub struct SdkWorkflowServerFailureInfo {
     pub non_retryable: bool,
 }
@@ -1785,7 +1817,7 @@ impl Into<temporal_api::failure::v1::ServerFailureInfo> for SdkWorkflowServerFai
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowResetFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowResetFailureInfo"]
 pub struct SdkWorkflowResetFailureInfo {
     pub last_heartbeat_details: Option<SdkPayloads>,
 }
@@ -1807,7 +1839,7 @@ impl Into<temporal_api::failure::v1::ResetWorkflowFailureInfo> for SdkWorkflowRe
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowActivityFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowActivityFailureInfo"]
 pub struct SdkWorkflowActivityFailureInfo {
     pub scheduled_event_id: i64,
     pub started_event_id: i64,
@@ -1888,7 +1920,7 @@ impl From<i32> for SdkRetryState {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowActivityType"]
+#[module = "TemporalEngineNif.Data.WorkflowActivityType"]
 pub struct SdkWorkflowActivityType {
     pub name: String,
 }
@@ -1908,7 +1940,7 @@ impl Into<temporal_api::common::v1::ActivityType> for SdkWorkflowActivityType {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowChildExecutionFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowChildExecutionFailureInfo"]
 pub struct SdkWorkflowChildExecutionFailureInfo {
     pub namespace: String,
     pub workflow_execution: Option<SdkWorkflowExecution>,
@@ -1974,7 +2006,7 @@ impl Into<temporal_api::common::v1::WorkflowExecution> for SdkWorkflowExecution 
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowType"]
+#[module = "TemporalEngineNif.Data.WorkflowType"]
 pub struct SdkWorkflowType {
     pub name: String,
 }
@@ -1994,7 +2026,7 @@ impl Into<temporal_api::common::v1::WorkflowType> for SdkWorkflowType {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowNexusOperationFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowNexusOperationFailureInfo"]
 pub struct SdkWorkflowNexusOperationFailureInfo {
     pub scheduled_event_id: i64,
     pub endpoint: String,
@@ -2037,7 +2069,7 @@ impl Into<temporal_api::failure::v1::NexusOperationFailureInfo>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowNexusHandlerFailureInfo"]
+#[module = "TemporalEngineNif.Data.WorkflowNexusHandlerFailureInfo"]
 pub struct SdkWorkflowNexusHandlerFailureInfo {
     pub failure_type: String,
     pub retry_behavior: SdkNexusHandlerErrorRetryBehavior,
@@ -2402,7 +2434,7 @@ impl Into<WorkflowCommand> for &SdkWorkflowCommand {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.UserMetadata"]
+#[module = "TemporalEngineNif.Data.UserMetadata"]
 pub struct SdkUserMetadata {
     pub summary: Option<SdkPayload>,
     pub details: Option<SdkPayload>,
@@ -2682,7 +2714,7 @@ impl Into<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleAct
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandQueryResult"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandQueryResult"]
 pub struct SdkWorkflowCommandQueryResult {
     pub query_id: String,
     pub variant: Option<SdkWorkflowCommandQueryResultVariant>,
@@ -2707,7 +2739,7 @@ impl Into<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandRequestCancelActivity"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandRequestCancelActivity"]
 pub struct SdkWorkflowCommandRequestCancelActivity {
     pub seq: u32,
 }
@@ -2725,7 +2757,7 @@ impl Into<workflow_commands::RequestCancelActivity> for SdkWorkflowCommandReques
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandCancelTimer"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandCancelTimer"]
 pub struct SdkWorkflowCommandCancelTimer {
     pub seq: u32,
 }
@@ -2791,7 +2823,7 @@ impl Into<workflow_commands::FailWorkflowExecution> for SdkWorkflowCommandFailWo
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandContinueAsNewWorkflowExecution"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandContinueAsNewWorkflowExecution"]
 pub struct SdkWorkflowCommandContinueAsNewWorkflowExecution {
     pub workflow_type: String,
     pub task_queue: String,
@@ -2900,7 +2932,7 @@ impl Into<workflow_commands::ContinueAsNewWorkflowExecution>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandCancelWorkflowExecution"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandCancelWorkflowExecution"]
 pub struct SdkWorkflowCommandCancelWorkflowExecution {}
 
 impl From<workflow_commands::CancelWorkflowExecution>
@@ -2920,7 +2952,7 @@ impl Into<workflow_commands::CancelWorkflowExecution>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandSetPatchMarker"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandSetPatchMarker"]
 pub struct SdkWorkflowCommandSetPatchMarker {
     pub patch_id: String,
     pub deprecated: bool,
@@ -2945,7 +2977,7 @@ impl Into<workflow_commands::SetPatchMarker> for SdkWorkflowCommandSetPatchMarke
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandStartChildWorkflowExecution"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandStartChildWorkflowExecution"]
 pub struct SdkWorkflowCommandStartChildWorkflowExecution {
     pub seq: u32,
     pub namespace: String,
@@ -3194,7 +3226,7 @@ impl Into<WorkflowIdReusePolicy> for SdkWorkflowIdReusePolicy {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandCancelChildWorkflowExecution"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandCancelChildWorkflowExecution"]
 pub struct SdkWorkflowCommandCancelChildWorkflowExecution {
     pub child_workflow_seq: u32,
     pub reason: String,
@@ -3223,7 +3255,7 @@ impl Into<workflow_commands::CancelChildWorkflowExecution>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandRequestCancelExternalWorkflowExecution"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandRequestCancelExternalWorkflowExecution"]
 pub struct SdkWorkflowCommandRequestCancelExternalWorkflowExecution {
     pub seq: u32,
     pub workflow_execution: Option<SdkWorkflowNamespacedExecution>,
@@ -3255,7 +3287,7 @@ impl Into<workflow_commands::RequestCancelExternalWorkflowExecution>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandSignalExternalWorkflowExecution"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandSignalExternalWorkflowExecution"]
 pub struct SdkWorkflowCommandSignalExternalWorkflowExecution {
     pub seq: u32,
     pub signal_name: String,
@@ -3301,7 +3333,7 @@ impl Into<workflow_commands::SignalExternalWorkflowExecution>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandCancelSignalWorkflow"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandCancelSignalWorkflow"]
 pub struct SdkWorkflowCommandCancelSignalWorkflow {
     pub seq: u32,
 }
@@ -3319,7 +3351,7 @@ impl Into<workflow_commands::CancelSignalWorkflow> for SdkWorkflowCommandCancelS
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandScheduleLocalActivity"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandScheduleLocalActivity"]
 pub struct SdkWorkflowCommandScheduleLocalActivity {
     pub seq: u32,
     pub activity_id: String,
@@ -3414,7 +3446,7 @@ impl Into<workflow_commands::ScheduleLocalActivity> for SdkWorkflowCommandSchedu
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandRequestCancelLocalActivity"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandRequestCancelLocalActivity"]
 pub struct SdkWorkflowCommandRequestCancelLocalActivity {
     pub seq: u32,
 }
@@ -3436,7 +3468,7 @@ impl Into<workflow_commands::RequestCancelLocalActivity>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandUpsertWorkflowSearchAttributes"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandUpsertWorkflowSearchAttributes"]
 pub struct SdkWorkflowCommandUpsertWorkflowSearchAttributes {
     pub search_attributes: Option<SdkWorkflowSearchAttributes>,
 }
@@ -3462,7 +3494,7 @@ impl Into<workflow_commands::UpsertWorkflowSearchAttributes>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandModifyWorkflowProperties"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandModifyWorkflowProperties"]
 pub struct SdkWorkflowCommandModifyWorkflowProperties {
     pub upserted_memo: Option<SdkWorkflowMemo>,
 }
@@ -3488,7 +3520,7 @@ impl Into<workflow_commands::ModifyWorkflowProperties>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandUpdateResponse"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandUpdateResponse"]
 pub struct SdkWorkflowCommandUpdateResponse {
     pub protocol_instance_id: String,
     pub response: Option<SdkWorkflowCommandUpdateResponseStatus>,
@@ -3548,7 +3580,7 @@ impl Into<workflow_commands::update_response::Response> for SdkWorkflowCommandUp
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandScheduleNexusOperation"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandScheduleNexusOperation"]
 pub struct SdkWorkflowCommandScheduleNexusOperation {
     pub seq: u32,
     pub endpoint: String,
@@ -3629,7 +3661,7 @@ impl From<i32> for SdkNexusOperationCancellationType {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandRequestCancelNexusOperation"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandRequestCancelNexusOperation"]
 pub struct SdkWorkflowCommandRequestCancelNexusOperation {
     pub seq: u32,
 }
@@ -3717,7 +3749,7 @@ impl Into<workflow_commands::query_result::Variant> for SdkWorkflowCommandQueryR
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowCommandQuerySuccess"]
+#[module = "TemporalEngineNif.Data.WorkflowCommandQuerySuccess"]
 pub struct SdkWorkflowCommandQuerySuccess {
     pub response: Option<SdkPayload>,
 }
@@ -3739,7 +3771,7 @@ impl Into<workflow_commands::QuerySuccess> for SdkWorkflowCommandQuerySuccess {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowStartOptions"]
+#[module = "TemporalEngineNif.Data.WorkflowStartOptions"]
 pub struct SdkWorkflowStartOptions {
     pub task_queue: String,
     pub workflow_id: String,
@@ -3869,7 +3901,7 @@ impl Into<WorkflowIdConflictPolicy> for SdkWorkflowIdConflictPolicy {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowStartSignal"]
+#[module = "TemporalEngineNif.Data.WorkflowStartSignal"]
 pub struct SdkWorkflowStartSignal {
     pub signal_name: String,
     pub input: Option<SdkPayloads>,
@@ -3896,7 +3928,7 @@ impl Into<WorkflowStartSignal> for SdkWorkflowStartSignal {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowDefinition"]
+#[module = "TemporalEngineNif.Data.WorkflowDefinition"]
 pub struct SdkWorkflowDefinition {
     pub name: String,
 }
@@ -3914,7 +3946,7 @@ impl HasWorkflowDefinition for SdkWorkflowDefinition {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.WorkflowArguments"]
+#[module = "TemporalEngineNif.Data.WorkflowArguments"]
 pub struct SdkWorkflowArguments {
     pub args: Vec<SdkWorkflowInput>,
 }
@@ -4040,7 +4072,7 @@ impl TemporalSerializable for SdkWorkflowInput {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkflowGetResultOptions"]
+#[module = "TemporalEngineNif.Data.WorkflowGetResultOptions"]
 pub struct SdkWorkflowGetResultOptions {
     pub follow_runs: bool,
 }

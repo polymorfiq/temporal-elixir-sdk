@@ -1,5 +1,5 @@
 use crate::common::{SdkPayload, SdkTimestamp};
-use rustler::NifStruct;
+use rustler::{NifStruct, NifUnitEnum};
 use std::collections::HashMap;
 use temporalio_sdk_common::protos::coresdk::nexus;
 use temporalio_sdk_common::protos::coresdk::nexus::CancelNexusTask;
@@ -15,7 +15,7 @@ use temporalio_sdk_common::protos::temporal::api::workflowservice::v1::PollNexus
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.NexusTask"]
+#[module = "TemporalEngineNif.Data.NexusTask"]
 pub struct SdkNexusTask {
     pub request_deadline: Option<SdkTimestamp>,
     pub endpoint: String,
@@ -33,7 +33,7 @@ impl From<nexus::NexusTask> for SdkNexusTask {
 }
 
 #[derive(NifStruct, Default)]
-#[module = "Temporal.CoreSdk.Data.NexusTaskVariant"]
+#[module = "TemporalEngineNif.Data.NexusTaskVariant"]
 pub struct SdkNexusTaskVariant {
     task: Option<SdkNexusPollTaskQueueResponse>,
     cancel_task: Option<SdkNexusCancelTask>,
@@ -56,7 +56,7 @@ impl From<nexus::nexus_task::Variant> for SdkNexusTaskVariant {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.NexusPollTaskQueueResponse"]
+#[module = "TemporalEngineNif.Data.NexusPollTaskQueueResponse"]
 pub struct SdkNexusPollTaskQueueResponse {
     pub task_token: Vec<u8>,
     pub request: Option<SdkNexusRequest>,
@@ -82,23 +82,49 @@ impl From<PollNexusTaskQueueResponse> for SdkNexusPollTaskQueueResponse {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.NexusCancelTask"]
+#[module = "TemporalEngineNif.Data.NexusCancelTask"]
 pub struct SdkNexusCancelTask {
     pub task_token: Vec<u8>,
-    pub reason: i32,
+    pub reason: SdkNexusTaskCancelReason,
 }
 
 impl From<CancelNexusTask> for SdkNexusCancelTask {
     fn from(external: CancelNexusTask) -> Self {
         Self {
             task_token: external.task_token,
-            reason: external.reason,
+            reason: external.reason.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkNexusTaskCancelReason {
+    TimedOut = 0,
+    WorkerShutdown = 1,
+}
+
+impl Into<i32> for SdkNexusTaskCancelReason {
+    fn into(self) -> i32 {
+        match self {
+            Self::TimedOut => 0,
+            Self::WorkerShutdown => 1,
+        }
+    }
+}
+
+impl From<i32> for SdkNexusTaskCancelReason {
+    fn from(intent: i32) -> SdkNexusTaskCancelReason {
+        match intent {
+            0 => Self::TimedOut,
+            1 => Self::WorkerShutdown,
+            _ => Self::TimedOut,
         }
     }
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.PollerScalingDecision"]
+#[module = "TemporalEngineNif.Data.PollerScalingDecision"]
 pub struct SdkPollerScalingDecision {
     pub poll_request_delta_suggestion: i32,
 }
@@ -112,7 +138,7 @@ impl From<TaskQueuePollerScalingDecision> for SdkPollerScalingDecision {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.PollerGroupInfo"]
+#[module = "TemporalEngineNif.Data.PollerGroupInfo"]
 pub struct SdkPollerGroupInfo {
     pub id: String,
     pub weight: f32,
@@ -128,7 +154,7 @@ impl From<TaskQueuePollerGroupInfo> for SdkPollerGroupInfo {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.NexusRequest"]
+#[module = "TemporalEngineNif.Data.NexusRequest"]
 pub struct SdkNexusRequest {
     pub header: HashMap<String, String>,
     pub scheduled_time: Option<SdkTimestamp>,
@@ -150,7 +176,7 @@ impl From<NexusRequest> for SdkNexusRequest {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.NexusCapabilities"]
+#[module = "TemporalEngineNif.Data.NexusCapabilities"]
 pub struct SdkNexusCapabilities {
     pub temporal_failure_responses: bool,
 }
@@ -164,7 +190,7 @@ impl From<NexusCapabilities> for SdkNexusCapabilities {
 }
 
 #[derive(NifStruct, Default)]
-#[module = "Temporal.CoreSdk.Data.NexusRequestVariant"]
+#[module = "TemporalEngineNif.Data.NexusRequestVariant"]
 pub struct SdkNexusRequestVariant {
     pub start_operation: Option<SdkNexusStartOperationRequest>,
     pub cancel_operation: Option<SdkNexusCancelOperationRequest>,
@@ -187,7 +213,7 @@ impl From<NexusRequestVariant> for SdkNexusRequestVariant {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.NexusCancelOperationRequest"]
+#[module = "TemporalEngineNif.Data.NexusCancelOperationRequest"]
 pub struct SdkNexusCancelOperationRequest {
     pub service: String,
     pub operation: String,
@@ -208,7 +234,7 @@ impl From<NexusCancelOperationRequest> for SdkNexusCancelOperationRequest {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.NexusStartOperationRequest"]
+#[module = "TemporalEngineNif.Data.NexusStartOperationRequest"]
 pub struct SdkNexusStartOperationRequest {
     pub service: String,
     pub operation: String,
@@ -238,7 +264,7 @@ impl From<NexusStartOperationRequest> for SdkNexusStartOperationRequest {
 }
 
 #[derive(NifStruct)]
-#[module = "Temporal.CoreSdk.Data.NexusLink"]
+#[module = "TemporalEngineNif.Data.NexusLink"]
 pub struct SdkNexusLink {
     pub url: String,
     pub link_type: String,

@@ -35,7 +35,6 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
        task_queue: exec_ctx.task_queue,
        worker: %Worker{
          id: exec_ctx.worker_id,
-         channel: exec_ctx.channel,
          task_queue: exec_ctx.task_queue
        },
        forward_polled_pid: opts[:forward_polled_messages]

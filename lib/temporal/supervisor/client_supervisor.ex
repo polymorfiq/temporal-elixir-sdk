@@ -1,6 +1,8 @@
 defmodule Temporal.Supervisor.ClientSupervisor do
   use Supervisor
 
+  import TemporalEngine.Runtime
+
   alias Temporal.ClientRegistry
   alias Temporal.Supervisor.WorkerList
   alias Temporal.CoreSdk.CoreClient
@@ -10,7 +12,7 @@ defmodule Temporal.Supervisor.ClientSupervisor do
 
   @impl true
   def init({runtime_core, opts}) do
-    identity = opts.identity
+    identity = client_opts(opts, :identity)
     Process.set_label({:client_supervisor, identity})
 
     children = [

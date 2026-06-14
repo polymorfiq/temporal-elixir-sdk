@@ -27,7 +27,7 @@ defmodule Temporal.Comms.Shared.Duration do
     do: Duration.new!(second: seconds) |> from_native()
 
   def send_to_engine({milli, :milliseconds}) when is_integer(milli),
-    do: Duration.new!(microsecond: milli * 1_000) |> from_native()
+    do: Duration.new!(microsecond: {milli * 1_000, 6}) |> from_native()
 
   def send_to_engine({micro, :microseconds}) when is_integer(micro),
     do: Duration.new!(microsecond: {micro, 6}) |> from_native()

@@ -2,6 +2,8 @@ defmodule Temporal.CoreSdk.CoreWorker do
   defstruct [:core]
   use GenServer
 
+  import TemporalEngine.Client
+
   alias Temporal.CoreSdk
   alias Temporal.CoreSdk.CoreRuntime
   alias Temporal.CoreSdk.Data.WorkerOpts
@@ -21,8 +23,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
     :client,
     :core,
     shutdowns: %{},
-    waiting_on_shutdown: [],
-    forward_polled_pid: nil
+    waiting_on_shutdown: []
   ])
 
   @type worker_id :: String.t()
@@ -67,34 +68,10 @@ defmodule Temporal.CoreSdk.CoreWorker do
         {:ok, existing_core_worker}
       else
         parent = self()
-
-        {pid, ref} =
-          spawn_monitor(fn ->
-            CoreSdk._create_worker(exec_ctx.runtime.core, exec_ctx.client.core, config, self())
-            |> case do
-              {:ok, _} -> :ok
-              {:error, err} -> raise "Could initialize worker from Core SDK: #{inspect(err)}"
-            end
-
-            receive do
-              {:ok, worker} ->
-                send(parent, {self(), {:ok, worker}})
-
-              {:error, err} ->
-                send(parent, {self(), {:error, err}})
-            end
-          end)
-
-        receive do
-          {^pid, response} ->
-            response
-
-          {:DOWN, ^ref, :process, ^pid, reason} ->
-            {:error, reason}
-        end
+        TemporalEngine.Client.create_worker(exec_ctx.client.core, config)
       end
 
-    with {:ok, core} <- worker_resp, :ok <- validate(core, exec_ctx.runtime) do
+    with {:ok, core} <- worker_resp do
       :ets.insert(@worker_store, {{:core, exec_ctx.worker_id}, core})
       :ets.insert(@worker_store, {{:runtime, exec_ctx.worker_id}, exec_ctx.runtime})
 
@@ -102,49 +79,12 @@ defmodule Temporal.CoreSdk.CoreWorker do
        server_state(
          id: exec_ctx.worker_id,
          core: core,
-         task_queue: config.task_queue,
+         task_queue: worker_opts(config, :task_queue),
          namespace: exec_ctx.namespace,
-         identity_override: config.identity_override,
+         identity_override: worker_opts(config, :identity_override),
          runtime: exec_ctx.runtime,
-         client: exec_ctx.client,
-         forward_polled_pid: Keyword.get(opts, :forward_polled_messages)
+         client: exec_ctx.client
        )}
-    end
-  end
-
-  @spec validate(worker_ref :: term(), CoreRuntime.t()) :: :ok | {:error, term()}
-  def validate(worker_ref, runtime) do
-    parent = self()
-
-    {pid, ref} =
-      spawn_monitor(fn ->
-        CoreSdk._validate_worker(runtime.core, worker_ref, self())
-        |> case do
-          {:ok, _} -> :ok
-          {:error, err} -> raise "Could not validate worker via Core SDK: #{inspect(err)}"
-        end
-
-        receive do
-          {:ok, resp} ->
-            send(parent, {self(), {:ok, resp}})
-
-          {:error, err} ->
-            send(parent, {self(), {:error, err}})
-        end
-      end)
-
-    validate_resp =
-      receive do
-        {^pid, response} ->
-          response
-
-        {:DOWN, ^ref, :process, ^pid, reason} ->
-          {:error, reason}
-      end
-
-    case validate_resp do
-      {:ok, true} -> :ok
-      {:error, err} -> {:error, "Validation error: #{inspect(err)}"}
     end
   end
 
@@ -180,19 +120,11 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   @impl true
   def handle_call({:process_activity_task, _task} = msg, _from, state) do
-    if forward_to = server_state(state, :forward_polled_pid) do
-      send(forward_to, msg)
-    end
-
     {:reply, :ok, state}
   end
 
   @impl true
   def handle_call({:process_nexus_task, _task} = msg, _from, state) do
-    if forward_to = server_state(state, :forward_polled_pid) do
-      send(forward_to, msg)
-    end
-
     {:reply, :ok, state}
   end
 
@@ -259,7 +191,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
   defp initiate_shutdown(state) do
     worker_core = server_state(state, :core)
 
-    with :ok <- CoreSdk._worker_initiate_shutdown(worker_core) do
+    with :ok <- TemporalEngine.Worker.initiate_shutdown(worker_core) do
       Logger.debug("Worker (#{friendly_name(state)}) shutdown initiated.")
       :ok
     else
@@ -274,7 +206,7 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   defp finalize_shutdown(state) do
     worker_core = server_state(state, :core)
-    CoreSdk._worker_finalize_shutdown(worker_core)
+    TemporalEngine.Worker.finalize_shutdown(worker_core)
   end
 
   defp friendly_name(state), do: server_state(state, :id)

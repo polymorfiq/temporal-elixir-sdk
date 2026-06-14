@@ -1,6 +1,9 @@
-use rustler::{NifStruct, NifTaggedEnum, Resource};
+use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
+use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
+use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::worker::{WorkerDeploymentOptions, WorkerDeploymentVersion};
 use temporalio_sdk_core::Worker;
+use crate::common::SdkDuration;
 
 pub struct ElixirWorker {
     #[allow(dead_code)]
@@ -11,7 +14,7 @@ pub struct ElixirWorker {
 impl Resource for ElixirWorker {}
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkerOpts"]
+#[module = "TemporalEngineNif.Data.WorkerOpts"]
 pub struct SdkWorkerOpts {
     pub namespace: String,
     pub task_queue: String,
@@ -22,10 +25,10 @@ pub struct SdkWorkerOpts {
     pub enable_local_activities: bool,
     pub enable_remote_activities: bool,
     pub enable_nexus: bool,
-    pub sticky_queue_schedule_to_start_timeout_secs: f64,
-    pub max_heartbeat_throttle_interval_secs: f64,
-    pub default_heartbeat_throttle_interval_secs: f64,
-    pub graceful_shutdown_period_secs: f64,
+    pub sticky_queue_schedule_to_start_timeout: SdkDuration,
+    pub max_heartbeat_throttle_interval: SdkDuration,
+    pub default_heartbeat_throttle_interval: SdkDuration,
+    pub graceful_shutdown_period: Option<SdkDuration>,
     pub nondeterminism_as_workflow_fail: bool,
     pub tuner: SdkWorkerTunerOpts,
     pub nondeterminism_as_workflow_fail_for_types: Vec<String>,
@@ -38,11 +41,11 @@ pub struct SdkWorkerOpts {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkerDeploymentOpts"]
+#[module = "TemporalEngineNif.Data.WorkerDeploymentOpts"]
 pub struct SdkWorkerDeploymentOpts {
     pub version: SdkWorkerDeploymentVersion,
     pub use_worker_versioning: bool,
-    pub default_versioning_behavior: Option<u32>,
+    pub default_versioning_behavior: Option<SdkDeploymentVersioningBehavior>,
 }
 
 impl From<WorkerDeploymentOptions> for SdkWorkerDeploymentOpts {
@@ -50,16 +53,62 @@ impl From<WorkerDeploymentOptions> for SdkWorkerDeploymentOpts {
         Self {
             version: external.version.into(),
             use_worker_versioning: external.use_worker_versioning,
-            default_versioning_behavior: match external.default_versioning_behavior {
-                Some(behavior) => Some(behavior as u32),
-                None => None,
-            },
+            default_versioning_behavior: external.default_versioning_behavior.try_into_or_none(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkDeploymentVersioningBehavior {
+    Unspecified = 0,
+    Pinned = 1,
+    AutoUpgrade = 2
+}
+
+impl Into<i32> for SdkDeploymentVersioningBehavior {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Pinned => 1,
+            Self::AutoUpgrade => 2,
+        }
+    }
+}
+
+impl From<i32> for SdkDeploymentVersioningBehavior {
+    fn from(intent: i32) -> SdkDeploymentVersioningBehavior {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Pinned,
+            2 => Self::AutoUpgrade,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
+impl From<VersioningBehavior> for SdkDeploymentVersioningBehavior {
+    fn from(intent: VersioningBehavior) -> SdkDeploymentVersioningBehavior {
+        match intent {
+            VersioningBehavior::Unspecified => Self::Unspecified,
+            VersioningBehavior::Pinned => Self::Pinned,
+            VersioningBehavior::AutoUpgrade => Self::AutoUpgrade
+        }
+    }
+}
+
+impl Into<VersioningBehavior> for SdkDeploymentVersioningBehavior {
+    fn into(self) -> VersioningBehavior {
+        match self {
+            Self::Unspecified => VersioningBehavior::Unspecified,
+            Self::Pinned => VersioningBehavior::Pinned,
+            Self::AutoUpgrade => VersioningBehavior::AutoUpgrade
         }
     }
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkerDeploymentVersion"]
+#[module = "TemporalEngineNif.Data.WorkerDeploymentVersion"]
 pub struct SdkWorkerDeploymentVersion {
     pub build_id: String,
     pub deployment_name: String,
@@ -94,7 +143,7 @@ pub enum SdkWorkerPollerOpts {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkerPollerAutoscalingOpts"]
+#[module = "TemporalEngineNif.Data.WorkerPollerAutoscalingOpts"]
 pub struct SdkWorkerPollerAutoscalingOpts {
     pub minimum: u32,
     pub maximum: u32,
@@ -102,13 +151,13 @@ pub struct SdkWorkerPollerAutoscalingOpts {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkerPollerSimpleMaximumOpts"]
+#[module = "TemporalEngineNif.Data.WorkerPollerSimpleMaximumOpts"]
 pub struct SdkWorkerPollerSimpleMaximumOpts {
     pub simple_maximum: u32,
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkerTunerOpts"]
+#[module = "TemporalEngineNif.Data.WorkerTunerOpts"]
 pub struct SdkWorkerTunerOpts {
     pub workflow_slot_supplier: SdkWorkerSlotSupplierOpts,
     pub activity_slot_supplier: SdkWorkerSlotSupplierOpts,
@@ -122,7 +171,7 @@ pub enum SdkWorkerSlotSupplierOpts {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.WorkerTunerResourceOpts"]
+#[module = "TemporalEngineNif.Data.WorkerTunerResourceOpts"]
 pub struct SdkWorkerTunerResourceOpts {
     pub target_mem_usage: f64,
     pub target_cpu_usage: f64,

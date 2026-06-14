@@ -2,8 +2,8 @@ defmodule Temporal.CoreSdk.CoreRuntime do
   use GenServer
   defstruct [:core]
 
-  alias Temporal.CoreSdk
-  alias Temporal.CoreSdk.Data.RuntimeOpts
+  import TemporalEngine.Engine
+  alias TemporalEngine.Data.Duration
 
   require Record
   Record.defrecordp(:server_state, [:id, :core])
@@ -11,7 +11,7 @@ defmodule Temporal.CoreSdk.CoreRuntime do
   @type runtime_id() :: String.t() | atom()
   @type runtime_opts() :: [
           {:runtime_id, runtime_id()}
-          | {:heartbeat_interval_secs, pos_integer()}
+          | {:heartbeat_interval, Duration.duration()}
         ]
   @type t :: %__MODULE__{core: term()}
 
@@ -19,7 +19,7 @@ defmodule Temporal.CoreSdk.CoreRuntime do
 
   @spec start_link(runtime_opts() | keyword()) :: {:ok, pid()} | {:error, term()}
   def start_link(opts) do
-    {runtime_opts, server_opts} = Keyword.split(opts, [:runtime_id, :heartbeat_interval_secs])
+    {runtime_opts, server_opts} = Keyword.split(opts, [:runtime_id, :heartbeat_interval])
 
     cond do
       !runtime_opts[:runtime_id] ->
@@ -33,10 +33,6 @@ defmodule Temporal.CoreSdk.CoreRuntime do
   @impl true
   @spec init(runtime_opts()) :: {:ok, pid} | {:error, term()}
   def init(opts) do
-    runtime_opts = %RuntimeOpts{
-      heartbeat_interval_secs: Keyword.get(opts, :heartbeat_interval_secs)
-    }
-
     runtime_id = Keyword.fetch!(opts, :runtime_id)
     Process.set_label({:runtime, runtime_id})
 
@@ -48,7 +44,11 @@ defmodule Temporal.CoreSdk.CoreRuntime do
         :ok
     end
 
-    with {:ok, core} <- CoreSdk._create_runtime(runtime_opts) do
+    rt_opts = runtime_opts(heartbeat_interval: opts[:heartbeat_interval])
+
+    engine = Application.fetch_env!(:temporal, :engine)
+
+    with {:ok, core} <- engine.create_runtime(rt_opts) do
       :ets.insert(@runtime_store, {{:core, runtime_id}, core})
 
       {:ok, server_state(id: runtime_id, core: core)}

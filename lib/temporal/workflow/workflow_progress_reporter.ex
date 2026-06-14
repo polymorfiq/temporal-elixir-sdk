@@ -51,12 +51,15 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
        runtime: exec_ctx.runtime,
        worker: %Worker{
          id: exec_ctx.worker_id,
-         channel: exec_ctx.channel,
          task_queue: exec_ctx.task_queue
        },
        channel: exec_ctx.channel
      )}
   end
+
+  @spec start_timer(pid(), Duration.duration()) :: :ok | {:error, term()}
+  def start_timer(reporter, duration),
+    do: GenServer.call(reporter, {:start_timer, duration}, :infinity)
 
   @spec schedule_activity(
           pid(),
@@ -87,6 +90,17 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(run_id) do
       GenServer.cast(reporter, :heartbeat)
     end
+  end
+
+  def handle_call({:start_timer, duration}, _from, state) do
+    next_seq = progress_state(state, :next_seq)
+    timer_id = "#{next_seq}"
+
+    command = {:start_timer, next_seq, duration}
+    command_batch = progress_state(state, :command_batch) ++ [command]
+
+    {:reply, {:ok, timer_id},
+     progress_state(state, command_batch: command_batch, next_seq: next_seq + 1)}
   end
 
   def handle_call(

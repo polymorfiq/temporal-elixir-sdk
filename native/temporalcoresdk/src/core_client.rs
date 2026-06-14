@@ -1,6 +1,7 @@
 use rustler::{NifStruct, Resource};
 use std::collections::HashMap;
 use temporalio_sdk_client::Client;
+use crate::common::SdkDuration;
 
 pub struct ElixirClient {
     pub client: Client,
@@ -10,7 +11,7 @@ pub struct ElixirClient {
 impl Resource for ElixirClient {}
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ClientOpts"]
+#[module = "TemporalEngineNif.Data.ClientOpts"]
 pub struct SdkClientOpts {
     pub target_host: String,
     pub namespace: String,
@@ -28,7 +29,7 @@ pub struct SdkClientOpts {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ClientTlsOpts"]
+#[module = "TemporalEngineNif.Data.ClientTlsOpts"]
 pub struct SdkClientTlsOpts {
     pub client_cert: Option<String>,
     pub client_private_key: Option<String>,
@@ -37,25 +38,25 @@ pub struct SdkClientTlsOpts {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ClientRetryOpts"]
+#[module = "TemporalEngineNif.Data.ClientRetryOpts"]
 pub struct SdkClientRetryOpts {
-    pub initial_interval_secs: f64,
+    pub initial_interval: SdkDuration,
     pub randomization_factor: f64,
     pub multiplier: f64,
-    pub max_interval_secs: f64,
-    pub max_elapsed_time_secs: f64,
+    pub max_interval: SdkDuration,
+    pub max_elapsed_time: Option<SdkDuration>,
     pub max_retries: u32,
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ClientKeepAliveOpts"]
+#[module = "TemporalEngineNif.Data.ClientKeepAliveOpts"]
 pub struct SdkClientKeepAliveOpts {
-    pub interval_secs: f64,
-    pub timeout_secs: f64,
+    pub interval: SdkDuration,
+    pub timeout: SdkDuration,
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ClientHttpConnectProxyOpts"]
+#[module = "TemporalEngineNif.Data.ClientHttpConnectProxyOpts"]
 pub struct SdkClientHttpConnectProxyOpts {
     pub target_host: String,
     pub basic_auth_user: Option<String>,
@@ -63,7 +64,7 @@ pub struct SdkClientHttpConnectProxyOpts {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.CoreSdk.Data.ClientDnsLoadBalancingOpts"]
+#[module = "TemporalEngineNif.Data.ClientDnsLoadBalancingOpts"]
 pub struct SdkClientDnsLoadBalancingOpts {
-    pub resolution_interval_secs: f64,
+    pub resolution_interval: SdkDuration,
 }

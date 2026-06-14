@@ -1,7 +1,7 @@
 use crate::core_activities::{SdkActivityTask, SdkActivityTaskCompletion};
 use crate::core_client::ElixirClient;
 use crate::core_nexus::SdkNexusTask;
-use crate::core_runtime::ElixirRuntime;
+use crate::core_runtime::{ElixirRuntime, SdkRuntimeOpts};
 use crate::core_worker::ElixirWorker;
 use crate::core_workflows::{
     ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion,
@@ -17,8 +17,8 @@ use temporalio_sdk_client::{
     Client, ClientKeepAliveOptions, ClientOptions, ClientTlsOptions, Connection, ConnectionOptions,
     DnsLoadBalancingOptions, HttpConnectProxyOptions, RetryOptions, TlsOptions,
 };
-use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
 use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
+use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::worker::{
     WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes,
 };
@@ -47,14 +47,11 @@ mod atoms {
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn _create_runtime(
-    opts: Option<crate::core_runtime::SdkRuntimeOpts>,
+    opts: Option<SdkRuntimeOpts>,
 ) -> Result<ResourceArc<ElixirRuntime>, String> {
     let core_opts = match opts {
         Some(sdk_opts) => {
-            let hb_interval = match sdk_opts.heartbeat_interval_secs {
-                Some(hb) => Some(Duration::from_secs(hb)),
-                None => None,
-            };
+            let hb_interval = sdk_opts.heartbeat_interval.try_into_or_none();
 
             RuntimeOptions::builder()
                 .heartbeat_interval(hb_interval)
@@ -133,21 +130,17 @@ fn _create_client(
             None
         })
         .retry_options(RetryOptions {
-            initial_interval: Duration::from_secs_f64(options.rpc_retry.initial_interval_secs),
+            initial_interval: options.rpc_retry.initial_interval.into(),
             randomization_factor: options.rpc_retry.randomization_factor,
             multiplier: options.rpc_retry.multiplier,
-            max_interval: Duration::from_secs_f64(options.rpc_retry.max_interval_secs),
-            max_elapsed_time: match options.rpc_retry.max_elapsed_time_secs {
-                // 0 means none
-                0.0 => None,
-                val => Some(Duration::from_secs_f64(val)),
-            },
+            max_interval: options.rpc_retry.max_interval.into(),
+            max_elapsed_time: options.rpc_retry.max_elapsed_time.try_into_or_none(),
             max_retries: options.rpc_retry.max_retries as usize,
         })
         .keep_alive(if let Some(keep_alive) = options.keep_alive {
             Some(ClientKeepAliveOptions {
-                interval: Duration::from_secs_f64(keep_alive.interval_secs),
-                timeout: Duration::from_secs_f64(keep_alive.timeout_secs),
+                interval: keep_alive.interval.into(),
+                timeout: keep_alive.timeout.into(),
             })
         } else {
             None
@@ -173,7 +166,7 @@ fn _create_client(
             None
         } else if let Some(dns) = options.dns_load_balancing {
             let mut opts = DnsLoadBalancingOptions::default();
-            opts.resolution_interval = Duration::from_secs_f64(dns.resolution_interval_secs);
+            opts.resolution_interval = dns.resolution_interval.into();
             Some(opts)
         } else {
             None
@@ -238,15 +231,7 @@ fn _create_worker(
                 default_versioning_behavior: {
                     match dopts.default_versioning_behavior {
                         None => None,
-                        Some(0) => None,
-                        Some(1) => Some(VersioningBehavior::Pinned),
-                        Some(2) => Some(VersioningBehavior::AutoUpgrade),
-                        Some(behavior) => {
-                            return Err(format!(
-                                "Unknown default versioning behavior: {}",
-                                behavior
-                            ))
-                        }
+                        Some(val) => Some(val.into())
                     }
                 },
             })
@@ -290,20 +275,12 @@ fn _create_worker(
             enable_remote_activities: options.enable_remote_activities,
             enable_nexus: options.enable_nexus,
         })
-        .sticky_queue_schedule_to_start_timeout(Duration::from_secs_f64(
-            options.sticky_queue_schedule_to_start_timeout_secs,
-        ))
-        .max_heartbeat_throttle_interval(Duration::from_secs_f64(
-            options.max_heartbeat_throttle_interval_secs,
-        ))
-        .default_heartbeat_throttle_interval(Duration::from_secs_f64(
-            options.default_heartbeat_throttle_interval_secs,
-        ))
+        .sticky_queue_schedule_to_start_timeout(options.sticky_queue_schedule_to_start_timeout.into())
+        .max_heartbeat_throttle_interval(options.max_heartbeat_throttle_interval.into())
+        .default_heartbeat_throttle_interval(options.default_heartbeat_throttle_interval.into())
         .maybe_max_worker_activities_per_second(options.max_worker_activities_per_second)
         .maybe_max_task_queue_activities_per_second(options.max_task_queue_activities_per_second)
-        .graceful_shutdown_period(Duration::from_secs_f64(
-            options.graceful_shutdown_period_secs,
-        ))
+        .maybe_graceful_shutdown_period(options.graceful_shutdown_period.try_into_or_none())
         .tuner(Arc::new(build_tuner(options.tuner)?))
         .workflow_failure_errors(if options.nondeterminism_as_workflow_fail {
             HashSet::from([WorkflowErrorType::Nondeterminism])
@@ -456,7 +433,7 @@ fn _validate_worker(
     runtime: ResourceArc<ElixirRuntime>,
     worker: ResourceArc<ElixirWorker>,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
+) -> NifResult<Atom> {
     let handle = runtime
         .core
         .read()
@@ -483,7 +460,7 @@ fn _validate_worker(
         }
     });
 
-    Ok(true)
+    Ok(atoms::ok())
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
@@ -775,4 +752,4 @@ fn _workflow_handle_get_result(
     Ok(atoms::ok())
 }
 
-rustler::init!("Elixir.Temporal.CoreSdk");
+rustler::init!("Elixir.TemporalEngineNif.Core");

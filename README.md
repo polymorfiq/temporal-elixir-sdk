@@ -127,7 +127,7 @@ task_queue = Temporal.TaskQueue.new(client, "default")
   sticky_queue_schedule_to_start_timeout_secs: 300.0,
   max_heartbeat_throttle_interval_secs: 60.00,
   default_heartbeat_throttle_interval_secs: 30.0,
-  graceful_shutdown_period_secs: 5.0,
+  graceful_shutdown_period: {5, :seconds},
   nondeterminism_as_workflow_fail: true,
   tuner: [
     workflow_slot_supplier: {:fixed_size, 10},

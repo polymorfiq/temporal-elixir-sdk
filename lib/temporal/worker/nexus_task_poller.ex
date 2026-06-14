@@ -1,12 +1,14 @@
 defmodule Temporal.Worker.NexusTaskPoller do
   use GenServer
 
+  alias TemporalEngine.Worker
   alias Temporal.Comms.Channel
   alias Temporal.Supervisor.WorkerSupervisor
+  alias Temporal.CoreSdk.CoreWorker
 
   require Logger
   require Record
-  Record.defrecordp(:poll_state, [:worker_id, :worker, :channel])
+  Record.defrecordp(:poll_state, [:worker_id, :worker, :core_worker, :channel])
 
   def start_link({exec_ctx, server_opts}) do
     GenServer.start_link(__MODULE__, exec_ctx, server_opts)
@@ -17,12 +19,15 @@ defmodule Temporal.Worker.NexusTaskPoller do
     Process.flag(:trap_exit, true)
     Process.set_label({:nexus_task_poller, exec_ctx.worker_id})
 
-    {:ok,
-     poll_state(
-       worker_id: exec_ctx.worker_id,
-       worker: exec_ctx.worker,
-       channel: exec_ctx.channel
-     ), {:continue, :poll_for_tasks}}
+    with {:ok, core_worker} <- CoreWorker.existing_for_id(exec_ctx.worker_id) do
+      {:ok,
+       poll_state(
+         worker_id: exec_ctx.worker_id,
+         worker: exec_ctx.worker,
+         core_worker: core_worker,
+         channel: exec_ctx.channel
+       ), {:continue, :poll_for_tasks}}
+    end
   end
 
   @doc false
@@ -57,10 +62,10 @@ defmodule Temporal.Worker.NexusTaskPoller do
   end
 
   defp poll_and_inform_worker(state) do
-    worker = poll_state(state, :worker)
+    core_worker = poll_state(state, :core_worker)
     channel = poll_state(state, :channel)
 
-    case Channel.poll_nexus_task(channel, worker) do
+    case Worker.poll_nexus_task(core_worker.core) do
       {:ok, nil} -> :ok
       {:ok, task} -> process_nexus_task(task, state)
       {:error, err} -> {:error, err}

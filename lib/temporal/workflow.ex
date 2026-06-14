@@ -2,16 +2,19 @@ defmodule Temporal.Workflow do
   alias Temporal.Activity
   alias Temporal.Activity.ActivityExecHandle
   alias Temporal.Client
+  alias Temporal.Comms.Shared.Duration
   alias Temporal.CoreSdk
-  alias Temporal.CoreSdk.Data.WorkflowGetResultOptions
   alias Temporal.CoreSdk.Data.WorkflowStartOptions
   alias Temporal.CoreSdk.Data.WorkflowArguments
+  alias Temporal.Selectors.TimerHandle
   alias Temporal.TaskQueue
   alias Temporal.Workflows.WorkflowExecHandle
   alias Temporal.Workflow.WorkflowContext
   alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Supervisor.WorkflowSupervisor
+
+  import TemporalEngine.WorkflowHandle
 
   @type workflow_exec_handle() :: WorkflowExecHandle.t()
   @type get_results_opts() :: [
@@ -38,9 +41,7 @@ defmodule Temporal.Workflow do
   def result(%WorkflowExecHandle{} = handle, opts \\ []) do
     with {:ok, opts} <- Keyword.validate(opts, [:follow_runs, :timeout]),
          {:ok, runtime} <- Client.core_runtime(handle.client) do
-      get_result_opts = %WorkflowGetResultOptions{
-        follow_runs: Keyword.get(opts, :follow_runs, true)
-      }
+      get_opts = get_result_opts(follow_runs: Keyword.get(opts, :follow_runs, true))
 
       parent = self()
 
@@ -49,7 +50,7 @@ defmodule Temporal.Workflow do
           CoreSdk._workflow_handle_get_result(
             runtime.core,
             handle.handle,
-            get_result_opts,
+            get_opts,
             self()
           )
           |> case do
@@ -69,14 +70,31 @@ defmodule Temporal.Workflow do
       timeout = Keyword.get(opts, :timeout, :infinity)
 
       receive do
-        {^pid, {:ok, %WorkflowArguments{} = args}} ->
-          WorkflowArguments.to_workflow_result(args)
+        {^pid, {:ok, args}} ->
+          args
 
         {:DOWN, ^ref, :process, ^pid, %RuntimeError{} = rt_err} ->
           {:error, rt_err}
       after
         timeout ->
           {:error, :timeout}
+      end
+    end
+  end
+
+  @spec new_timer(WorkflowContext.t(), Duration.duration()) ::
+          {:ok, TimerHandle.t()} | {:error, term()}
+  def new_timer(%WorkflowContext{} = ctx, duration) do
+    with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(ctx.run_id) do
+      reported = WorkflowProgressReporter.start_timer(reporter, duration)
+
+      with {:ok, timer_id} <- reported do
+        {:ok,
+         %TimerHandle{
+           timer_id: timer_id,
+           run_id: ctx.run_id,
+           workflow_id: ctx.workflow_id
+         }}
       end
     end
   end
@@ -146,21 +164,6 @@ defmodule Temporal.Workflow do
     TaskQueue.start_workflow(queue, workflow_id, workflow_name, inputs, opts)
   end
 
-  @spec get(exec_handle()) :: {:ok, term()} | {:error, term()}
-  def get(%WorkflowExecHandle{} = handle) do
-    result(handle)
-  end
-
-  def get(%ActivityExecHandle{} = activity) do
-    with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(activity.run_id) do
-      WorkflowFlowController.await_activity_result(
-        flow_control,
-        activity.run_id,
-        activity.activity_id
-      )
-    end
-  end
-
   @spec get(WorkflowContext.t(), exec_handle()) :: {:ok, term()} | {:error, term()}
   def get(%WorkflowContext{} = _ctx, %WorkflowExecHandle{} = handle), do: handle
 
@@ -170,6 +173,16 @@ defmodule Temporal.Workflow do
         flow_control,
         activity.run_id,
         activity.activity_id
+      )
+    end
+  end
+
+  def get(%WorkflowContext{} = ctx, %TimerHandle{} = timer) do
+    with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(ctx.run_id) do
+      WorkflowFlowController.await_timer(
+        flow_control,
+        timer.run_id,
+        timer.timer_id
       )
     end
   end

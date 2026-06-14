@@ -69,7 +69,6 @@ defmodule Temporal.Worker.WorkerActivityManager do
           exec_ctx
           | worker: %Worker{
               id: exec_ctx.worker_id,
-              channel: exec_ctx.channel,
               task_queue: exec_ctx.task_queue
             },
             workflow_id: workflow_id,
