@@ -120,6 +120,8 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   def complete_workflow_activation(worker, completion) do
     parent = self()
 
+    completion |> IO.inspect(label: "COMPLETION")
+
     child =
       spawn_link(fn ->
         Core._worker_complete_workflow_activation(
