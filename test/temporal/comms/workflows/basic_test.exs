@@ -72,7 +72,7 @@ defmodule Temporal.Workflows.BasicTest do
                    1000
   end
 
-  test "should respect timers", ctx do
+  test "should respect timers", _ctx do
 #    WorkerMock.forward_received_jobs(ctx.mocked_worker)
 #
 #    TaskQueue.start_workflow(ctx.queue, unique_name("basic-test"), TimerWithAwait, [],
