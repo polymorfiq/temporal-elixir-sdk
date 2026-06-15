@@ -54,13 +54,33 @@ defmodule Temporal.Workflow.WorkflowExecutor do
          {:ok, ctx} <- WorkflowContext.new(exec_ctx) do
       inputs = Enum.map(workflow_state(state, :args), &Payload.value_from_record/1)
 
-      case apply(mod, :execute, [ctx] ++ inputs) do
-        {:ok, result} ->
+      try do
+        case apply(mod, :execute, [ctx] ++ inputs) do
+          {:ok, result} ->
+            Logger.debug(
+              "Workflow finished (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)} -> Reporting Completion..."
+            )
+
+            :ok = WorkflowProgressReporter.report_completed_success(reporter, message: result)
+
+          {:error, err} ->
+            Logger.debug(
+              "Workflow finished (Error) (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)} -> Reporting Completion..."
+            )
+
+            :ok = WorkflowProgressReporter.report_completed_failure(reporter, message: err)
+        end
+      rescue
+        e in RuntimeError ->
           Logger.debug(
-            "Workflow finished (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)} -> Reporting Completion..."
+            "Workflow finished (Exception) (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)}:\n#{Exception.format(:error, e, __STACKTRACE__)}"
           )
 
-          :ok = WorkflowProgressReporter.report_completed_success(reporter, result)
+          :ok =
+            WorkflowProgressReporter.report_completed_failure(reporter,
+              message: e.message,
+              stack_trace: "#{Exception.format_stacktrace(__STACKTRACE__)}"
+            )
       end
 
       {:noreply, state}

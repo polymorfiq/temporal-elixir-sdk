@@ -316,6 +316,39 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     GenServer.call(reporter, {:report_completed_success, output}, :infinity)
   end
 
+  @failure_opts_schema NimbleOptions.new!(
+                         message: [
+                           required: true,
+                           type: :string,
+                           doc: "Error message to report with the failure"
+                         ],
+                         stack_trace: [
+                           default: "",
+                           type: :string,
+                           doc: "Stack Trace associated with the failure, if applicable"
+                         ]
+                       )
+
+  @typedoc "Supported options:\n#{NimbleOptions.docs(@failure_opts_schema)}"
+  @type failure_opts :: unquote(NimbleOptions.option_typespec(@failure_opts_schema))
+
+  @spec report_completed_failure(pid(), failure_opts()) :: :ok | {:error, term()}
+  def report_completed_failure(reporter, opts) do
+    import TemporalEngine.Data.Failure
+
+    with {:ok, opts} <- NimbleOptions.validate(opts, @failure_opts_schema) do
+      GenServer.call(
+        reporter,
+        {:report_completed_failure,
+         failure(
+           message: opts[:message],
+           stack_trace: opts[:stack_trace]
+         )},
+        :infinity
+      )
+    end
+  end
+
   def send_heartbeat_for_id(run_id) do
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(run_id) do
       GenServer.cast(reporter, :heartbeat)
@@ -450,7 +483,19 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   end
 
   def handle_call({:report_completed_success, output}, _from, state) do
-    report_successful_completion(state, [{:complete_workflow_execution, output}])
+    report_successful_completion(state, [complete_workflow_execution(result: output)])
+    |> case do
+      {:ok, new_state} ->
+        {:reply, :ok, new_state}
+
+      {{:error, err}, _} ->
+        Logger.error("Error reporting workflow completion - #{inspect(err)}")
+        {:reply, {:error, err}, state}
+    end
+  end
+
+  def handle_call({:report_completed_failure, failure}, _from, state) do
+    report_successful_completion(state, [fail_workflow_execution(failure: failure)])
     |> case do
       {:ok, new_state} ->
         {:reply, :ok, new_state}
