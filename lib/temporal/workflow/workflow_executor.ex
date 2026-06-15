@@ -61,7 +61,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
               "Workflow finished (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)} -> Reporting Completion..."
             )
 
-            :ok = WorkflowProgressReporter.report_completed_success(reporter, message: result)
+            :ok = WorkflowProgressReporter.report_completed_success(reporter, result)
 
           {:error, err} ->
             Logger.debug(
