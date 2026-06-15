@@ -1,4 +1,6 @@
 defmodule Temporal.Workflow do
+  import TemporalEngine.WorkflowHandle
+
   alias Temporal.Activity
   alias Temporal.Activity.ActivityExecHandle
   alias Temporal.Comms.Shared.Duration
@@ -9,11 +11,13 @@ defmodule Temporal.Workflow do
   alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Supervisor.WorkflowSupervisor
+  alias TemporalEngine.Data.Duration
+  alias TemporalEngine.Data.Payload
 
   @type workflow_exec_handle() :: WorkflowExecHandle.t()
   @type get_results_opts() :: [
           {:follow_runs, bool()},
-          {:timeout, {pos_integer(), :second} | {pos_integer(), :ms}}
+          {:timeout, Duration.duration()}
         ]
   @type activity_exec_opts ::
           [{:name, String.t()}] | WorkflowProgressReporter.schedule_activity_opts()
@@ -33,7 +37,15 @@ defmodule Temporal.Workflow do
   @spec result(workflow_exec_handle(), get_results_opts()) ::
           {:ok, TemporalEngine.Data.Payload.t()} | {:error, term()}
   def result(handle, opts \\ []) do
-    TemporalEngine.WorkflowHandle.get_result(handle, opts)
+    opts =
+      get_result_opts(
+        follow_runs: opts[:follow_runs] || true,
+        timeout: if(tm = opts[:timeout], do: Duration.from_tuple(tm))
+      )
+
+    with {:ok, result} <- TemporalEngine.WorkflowHandle.get_result(handle, opts) do
+      {:ok, if(result, do: Payload.value_from_record(result))}
+    end
   end
 
   @spec new_timer(WorkflowContext.t(), Duration.duration()) ::
