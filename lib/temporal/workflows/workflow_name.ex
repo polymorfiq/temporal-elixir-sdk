@@ -33,5 +33,11 @@ defimpl Temporal.Workflows.WorkflowName, for: Atom do
     end
   end
 
-  defp is_module?(name), do: Kernel.function_exported?(name, :__info__, 1)
+  defp is_module?(name) when is_atom(name) do
+    _ = Code.ensure_loaded(name)
+
+    Kernel.function_exported?(name, :__info__, 1)
+  end
+
+  defp is_module?(_), do: false
 end

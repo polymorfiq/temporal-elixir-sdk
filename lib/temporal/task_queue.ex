@@ -289,6 +289,7 @@ defmodule Temporal.TaskQueue do
       start_opts =
         workflow_start_opts(
           task_queue: opts[:task_queue],
+          workflow_id: opts[:workflow_id],
           id_reuse_policy: opts[:id_reuse_policy],
           id_conflict_policy: opts[:id_conflict_policy],
           execution_timeout: if(d = opts[:execution_timeout], do: Duration.from_tuple(d)),
@@ -329,7 +330,7 @@ defmodule Temporal.TaskQueue do
           header: opts[:header],
           static_summary: opts[:static_summary],
           static_details: opts[:static_details]
-        )
+        ) |> IO.inspect(label: "sending...")
 
       with {:ok, core_client} <- CoreClient.existing_for_identity(queue.client.identity),
            :ok <- validate_workflow_inputs(workflow_name, inputs) do

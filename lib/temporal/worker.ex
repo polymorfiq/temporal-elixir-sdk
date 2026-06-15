@@ -372,26 +372,28 @@ defmodule Temporal.Worker do
   @spec register_workflow(t(), WorkflowName.t(), register_workflow_opts()) ::
           :ok | {:error, term()}
   def register_workflow(worker, workflow_mod, opts \\ []) do
-    workflow_name =
-      Keyword.get_lazy(opts, :name, fn ->
-        WorkflowName.server_recognized_name(workflow_mod)
-      end)
+    with {:module, _} <- Code.ensure_loaded(workflow_mod) do
+      workflow_name =
+        Keyword.get_lazy(opts, :name, fn ->
+          WorkflowName.server_recognized_name(workflow_mod)
+        end)
 
-    with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id) do
-      arities_resp = WorkflowName.execution_arities(workflow_mod)
+      with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id) do
+        arities_resp = WorkflowName.execution_arities(workflow_mod)
 
-      cond do
-        match?({:error, :unknown}, arities_resp) ->
-          {:error, "#{inspect(workflow_mod)} is not a module..."}
+        cond do
+          match?({:error, :unknown}, arities_resp) ->
+            {:error, "#{inspect(workflow_mod)} is not a module..."}
 
-        match?({:ok, []}, arities_resp) ->
-          {:error, "#{inspect(workflow_mod)} does not implement execute/* function..."}
+          match?({:ok, []}, arities_resp) ->
+            {:error, "#{inspect(workflow_mod)} does not implement execute/* function..."}
 
-        true ->
-          WorkerWorkflowManager.register(manager_pid, workflow_name, workflow_mod)
-          register_activities(worker, workflow_mod)
+          true ->
+            WorkerWorkflowManager.register(manager_pid, workflow_name, workflow_mod)
+            register_activities(worker, workflow_mod)
 
-          :ok
+            :ok
+        end
       end
     end
   end
