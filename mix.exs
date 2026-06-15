@@ -4,7 +4,7 @@ defmodule Temporal.MixProject do
   def project do
     [
       app: :temporal,
-      version: "0.0.1",
+      version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -37,8 +37,10 @@ defmodule Temporal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:temporal_engine, "~> 0.1.0",
+       github: "polymorfiq/temporal-engine-elixir",
+       ref: "f345743603494fa062305a5efe09adba73129614"},
       {:nimble_options, "~> 1.1"},
-      {:rustler, "~> 0.38.0", runtime: false},
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
       # {:dep_from_hexpm, "~> 0.3.0"},

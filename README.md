@@ -1,10 +1,8 @@
 # Temporal Elixir SDK
 
-**This is an (in progress, unofficial) Temporal Language SDK for the Elixir programming language, that utilizes an NIF of the [Temporal Core SDK](https://github.com/temporalio/sdk-rust#temporal-core-sdk).**
+This is a Frontend library that, when paired through the [Temporal Engine](https://github.com/polymorfiq/temporal-engine) protocols to a [Temporal Backend library](https://github.com/polymorfiq/temporal-engine-nif), becomes the Temporal Elixir SDK.
 
-**This SDK is not yet tested or fit for production usage.**
-
-Though, it's MIT Licensed so feel free to fork it and go crazy in making it production-ready!
+This is in active development and this README will be updated when it is ready for general use.
 
 Here is a [repository of examples](https://github.com/polymorfiq/temporal-elixir-sdk-samples) for using the SDK, that will be expanded as I continue building out the features and building tests!
 
@@ -14,150 +12,10 @@ Here is a [repository of examples](https://github.com/polymorfiq/temporal-elixir
 defp deps do
   [
     ...
-    {:temporal, "~> 0.0.1", github: "polymorfiq/temporal-elixir-sdk", branch: "main"}
+    {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", branch: "main"}
+    {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", branch: "main"}
   ]
 end
-```
-
-# Usage
-
-I'm still learning how the Core SDK works, and so below I'll note what's working and my current understanding of the purpose each interaction serves.
-
-I'm building a more Supervision-Tree-Friendly layer over the Core SDK for a more Elixir-friendly interaction, but the initialization and basic communication with the Rust Core is working and being improved.
-
-
-## Starting a workflow
-
-```elixir
-alias Temporal.{Client, Worker, TaskQueue, Workflow}
-
-# Connect to Temporal Server
-{:ok, client} = Client.new("localhost:7233")
-
-# Start a worker on the Task Queue
-queue = TaskQueue.new(client, "default")
-{:ok, worker} = Worker.new(queue)
-
-# Register relevant activities and workflows
-:ok = Worker.register_workflow(worker, WorkflowWithActivities)
-
-# Start workflow
-{:ok, handle} = TaskQueue.start_workflow(queue, "my-workflow", WorkflowWithActivities, ["World"])
-
-# "Received message: Hello, World!"
-{:ok, workflow_result} = Workflow.get(handle)
-IO.puts(workflow_result)
-
-# Define workflow and activities
-defmodule WorkflowWithActivities do
-  use Temporal.Workflow, activities: [my_activity: 2]
-  
-  alias Temporal.Workflow
-
-  def execute(ctx, msg) do
-    {:ok, activity_handle} =
-      Workflow.execute_activity(ctx, &my_activity/2, [msg],
-        start_to_close_timeout: {1, :seconds}
-      )
-
-    {:ok, result} = Workflow.get(ctx, activity_handle)
-    
-    {:ok, "Received message: #{result}"}
-  end
-
-  def my_activity(_ctx, msg) do
-    {:ok, "Hello, #{msg}!"}
-  end
-end
-```
-
-## Initializing the runtime
-
-From my current understanding, this orchestrates the asynchronous threads/fibers used within the Temporal Client.
-
-```elixir
-{:ok, runtime} = Temporal.CoreRuntime.with_id(:my_runtime, heartbeat_interval_secs: 30)
-```
-
-## Initializing the Client
-
-The client is in charge of the overall connection with, messages passed back and forth, between the process and the gRPC Temporal Server.
-
-```elixir
-{:ok, client} = Temporal.Client.new(runtime, [
-    target_host: "localhost:7233",
-      namespace: "default",
-      client_name: "temporal-elixir",
-      client_version: "0.0.1",
-      identity: "iex-repl",
-      rpc_retry: [
-        initial_interval_secs: 30.0,
-        randomization_factor: 5.0,
-        multiplier: 2.0,
-        max_interval_secs: 60.0,
-        max_elapsed_time_secs: 60.0,
-        max_retries: 30
-      ]
-])
-```
-
-## Initializing a Worker
-
-A worker polls various task queues (Workflow Activations, Activity Tasks, Nexus) for work to do, executes the work and responds via the Client to the Temporal Server with the results of those activities.
-
-```elixir
-task_queue = Temporal.TaskQueue.new(client, "default")
-{:ok, worker} = Temporal.Worker.new(task_queue, [
-  namespace: "default",
-  task_queue: "default",
-  deployment_options: [
-    version: [
-      build_id: "0.0.1",
-      deployment_name: "iex-repl-deploy"
-    ],
-    use_worker_versioning: false,
-    default_versioning_behavior: 0
-  ],
-  max_cached_workflows: 100,
-  nonsticky_to_sticky_poll_ratio: 0.5,
-  enable_workflows: true,
-  enable_local_activities: true,
-  enable_remote_activities: true,
-  enable_nexus: true,
-  sticky_queue_schedule_to_start_timeout_secs: 300.0,
-  max_heartbeat_throttle_interval_secs: 60.00,
-  default_heartbeat_throttle_interval_secs: 30.0,
-  graceful_shutdown_period: {5, :seconds},
-  nondeterminism_as_workflow_fail: true,
-  tuner: [
-    workflow_slot_supplier: {:fixed_size, 10},
-    activity_slot_supplier: {:fixed_size, 10},
-    local_activity_slot_supplier: {:fixed_size, 10}
-  ],
-  nondeterminism_as_workflow_fail_for_types: [],
-  plugins: [],
-  max_worker_activities_per_second: 60,
-  max_task_queue_activities_per_second: 60,
-  identity_override: nil,
-  workflow_task_poller_behavior: {:simple_maximum, [simple_maximum: 5]},
-  activity_task_poller_behavior:  {:simple_maximum, [simple_maximum: 5]}
-])
-```
-
-## Polling Workflow Activations
-
-This allows the worker to pull Workflows and changes to their state from the Task Queue of the Temporal Server.
-
-It is worth noting that the Core SDK has internal tracking that **prevents duplicate workflow activations**. This is important to know, if any activations get discarded by the Lang SDK without being properly responded to. Restarting the OS process clears this internal state and allows you to re-process the Workflow from the beginning.
-
-```elixir
-Temporal.CoreSdk.CoreWorker.poll_workflow_activations(worker, runtime)
-```
-
-## Polling Activity Tasks
-
-```elixir
-Temporal.CoreSdk.CoreWorker.poll_activity_tasks(worker, runtime)
 ```
 
 # Glossary of Terms

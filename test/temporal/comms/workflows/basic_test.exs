@@ -73,14 +73,14 @@ defmodule Temporal.Workflows.BasicTest do
   end
 
   test "should respect timers", _ctx do
-#    WorkerMock.forward_received_jobs(ctx.mocked_worker)
-#
-#    TaskQueue.start_workflow(ctx.queue, unique_name("basic-test"), TimerWithAwait, [],
-#      id_conflict_policy: :terminate_existing
-#    )
-#
-#    assert_receive {:job, initialize_workflow(workflow_type: "TimerWithAwait")}, 1000
-#    assert_receive {:job, remove_from_cache(reason: :workflow_execution_ending)}, 1000
+    #    WorkerMock.forward_received_jobs(ctx.mocked_worker)
+    #
+    #    TaskQueue.start_workflow(ctx.queue, unique_name("basic-test"), TimerWithAwait, [],
+    #      id_conflict_policy: :terminate_existing
+    #    )
+    #
+    #    assert_receive {:job, initialize_workflow(workflow_type: "TimerWithAwait")}, 1000
+    #    assert_receive {:job, remove_from_cache(reason: :workflow_execution_ending)}, 1000
   end
 
   def setup_worker(ctx) do
