@@ -123,7 +123,7 @@ defmodule Temporal.TaskQueue do
                                   "Interval of the first retry. If retryBackoffCoefficient is 1.0 then it is used for all retries."
                               ],
                               backoff_coefficient: [
-                                required: false,
+                                default: 2.0,
                                 type: :float,
                                 doc:
                                   "Coefficient used to calculate the next retry interval. The next retry interval is previous interval multiplied by the coefficient. Must be 1 or larger."
@@ -278,7 +278,15 @@ defmodule Temporal.TaskQueue do
           opts :: workflow_opts()
         ) :: {:ok, WorkflowExecHandle.t()} | {:error, term()}
   def start_workflow(queue, workflow_id, workflow_name, inputs, opts \\ []) do
-    wf_server_name = WorkflowName.server_recognized_name(workflow_name)
+    wf_server_name =
+      case workflow_name do
+        {workflow_name, execute_fn} ->
+          WorkflowName.server_recognized_name(workflow_name, execute_fn)
+
+        _ ->
+          WorkflowName.server_recognized_name(workflow_name, :execute)
+      end
+
     workflow_def = definition(name: wf_server_name)
     inputs = Enum.map(inputs, &Payload.record_from_value/1)
 
@@ -308,8 +316,8 @@ defmodule Temporal.TaskQueue do
                   initial_interval: if(d = policy[:initial_interval], do: Duration.from_tuple(d)),
                   backoff_coefficient: policy[:backoff_coefficient],
                   maximum_interval: if(d = policy[:maximum_interval], do: Duration.from_tuple(d)),
-                  maximum_attempts: opts[:maximum_attempts],
-                  non_retryable_error_types: opts[:non_retryable_error_types]
+                  maximum_attempts: policy[:maximum_attempts],
+                  non_retryable_error_types: policy[:non_retryable_error_types]
                 )
             ),
           start_signal:
@@ -341,7 +349,16 @@ defmodule Temporal.TaskQueue do
 
   @spec validate_workflow_inputs(WorkflowName.t(), [term()]) :: :ok | {:error, term()}
   defp validate_workflow_inputs(workflow_name, inputs) do
-    case WorkflowName.execution_arities(workflow_name) do
+    {workflow_name, execute_fn} =
+      case workflow_name do
+        {name, execute} when is_atom(execute) ->
+          {name, execute}
+
+        workflow_name ->
+          {workflow_name, :execute}
+      end
+
+    case WorkflowName.execution_arities(workflow_name, execute_fn) do
       {:ok, arities} ->
         given_arity = Enum.count(inputs)
         arity_with_ctx = given_arity + 1
@@ -349,7 +366,15 @@ defmodule Temporal.TaskQueue do
         if Enum.member?(arities, arity_with_ctx) do
           :ok
         else
-          server_name = WorkflowName.server_recognized_name(workflow_name)
+          server_name =
+            case workflow_name do
+              {workflow_name, execute_fn} ->
+                WorkflowName.server_recognized_name(workflow_name, execute_fn)
+
+              workflow_name ->
+                WorkflowName.server_recognized_name(workflow_name, :execute)
+            end
+
           {:error, "#{server_name} workflow does not implement execute/#{given_arity + 1}"}
         end
 

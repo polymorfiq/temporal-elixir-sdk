@@ -371,15 +371,35 @@ defmodule Temporal.Worker do
 
   @spec register_workflow(t(), WorkflowName.t(), register_workflow_opts()) ::
           :ok | {:error, term()}
-  def register_workflow(worker, workflow_mod, opts \\ []) do
+
+  def register_workflow(_worker, _workflow_name, _opts \\ [])
+
+  def register_workflow(worker, {workflow_mod, execute_fns}, opts) when is_list(execute_fns) do
+    execute_fns
+    |> Enum.each(fn
+      {execute_fn_name, curr_opts} when is_atom(execute_fn_name) ->
+        register_workflow(
+          worker,
+          workflow_mod,
+          opts ++ curr_opts ++ [execute_fn: execute_fn_name]
+        )
+
+      execute_fn_name when is_atom(execute_fn_name) ->
+        register_workflow(worker, workflow_mod, execute_fn: execute_fn_name)
+    end)
+  end
+
+  def register_workflow(worker, workflow_mod, opts) do
     with {:module, _} <- Code.ensure_loaded(workflow_mod) do
+      execute_fn = opts[:execute_fn] || :execute
+
       workflow_name =
         Keyword.get_lazy(opts, :name, fn ->
-          WorkflowName.server_recognized_name(workflow_mod)
+          WorkflowName.server_recognized_name(workflow_mod, execute_fn)
         end)
 
       with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id) do
-        arities_resp = WorkflowName.execution_arities(workflow_mod)
+        arities_resp = WorkflowName.execution_arities(workflow_mod, execute_fn)
 
         cond do
           match?({:error, :unknown}, arities_resp) ->
@@ -389,7 +409,7 @@ defmodule Temporal.Worker do
             {:error, "#{inspect(workflow_mod)} does not implement execute/* function..."}
 
           true ->
-            WorkerWorkflowManager.register(manager_pid, workflow_name, workflow_mod)
+            WorkerWorkflowManager.register(manager_pid, workflow_name, workflow_mod, execute_fn)
             register_activities(worker, workflow_mod)
 
             :ok

@@ -1,10 +1,13 @@
 defmodule Temporal.Workflow.WorkflowExecutor do
   use GenServer
 
+  require TemporalEngine.Data.Failure
+
   alias TemporalEngine.Data.Payload
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Workflow.WorkflowContext
+  alias TemporalEngine.Data.Failure
 
   require Logger
   require Record
@@ -14,6 +17,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
     :workflow_id,
     :worker_id,
     :module,
+    :execute_fn,
     :exec_ctx,
     :args
   ])
@@ -37,6 +41,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
        workflow_id: exec_ctx.workflow_id,
        worker_id: exec_ctx.worker_id,
        module: exec_ctx.workflow_module,
+       execute_fn: exec_ctx.workflow_execute_fn,
        exec_ctx: exec_ctx
      ), {:continue, :execute}}
   end
@@ -48,6 +53,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
     run_id = workflow_state(state, :id)
     mod = workflow_state(state, :module)
+    execute_fn = workflow_state(state, :execute_fn)
     exec_ctx = workflow_state(state, :exec_ctx)
 
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(run_id),
@@ -55,7 +61,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
       inputs = Enum.map(workflow_state(state, :args), &Payload.value_from_record/1)
 
       try do
-        case apply(mod, :execute, [ctx] ++ inputs) do
+        case apply(mod, execute_fn, [ctx] ++ inputs) do
           {:ok, result} ->
             Logger.debug(
               "Workflow finished (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)} -> Reporting Completion..."
@@ -63,23 +69,31 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
             :ok = WorkflowProgressReporter.report_completed_success(reporter, result)
 
-          {:error, err} ->
-            Logger.debug(
-              "Workflow finished (Error) (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)} -> Reporting Completion..."
-            )
+          {:error, err} when is_binary(err) ->
+            :ok =
+              WorkflowProgressReporter.report_completed_failure(reporter,
+                message: err,
+                info: Failure.application(failure_type: "ReturnedError")
+              )
 
-            :ok = WorkflowProgressReporter.report_completed_failure(reporter, message: err)
+          {:error, {err, info}} when is_binary(err) and is_tuple(info) ->
+            :ok =
+              WorkflowProgressReporter.report_completed_failure(reporter,
+                message: err,
+                info: info
+              )
         end
       rescue
-        e in RuntimeError ->
+        e ->
           Logger.debug(
             "Workflow finished (Exception) (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)}:\n#{Exception.format(:error, e, __STACKTRACE__)}"
           )
 
           :ok =
             WorkflowProgressReporter.report_completed_failure(reporter,
-              message: e.message,
-              stack_trace: "#{Exception.format_stacktrace(__STACKTRACE__)}"
+              message: Exception.message(e),
+              stack_trace: "#{Exception.format_stacktrace(__STACKTRACE__)}",
+              info: Failure.application(failure_type: Atom.to_string(e.__struct__))
             )
       end
 

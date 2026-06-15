@@ -48,11 +48,12 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     GenServer.call(pid, {:process_activation, activation}, :infinity)
   end
 
-  def register(pid, name, module), do: GenServer.cast(pid, {:register, name, module})
+  def register(pid, name, module, execute_fn),
+    do: GenServer.cast(pid, {:register, name, module, execute_fn})
 
-  def handle_cast({:register, name, module}, state) do
+  def handle_cast({:register, name, module, execute_fn}, state) do
     registered = manager_state(state, :registered)
-    {:noreply, manager_state(state, registered: Map.put(registered, name, module))}
+    {:noreply, manager_state(state, registered: Map.put(registered, name, {module, execute_fn}))}
   end
 
   def handle_call({:process_activation, {:error, "core_shutdown"}}, _from, state) do
@@ -91,7 +92,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     registered = manager_state(state, :registered)
 
     resp =
-      if workflow_module = registered[workflow_type] do
+      if {workflow_module, execute_fn} = registered[workflow_type] do
         Logger.debug("Job: initialize_workflow (#{inspect(workflow_module)} - #{run_id})")
 
         exec_ctx = %{
@@ -99,6 +100,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
           | workflow_id: workflow_id,
             run_id: run_id,
             workflow_module: workflow_module,
+            workflow_execute_fn: execute_fn,
             core_worker: manager_state(state, :core_worker)
         }
 

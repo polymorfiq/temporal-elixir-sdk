@@ -150,7 +150,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                       "Interval of the first retry. If retryBackoffCoefficient is 1.0 then it is used for all retries."
                                   ],
                                   backoff_coefficient: [
-                                    required: false,
+                                    default: 2.0,
                                     type: :float,
                                     doc:
                                       "Coefficient used to calculate the next retry interval. The next retry interval is previous interval multiplied by the coefficient. Must be 1 or larger."
@@ -326,6 +326,17 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                            default: "",
                            type: :string,
                            doc: "Stack Trace associated with the failure, if applicable"
+                         ],
+                         cause: [
+                           required: false,
+                           type: :any,
+                           doc: "Failure that led to this failure"
+                         ],
+                         info: [
+                           required: false,
+                           type: :any,
+                           type_doc: "`TemporalEngine.Data.Failure.info/0`",
+                           doc: "More detailed information about the type of failure"
                          ]
                        )
 
@@ -342,7 +353,9 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         {:report_completed_failure,
          failure(
            message: opts[:message],
-           stack_trace: opts[:stack_trace]
+           stack_trace: opts[:stack_trace],
+           cause: opts[:cause],
+           failure_info: opts[:info]
          )},
         :infinity
       )
