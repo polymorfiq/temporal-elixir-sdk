@@ -1,7 +1,7 @@
+use crate::common::SdkDuration;
 use rustler::{NifStruct, Resource};
 use std::sync::{Arc, RwLock};
 use temporalio_sdk_core::CoreRuntime;
-use crate::common::SdkDuration;
 
 pub struct ElixirRuntime {
     #[allow(dead_code)]

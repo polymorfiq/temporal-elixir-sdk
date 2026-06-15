@@ -4,6 +4,9 @@ defmodule TemporalEngineNif.Data.WorkflowFailureInfo do
   alias TemporalEngineNif.Data
   alias TemporalEngineNif.Data.Duration
   alias TemporalEngineNif.Data.Payload
+  alias TemporalEngineNif.Data.WorkflowActivityType, as: ActivityType
+  alias TemporalEngineNif.Data.WorkflowType
+  alias TemporalEngineNif.Data.WorkflowExecution, as: Execution
   alias TemporalEngine.Data.Failure, as: EngineFailure
 
   @type t ::
@@ -31,7 +34,7 @@ defmodule TemporalEngineNif.Data.WorkflowFailureInfo do
     )
   end
 
-  def to_record({:timeout_reached, failure}) do
+  def to_record({:timeout, failure}) do
     timeout_reached(
       timeout_type: failure.timeout_type,
       last_heartbeat_details: Payload.to_record(failure.last_heartbeat_details)
@@ -62,7 +65,7 @@ defmodule TemporalEngineNif.Data.WorkflowFailureInfo do
       scheduled_event_id: failure.scheduled_event_id,
       started_event_id: failure.started_event_id,
       identity: failure.identity,
-      activity_type: if(a_type = failure.activity_type, do: activity_type(name: a_type.name)),
+      activity_type: ActivityType.to_record(failure.activity_type),
       activity_id: failure.activity_id,
       retry_state: failure.retry_state
     )
@@ -71,11 +74,8 @@ defmodule TemporalEngineNif.Data.WorkflowFailureInfo do
   def to_record({:child_execution, failure}) do
     child_execution(
       namespace: failure.namespace,
-      workflow_execution:
-        if(exec = failure.workflow_execution,
-          do: run(workflow_id: exec.workflow_id, run_id: exec.run_id)
-        ),
-      workflow_type: if(wf_type = failure.workflow_type, do: workflow_type(name: wf_type.name)),
+      workflow_execution: Execution.to_record(failure.workflow_execution),
+      workflow_type: WorkflowType.to_record(failure.workflow_type),
       initiated_event_id: failure.initiated_event_id,
       started_event_id: failure.started_event_id,
       retry_state: failure.retry_state
@@ -98,5 +98,94 @@ defmodule TemporalEngineNif.Data.WorkflowFailureInfo do
       failure_type: failure.failure_type,
       retry_behavior: failure.retry_behavior
     )
+  end
+
+  @spec from_record(t() | nil) :: EngineFailure.failure_info() | nil
+  def from_record(nil), do: nil
+
+  def from_record(application() = info) do
+    {:application,
+     %Data.WorkflowApplicationFailureInfo{
+       failure_type: application(info, :failure_type),
+       non_retryable: application(info, :non_retryable),
+       details: Payload.from_record(application(info, :details)),
+       next_retry_delay: Duration.from_record(application(info, :next_retry_delay)),
+       category: application(info, :category)
+     }}
+  end
+
+  def from_record(timeout_reached() = info) do
+    {:timeout,
+     %Data.WorkflowTimeoutFailureInfo{
+       timeout_type: timeout_reached(info, :timeout_type),
+       last_heartbeat_details: Payload.from_record(timeout_reached(info, :last_heartbeat_details))
+     }}
+  end
+
+  def from_record(cancelled() = info) do
+    {:cancelled,
+     %Data.WorkflowCanceledFailureInfo{
+       identity: cancelled(info, :identity),
+       details: Payload.from_record(cancelled(info, :details))
+     }}
+  end
+
+  def from_record(terminated() = info) do
+    {:terminated, %Data.WorkflowTerminatedFailureInfo{identity: terminated(info, :identity)}}
+  end
+
+  def from_record(server() = info) do
+    {:server, %Data.WorkflowServerFailureInfo{non_retryable: server(info, :non_retryable)}}
+  end
+
+  def from_record(reset_workflow() = info) do
+    {:reset_workflow,
+     %Data.WorkflowResetFailureInfo{
+       last_heartbeat_details: Payload.from_record(reset_workflow(info, :last_heartbeat_details))
+     }}
+  end
+
+  def from_record(activity() = info) do
+    {:activity,
+     %Data.WorkflowActivityFailureInfo{
+       scheduled_event_id: activity(info, :scheduled_event_id),
+       started_event_id: activity(info, :started_event_id),
+       identity: activity(info, :identity),
+       activity_type: ActivityType.from_record(activity(info, :activity_type)),
+       activity_id: activity(info, :activity_id),
+       retry_state: activity(info, :retry_state)
+     }}
+  end
+
+  def from_record(child_execution() = info) do
+    {:child_execution,
+     %Data.WorkflowChildExecutionFailureInfo{
+       namespace: child_execution(info, :namespace),
+       workflow_execution: Execution.from_record(child_execution(info, :workflow_execution)),
+       workflow_type: WorkflowType.from_record(child_execution(info, :workflow_type)),
+       initiated_event_id: child_execution(info, :initiated_event_id),
+       started_event_id: child_execution(info, :started_event_id),
+       retry_state: child_execution(info, :retry_state)
+     }}
+  end
+
+  def from_record(nexus_operation() = info) do
+    {:nexus_operation,
+     %Data.WorkflowNexusOperationFailureInfo{
+       scheduled_event_id: nexus_operation(info, :scheduled_event_id),
+       endpoint: nexus_operation(info, :endpoint),
+       service: nexus_operation(info, :service),
+       operation: nexus_operation(info, :operation),
+       operation_id: nexus_operation(info, :operation_id),
+       operation_token: nexus_operation(info, :operation_token)
+     }}
+  end
+
+  def from_record(nexus_handler() = info) do
+    {:nexus_handler,
+     %Data.WorkflowNexusHandlerFailureInfo{
+       failure_type: nexus_handler(info, :failure_type),
+       retry_behavior: nexus_handler(info, :retry_behavior)
+     }}
   end
 end

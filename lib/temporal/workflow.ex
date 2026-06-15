@@ -40,7 +40,7 @@ defmodule Temporal.Workflow do
           {:ok, TimerHandle.t()} | {:error, term()}
   def new_timer(%WorkflowContext{} = ctx, duration) do
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(ctx.run_id) do
-      reported = WorkflowProgressReporter.start_timer(reporter, duration)
+      reported = WorkflowProgressReporter.request_start_timer(reporter, duration)
 
       with {:ok, timer_id} <- reported do
         {:ok,

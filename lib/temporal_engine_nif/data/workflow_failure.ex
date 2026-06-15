@@ -12,6 +12,7 @@ defmodule TemporalEngineNif.Data.WorkflowFailure do
 
   alias TemporalEngineNif.Data.Payload
   alias TemporalEngineNif.Data.WorkflowFailureInfo
+  alias TemporalEngine.Data.Failure, as: EngineFailure
 
   @type t :: %__MODULE__{
           message: String.t(),
@@ -22,7 +23,7 @@ defmodule TemporalEngineNif.Data.WorkflowFailure do
           failure_info: Data.WorkflowFailureInfo.t() | nil
         }
 
-  @spec to_record(t() | nil) :: Jobs.namespaced_run() | nil
+  @spec to_record(t() | nil) :: EngineFailure.failure() | nil
   def to_record(nil), do: nil
 
   def to_record(%__MODULE__{} = failure) do
@@ -34,5 +35,19 @@ defmodule TemporalEngineNif.Data.WorkflowFailure do
       cause: failure.cause,
       failure_info: WorkflowFailureInfo.to_record(failure.failure_info)
     )
+  end
+
+  @spec from_record(EngineFailure.failure() | nil) :: t() | nil
+  def from_record(nil), do: nil
+
+  def from_record(failure() = f) do
+    %__MODULE__{
+      message: failure(f, :message),
+      source: failure(f, :source),
+      stack_trace: failure(f, :stack_trace),
+      encoded_attributes: Payload.from_record(failure(f, :encoded_attributes)),
+      cause: failure(f, :cause),
+      failure_info: WorkflowFailureInfo.from_record(failure(f, :failure_info))
+    }
   end
 end

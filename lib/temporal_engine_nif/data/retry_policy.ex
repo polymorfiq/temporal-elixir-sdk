@@ -32,4 +32,17 @@ defmodule TemporalEngineNif.Data.RetryPolicy do
       non_retryable_error_types: policy.non_retryable_error_types
     )
   end
+
+  @spec from_record(EnginePolicy.policy() | nil) :: t() | nil
+  def from_record(nil), do: nil
+
+  def from_record(policy() = p) do
+    %__MODULE__{
+      initial_interval: Duration.from_record(policy(p, :initial_interval)),
+      backoff_coefficient: policy(p, :backoff_coefficient),
+      maximum_interval: Duration.from_record(policy(p, :maximum_interval)),
+      maximum_attempts: policy(p, :maximum_attempts),
+      non_retryable_error_types: policy(p, :non_retryable_error_types)
+    }
+  end
 end

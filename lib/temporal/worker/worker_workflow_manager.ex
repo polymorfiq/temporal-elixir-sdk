@@ -1,5 +1,12 @@
 defmodule Temporal.Worker.WorkerWorkflowManager do
   use GenServer
+
+  require Logger
+  require Record
+
+  import TemporalEngine.Data.Activation
+  import TemporalEngine.Data.Jobs
+
   alias Temporal.CoreSdk.CoreWorker
   alias Temporal.Supervisor.ExecutionContext
   alias Temporal.TaskQueue
@@ -8,14 +15,11 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   alias Temporal.Supervisor.WorkerSupervisor
   alias Temporal.Workflow.WorkflowProgressReporter
 
-  require Logger
-  require Record
-
   Record.defrecordp(:manager_state, [
     :id,
     :task_queue,
     :exec_ctx,
-    :worker,
+    :core_worker,
     registered: %{},
     forward_polled_pid: nil
   ])
@@ -28,17 +32,16 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   def init({exec_ctx, opts}) do
     Process.set_label({:workflow_manager, exec_ctx.worker_id})
 
-    {:ok,
-     manager_state(
-       exec_ctx: exec_ctx,
-       id: exec_ctx.worker_id,
-       task_queue: exec_ctx.task_queue,
-       worker: %Worker{
+    with {:ok, core_worker} <- CoreWorker.existing_for_id(exec_ctx.worker_id) do
+      {:ok,
+       manager_state(
+         exec_ctx: exec_ctx,
          id: exec_ctx.worker_id,
-         task_queue: exec_ctx.task_queue
-       },
-       forward_polled_pid: opts[:forward_polled_messages]
-     )}
+         task_queue: exec_ctx.task_queue,
+         core_worker: core_worker,
+         forward_polled_pid: opts[:forward_polled_messages]
+       )}
+    end
   end
 
   def process_activation(pid, activation) do
@@ -57,8 +60,8 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     {:noreply, state}
   end
 
-  def handle_call({:process_activation, {:activation, _, opts} = activation}, _from, state) do
-    jobs = Keyword.fetch!(opts, :jobs)
+  def handle_call({:process_activation, activation() = activation}, _from, state) do
+    jobs = activation(activation, :jobs)
 
     processed =
       Enum.reduce(jobs, {:ok, state}, fn job, curr ->
@@ -76,8 +79,12 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   end
 
   def handle_activation_job(
-        {:initialize_workflow, workflow_id, workflow_type, args, initialize},
-        {_, run_id, _},
+        initialize_workflow(
+          workflow_id: workflow_id,
+          workflow_type: workflow_type,
+          arguments: args
+        ),
+        activation(run_id: run_id),
         state
       ) do
     exec_ctx = manager_state(state, :exec_ctx)
@@ -87,26 +94,21 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
       if workflow_module = registered[workflow_type] do
         Logger.debug("Job: initialize_workflow (#{inspect(workflow_module)} - #{run_id})")
 
-        with {:ok, worker} <- CoreWorker.existing_for_id(exec_ctx.worker_id) do
-          exec_ctx = %{
-            exec_ctx
-            | workflow_id: workflow_id,
-              run_id: run_id,
-              workflow_module: workflow_module,
-              workflow_initialize: initialize,
-              core_worker: worker
-          }
+        exec_ctx = %{
+          exec_ctx
+          | workflow_id: workflow_id,
+            run_id: run_id,
+            workflow_module: workflow_module,
+            core_worker: manager_state(state, :core_worker)
+        }
 
-          start_or_restart_workflow(exec_ctx, args)
-        end
+        start_or_restart_workflow(exec_ctx, args)
       else
         Logger.warning("Ignoring unregistered workflow type: #{inspect(workflow_type)}")
 
-        worker = manager_state(state, :worker)
-
         WorkflowProgressReporter.send_failure_activation_completion(
           run_id,
-          worker,
+          manager_state(state, :core_worker).core,
           "Unknown workflow type: #{inspect(workflow_type)}"
         )
 
@@ -116,18 +118,20 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     {resp, state}
   end
 
-  def handle_activation_job({:remove_from_cache, reason, message}, {_, run_id, _}, state) do
+  def handle_activation_job(
+        remove_from_cache(reason: reason, message: message),
+        activation(run_id: run_id),
+        state
+      ) do
     Logger.debug("Job: remove_from_cache (#{reason} - #{run_id} - #{message})")
 
     Logger.info("Removing from cache (#{reason} - #{message}): Workflow Run (#{run_id})")
 
     WorkflowSupervisor.stop_workflow(run_id)
 
-    worker = manager_state(state, :worker)
-
     WorkflowProgressReporter.send_successful_activation_completion(
       run_id,
-      worker,
+      manager_state(state, :core_worker).core,
       []
     )
 

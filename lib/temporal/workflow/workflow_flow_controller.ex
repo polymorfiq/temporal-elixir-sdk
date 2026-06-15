@@ -32,6 +32,8 @@ defmodule Temporal.Workflow.WorkflowFlowController do
   def activity_tasks_resolved(pid, results),
     do: GenServer.call(pid, {:activity_tasks_resolved, results})
 
+  def timers_resolved(pid, timer_ids), do: GenServer.call(pid, {:timers_resolved, timer_ids})
+
   def await_timer(pid, _run_id, timer_id) do
     GenServer.call(pid, {:await_timer, timer_id}, :infinity)
   end
@@ -66,6 +68,27 @@ defmodule Temporal.Workflow.WorkflowFlowController do
 
     {:reply, :ok,
      flow_state(state, awaiting_activities: still_awaiting, activity_results: activity_results)}
+  end
+
+  def handle_call({:timers_resolved, timer_ids}, _, state) do
+    awaiting = flow_state(state, :awaiting_timers)
+
+    {was_awaiting, still_awaiting} = Map.split(awaiting, timer_ids)
+
+    was_awaiting
+    |> Enum.map(fn {timer_id, awaiting} ->
+      Enum.each(awaiting, fn awaiter ->
+        Logger.debug("Awaiting timer (Unlocked): #{inspect(awaiter)} - #{timer_id}")
+        GenServer.reply(awaiter, :ok)
+      end)
+    end)
+
+    fired_timers =
+      Enum.reduce(timer_ids, flow_state(state, :fired_timers), fn timer_id, acc ->
+        Map.put(acc, timer_id, true)
+      end)
+
+    {:reply, :ok, flow_state(state, awaiting_timers: still_awaiting, fired_timers: fired_timers)}
   end
 
   def handle_call({:will_resolutions_unlock?, activity_ids}, _from, state) do

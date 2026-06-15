@@ -15,7 +15,7 @@ defmodule TemporalEngine.Data.Commands do
   Record.defrecord(:start_timer, [:seq, :start_to_fire_timeout])
 
   @type start_timer ::
-          record(:start_timer, seq: pos_integer(), start_to_fire_timeout: Duration.duration())
+          record(:start_timer, seq: pos_integer(), start_to_fire_timeout: Duration.t())
 
   Record.defrecord(:schedule_activity, [
     :seq,
@@ -42,10 +42,10 @@ defmodule TemporalEngine.Data.Commands do
             task_queue: String.t(),
             headers: %{String.t() => Payload.payload()},
             arguments: [Payload.payload()],
-            schedule_to_close_timeout: Duration.duration() | nil,
-            schedule_to_start_timeout: Duration.duration() | nil,
-            start_to_close_timeout: Duration.duration() | nil,
-            heartbeat_timeout: Duration.duration() | nil,
+            schedule_to_close_timeout: Duration.t() | nil,
+            schedule_to_start_timeout: Duration.t() | nil,
+            start_to_close_timeout: Duration.t() | nil,
+            heartbeat_timeout: Duration.t() | nil,
             retry_policy: RetryPolicy.policy() | nil,
             cancellation_type: cancellation_type(),
             do_not_eagerly_execute: bool(),

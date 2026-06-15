@@ -11,7 +11,7 @@ defmodule TemporalEngineNif.Engine do
     rt_opts = %RuntimeOpts{heartbeat_interval: runtime_opts(opts, :heartbeat_interval)}
 
     with {:ok, core} <- Core._create_runtime(rt_opts) do
-      {:ok, %Runtime{core: core}}
+      {:ok, %Runtime{id: runtime_opts(opts, :id), core: core}}
     end
   end
 end

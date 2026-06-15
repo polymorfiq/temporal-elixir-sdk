@@ -1,5 +1,5 @@
 defmodule TemporalEngineNif.Runtime do
-  defstruct [:core]
+  defstruct [:id, :core]
 
   @type t :: %{core: term()}
 end
@@ -10,6 +10,9 @@ defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
   alias TemporalEngineNif.Data.ClientOpts
   alias TemporalEngineNif.Data.Duration
   alias TemporalEngineNif.Client
+
+  @impl true
+  def id(runtime), do: runtime.id
 
   @impl true
   def create_client(runtime, opts) do
@@ -41,7 +44,11 @@ defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
 
         receive do
           {:ok, client} ->
-            send(parent, {self(), {:ok, %Client{core: client, runtime: runtime}}})
+            send(
+              parent,
+              {self(),
+               {:ok, %Client{id: client_opts(opts, :identity), core: client, runtime: runtime}}}
+            )
 
           {:error, err} ->
             send(parent, {self(), {:error, err}})

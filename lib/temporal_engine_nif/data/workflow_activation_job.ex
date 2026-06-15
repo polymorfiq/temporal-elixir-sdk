@@ -51,4 +51,40 @@ defmodule TemporalEngineNif.Data.WorkflowActivationJob do
       priority: Priority.to_record(job.priority)
     )
   end
+
+  def to_record(%__MODULE__{variant: {:resolve_activity, job}}) do
+    resolve_activity(
+      seq: job.seq,
+      result:
+        case job.result do
+          nil ->
+            nil
+
+          %{status: {:completed, result}} ->
+            activity_completed(result: Payload.to_record(result.result))
+
+          %{status: {:failed, result}} ->
+            activity_failed(failure: WorkflowFailure.to_record(result.failure))
+
+          %{status: {:cancelled, result}} ->
+            activity_cancelled(failure: WorkflowFailure.to_record(result.failure))
+
+          %{status: {:backoff, result}} ->
+            activity_backoff(
+              attempt: result.attempt,
+              backoff_duration: Duration.to_record(result.backoff_duration),
+              original_schedule_time: Timestamp.to_record(result.original_schedule_time)
+            )
+        end,
+      is_local: job.is_local
+    )
+  end
+
+  def to_record(%__MODULE__{variant: {:fire_timer, job}}) do
+    fire_timer(seq: job.seq)
+  end
+
+  def to_record(%__MODULE__{variant: {:remove_from_cache, job}}) do
+    remove_from_cache(message: job.message, reason: job.reason)
+  end
 end

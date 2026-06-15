@@ -195,7 +195,7 @@ defmodule Temporal.Worker do
                      ],
                      default_versioning_behavior: [
                        required: false,
-                       type: {:in, [:unspecified, :pinned, :auto_upgrade]},
+                       type: {:in, [:unspecified, :pinned, :auto_upgrade, nil]},
                        doc:
                          "The default versioning behavior to use for workflows that do not pass one to Core. It is a startup-time error to specify :unspecified here."
                      ]

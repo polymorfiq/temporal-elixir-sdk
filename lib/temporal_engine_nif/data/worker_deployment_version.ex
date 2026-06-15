@@ -4,11 +4,16 @@ defmodule TemporalEngineNif.Data.WorkerDeploymentVersion do
     :deployment_name
   ]
 
-  require TemporalEngine.Client
+  import TemporalEngine.Client
+
+  alias TemporalEngine.Client
 
   @type t :: %__MODULE__{build_id: String.t(), deployment_name: String.t()}
 
+  @spec to_record(t() | nil) :: Client.version() | nil
+  def to_record(nil), do: nil
+
   def to_record(%__MODULE__{build_id: build_id, deployment_name: deployment_name}) do
-    TemporalEngine.Client.version(build_id: build_id, deployment_name: deployment_name)
+    version(build_id: build_id, deployment_name: deployment_name)
   end
 end

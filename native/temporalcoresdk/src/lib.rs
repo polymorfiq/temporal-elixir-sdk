@@ -46,9 +46,7 @@ mod atoms {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-fn _create_runtime(
-    opts: Option<SdkRuntimeOpts>,
-) -> Result<ResourceArc<ElixirRuntime>, String> {
+fn _create_runtime(opts: Option<SdkRuntimeOpts>) -> Result<ResourceArc<ElixirRuntime>, String> {
     let core_opts = match opts {
         Some(sdk_opts) => {
             let hb_interval = sdk_opts.heartbeat_interval.try_into_or_none();
@@ -231,7 +229,7 @@ fn _create_worker(
                 default_versioning_behavior: {
                     match dopts.default_versioning_behavior {
                         None => None,
-                        Some(val) => Some(val.into())
+                        Some(val) => Some(val.into()),
                     }
                 },
             })
@@ -275,7 +273,9 @@ fn _create_worker(
             enable_remote_activities: options.enable_remote_activities,
             enable_nexus: options.enable_nexus,
         })
-        .sticky_queue_schedule_to_start_timeout(options.sticky_queue_schedule_to_start_timeout.into())
+        .sticky_queue_schedule_to_start_timeout(
+            options.sticky_queue_schedule_to_start_timeout.into(),
+        )
         .max_heartbeat_throttle_interval(options.max_heartbeat_throttle_interval.into())
         .default_heartbeat_throttle_interval(options.default_heartbeat_throttle_interval.into())
         .maybe_max_worker_activities_per_second(options.max_worker_activities_per_second)
@@ -648,9 +648,7 @@ fn _worker_poll_workflow_activation(
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-fn _worker_initiate_shutdown(
-    worker: ResourceArc<ElixirWorker>
-) -> NifResult<Atom> {
+fn _worker_initiate_shutdown(worker: ResourceArc<ElixirWorker>) -> NifResult<Atom> {
     let rt = Runtime::new().unwrap();
     match worker.worker.as_ref() {
         Some(core_worker) => {
@@ -660,16 +658,14 @@ fn _worker_initiate_shutdown(
             Ok(atoms::ok())
         }
 
-        None => {
-            Err(rustler::Error::Term(Box::new("Core Worker instance unavailable...")))
-        }
+        None => Err(rustler::Error::Term(Box::new(
+            "Core Worker instance unavailable...",
+        ))),
     }
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-fn _worker_finalize_shutdown(
-    worker: ResourceArc<ElixirWorker>
-) -> NifResult<Atom> {
+fn _worker_finalize_shutdown(worker: ResourceArc<ElixirWorker>) -> NifResult<Atom> {
     let worker_mut = worker.deref() as *const ElixirWorker as *mut ElixirWorker;
     let stolen_core = unsafe { (*worker_mut).worker.take() };
 
@@ -679,9 +675,9 @@ fn _worker_finalize_shutdown(
             Ok(atoms::ok())
         }
 
-        None => {
-            Err(rustler::Error::Term(Box::new("Core Worker instance unavailable...")))
-        }
+        None => Err(rustler::Error::Term(Box::new(
+            "Core Worker instance unavailable...",
+        ))),
     }
 }
 

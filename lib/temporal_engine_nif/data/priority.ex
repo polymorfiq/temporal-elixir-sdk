@@ -21,4 +21,15 @@ defmodule TemporalEngineNif.Data.Priority do
       fairness_weight: priority.fairness_weight
     )
   end
+
+  @spec from_record(EnginePriority.priority() | nil) :: t() | nil
+  def from_record(nil), do: nil
+
+  def from_record(priority() = p) do
+    %__MODULE__{
+      priority_key: priority(p, :priority_key),
+      fairness_key: priority(p, :fairness_key),
+      fairness_weight: priority(p, :fairness_weight)
+    }
+  end
 end

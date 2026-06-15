@@ -23,7 +23,8 @@ defmodule Temporal.Client do
                        ],
                        runtime: [
                          required: false,
-                         type: {:struct, Runtime},
+                         type: :any,
+                         type_doc: "[Runtime.t/0](`t:TemporalEngine.Runtime.t/0`)",
                          doc:
                            "A runtime to spawn the client under. Manages concurrency and resources."
                        ],

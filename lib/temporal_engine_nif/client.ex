@@ -1,5 +1,5 @@
 defmodule TemporalEngineNif.Client do
-  defstruct [:core, :runtime]
+  defstruct [:id, :core, :runtime]
 
   @type t :: %{core: term()}
 end
@@ -25,6 +25,9 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
   alias TemporalEngineNif.Runtime
   alias TemporalEngineNif.WorkflowHandle
   alias TemporalEngineNif.Worker
+
+  @impl true
+  def id(client), do: client.id
 
   @impl true
   def create_worker(client, opts) do

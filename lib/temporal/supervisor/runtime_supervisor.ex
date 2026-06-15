@@ -13,7 +13,7 @@ defmodule Temporal.Supervisor.RuntimeSupervisor do
   def init(opts) do
     runtime_id = Keyword.fetch!(opts, :runtime_id)
     Process.set_label({:runtime_supervisor, runtime_id})
-    {runtime_opts, _opts} = Keyword.split(opts, [:runtime_id, :heartbeat_interval_secs])
+    {runtime_opts, _opts} = Keyword.split(opts, [:runtime_id, :engine, :heartbeat_interval_secs])
 
     children = [
       {CoreRuntime, runtime_opts ++ [name: via_registry({:core, runtime_id})]},

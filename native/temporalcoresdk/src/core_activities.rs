@@ -8,7 +8,7 @@ use temporalio_sdk_common::protos::coresdk::activity_task::activity_task::Varian
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.ActivityTask"]
+#[module = "TemporalEngineNif.Data.ActivityTask"]
 pub struct SdkActivityTask {
     pub task_token: Vec<u8>,
     pub variant: Option<SdkActivityTaskVariant>,
@@ -57,7 +57,7 @@ impl Into<ActivityTaskVariant> for SdkActivityTaskVariant {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.ActivityTaskStart"]
+#[module = "TemporalEngineNif.Data.ActivityTaskStart"]
 pub struct SdkActivityTaskStart {
     pub workflow_namespace: String,
     pub workflow_type: String,
@@ -151,7 +151,7 @@ impl Into<activity_task::Start> for SdkActivityTaskStart {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.ActivityTaskCancel"]
+#[module = "TemporalEngineNif.Data.ActivityTaskCancel"]
 pub struct SdkActivityTaskCancel {
     pub reason: SdkActivityTaskCancelReason,
     pub details: Option<SdkActivityCancellationDetails>,
@@ -214,7 +214,7 @@ impl From<i32> for SdkActivityTaskCancelReason {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.CancellationDetails"]
+#[module = "TemporalEngineNif.Data.ActivityCancellationDetails"]
 pub struct SdkActivityCancellationDetails {
     pub is_not_found: bool,
     pub is_cancelled: bool,
@@ -251,7 +251,7 @@ impl Into<activity_task::ActivityCancellationDetails> for SdkActivityCancellatio
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.TaskCompletion"]
+#[module = "TemporalEngineNif.Data.ActivityTaskCompletion"]
 pub struct SdkActivityTaskCompletion {
     task_token: Vec<u8>,
     result: Option<SdkActivityExecutionResult>,
@@ -280,7 +280,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.ExecutionResult"]
+#[module = "TemporalEngineNif.Data.ActivityExecutionResult"]
 pub struct SdkActivityExecutionResult {
     status: Option<SdkActivityExecutionStatus>,
 }
@@ -344,7 +344,7 @@ impl Into<ActivityExecutionStatus> for SdkActivityExecutionStatus {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.ExecutionResult.Completed"]
+#[module = "TemporalEngineNif.Data.ActivityExecutionSuccess"]
 pub struct SdkActivityExecutionSuccess {
     result: Option<SdkPayload>,
 }
@@ -370,7 +370,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Success>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.ExecutionResult.Failed"]
+#[module = "TemporalEngineNif.Data.ActivityExecutionFailure"]
 pub struct SdkActivityExecutionFailure {
     failure: Option<SdkWorkflowFailure>,
 }
@@ -396,7 +396,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Failure>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.ExecutionResult.Cancelled"]
+#[module = "TemporalEngineNif.Data.ActivityExecutionCancellation"]
 pub struct SdkActivityExecutionCancellation {
     failure: Option<SdkWorkflowFailure>,
 }
@@ -424,7 +424,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::activity_result::Cancellation>
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Activities.ExecutionResult.WillCompleteAsync"]
+#[module = "TemporalEngineNif.Data.ActivityExecutionWillCompleteAsync"]
 pub struct SdkActivityExecutionWillCompleteAsync {}
 
 impl From<temporalio_sdk_common::protos::coresdk::activity_result::WillCompleteAsync>

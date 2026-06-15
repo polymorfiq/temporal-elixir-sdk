@@ -17,8 +17,8 @@ defmodule Temporal.WorkerTest do
                max_cached_workflows: 100,
                deployment_options: [
                  version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
-                 use_worker_versioning: true,
-                 default_versioning_behavior: :auto_upgrade
+                 use_worker_versioning: false,
+                 default_versioning_behavior: nil
                ],
                task_types: [
                  enable_workflows: true,
@@ -39,8 +39,8 @@ defmodule Temporal.WorkerTest do
         max_cached_workflows: 100,
         deployment_options: [
           version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
-          use_worker_versioning: true,
-          default_versioning_behavior: :auto_upgrade
+          use_worker_versioning: false,
+          default_versioning_behavior: nil
         ],
         task_types: [
           enable_workflows: true,
@@ -69,8 +69,8 @@ defmodule Temporal.WorkerTest do
         max_cached_workflows: 100,
         deployment_options: [
           version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
-          use_worker_versioning: true,
-          default_versioning_behavior: :auto_upgrade
+          use_worker_versioning: false,
+          default_versioning_behavior: nil
         ],
         task_types: [
           enable_workflows: true,
@@ -98,8 +98,8 @@ defmodule Temporal.WorkerTest do
         max_cached_workflows: 100,
         deployment_options: [
           version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
-          use_worker_versioning: true,
-          default_versioning_behavior: :auto_upgrade
+          use_worker_versioning: false,
+          default_versioning_behavior: nil
         ],
         task_types: [
           enable_workflows: true,

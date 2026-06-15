@@ -12,6 +12,7 @@ defmodule Temporal.CoreSdk.CoreRuntime do
   @type runtime_opts() :: [
           {:runtime_id, runtime_id()}
           | {:heartbeat_interval, Duration.duration()}
+          | {:engine, module()}
         ]
   @type t :: %__MODULE__{core: term()}
 
@@ -19,7 +20,7 @@ defmodule Temporal.CoreSdk.CoreRuntime do
 
   @spec start_link(runtime_opts() | keyword()) :: {:ok, pid()} | {:error, term()}
   def start_link(opts) do
-    {runtime_opts, server_opts} = Keyword.split(opts, [:runtime_id, :heartbeat_interval])
+    {runtime_opts, server_opts} = Keyword.split(opts, [:runtime_id, :engine, :heartbeat_interval])
 
     cond do
       !runtime_opts[:runtime_id] ->
@@ -44,9 +45,9 @@ defmodule Temporal.CoreSdk.CoreRuntime do
         :ok
     end
 
-    rt_opts = runtime_opts(heartbeat_interval: opts[:heartbeat_interval])
+    rt_opts = runtime_opts(id: "#{runtime_id}", heartbeat_interval: opts[:heartbeat_interval])
 
-    engine = Application.fetch_env!(:temporal, :engine)
+    engine = opts[:engine] || Application.fetch_env!(:temporal, :engine)
 
     with {:ok, core} <- engine.create_runtime(rt_opts) do
       :ets.insert(@runtime_store, {{:core, runtime_id}, core})

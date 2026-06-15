@@ -1,9 +1,12 @@
 defmodule Temporal.Worker.WorkerActivityManager do
   use GenServer
 
+  import TemporalEngine.Data.ActivityTask
+
   alias Temporal.Worker
   alias Temporal.Supervisor.ExecutionContext
   alias Temporal.Workflow.WorkflowActivityManager
+  alias TemporalEngine.Data.Payload
 
   require Logger
   require Record
@@ -39,7 +42,8 @@ defmodule Temporal.Worker.WorkerActivityManager do
   end
 
   def handle_call(
-        {:process_task, {_, {:start, activity_id, activity_type, opts}, token}},
+        {:process_task,
+         start_activity(activity_id: activity_id, activity_type: activity_type) = start},
         _from,
         state
       ) do
@@ -52,14 +56,14 @@ defmodule Temporal.Worker.WorkerActivityManager do
         arity
       end
 
-    input = opts.input
-    {:execution, workflow_id, run_id} = opts.workflow_execution
+    inputs = start_activity(start, :input) |> Enum.map(&Payload.value_from_record/1)
+    run(workflow_id: workflow_id, run_id: run_id) = start_activity(start, :workflow_execution)
 
     cond do
       !activity_fn ->
         {:reply, {:error, "Activity not found: #{inspect(activity_type)}"}, state}
 
-      activity_arity != Enum.count(input) + 1 ->
+      activity_arity != Enum.count(inputs) + 1 ->
         {:reply, {:error, "Activity of wrong arity: #{inspect(activity_type)}"}, state}
 
       true ->
@@ -76,15 +80,19 @@ defmodule Temporal.Worker.WorkerActivityManager do
             activity_type: activity_type,
             activity_id: activity_id,
             activity_fn: activity_fn,
-            activity_start: opts,
-            activity_task_token: token
+            activity_inputs: inputs,
+            activity_task_token: start_activity(start, :task_token)
         }
 
         {:reply, WorkflowActivityManager.start_or_restart_activity(exec_ctx), state}
     end
   end
 
-  def handle_call({:process_task, {_, {:cancel, reason, details}, _token}}, _from, state) do
+  def handle_call(
+        {:process_task, cancel_activity(reason: reason, details: details)},
+        _from,
+        state
+      ) do
     {reason, details} |> IO.inspect(label: "cancel-activity")
 
     {:reply, :ok, state}

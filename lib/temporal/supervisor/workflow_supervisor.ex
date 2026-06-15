@@ -6,7 +6,6 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
   alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Workflow.WorkflowExecutor
-  alias Temporal.Supervisor.ActivityList
   alias Temporal.Supervisor.ExecutionContext
 
   @type workflow_id :: String.t()
@@ -25,11 +24,9 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
   @impl true
   def init({exec_ctx, args}) do
     Process.set_label({:workflow_supervisor, exec_ctx.workflow_id})
-
     run_id = exec_ctx.run_id
 
     children = [
-      {ActivityList, [name: via_registry({:activities, run_id})]},
       {WorkflowFlowController, {exec_ctx, [name: via_registry({:flow_control, run_id})]}},
       {WorkflowProgressReporter,
        {exec_ctx, [name: via_registry({:progress_reporter, run_id}), shutdown: 5_000]}},
@@ -73,15 +70,6 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
       {:ok, pid}
     else
       {:error, :flow_control_not_running}
-    end
-  end
-
-  @spec activities_sup_for_id(run_id()) :: {:ok, term()} | {:error, term()}
-  def activities_sup_for_id(run_id) do
-    if pid = GenServer.whereis(via_registry({:activities, run_id})) do
-      {:ok, pid}
-    else
-      {:error, "Activity list not found for worker (#{inspect(run_id)})"}
     end
   end
 

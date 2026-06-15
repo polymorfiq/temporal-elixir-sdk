@@ -1,9 +1,9 @@
+use crate::common::SdkDuration;
 use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
 use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::worker::{WorkerDeploymentOptions, WorkerDeploymentVersion};
 use temporalio_sdk_core::Worker;
-use crate::common::SdkDuration;
 
 pub struct ElixirWorker {
     #[allow(dead_code)]
@@ -63,7 +63,7 @@ impl From<WorkerDeploymentOptions> for SdkWorkerDeploymentOpts {
 pub enum SdkDeploymentVersioningBehavior {
     Unspecified = 0,
     Pinned = 1,
-    AutoUpgrade = 2
+    AutoUpgrade = 2,
 }
 
 impl Into<i32> for SdkDeploymentVersioningBehavior {
@@ -92,7 +92,7 @@ impl From<VersioningBehavior> for SdkDeploymentVersioningBehavior {
         match intent {
             VersioningBehavior::Unspecified => Self::Unspecified,
             VersioningBehavior::Pinned => Self::Pinned,
-            VersioningBehavior::AutoUpgrade => Self::AutoUpgrade
+            VersioningBehavior::AutoUpgrade => Self::AutoUpgrade,
         }
     }
 }
@@ -102,7 +102,7 @@ impl Into<VersioningBehavior> for SdkDeploymentVersioningBehavior {
         match self {
             Self::Unspecified => VersioningBehavior::Unspecified,
             Self::Pinned => VersioningBehavior::Pinned,
-            Self::AutoUpgrade => VersioningBehavior::AutoUpgrade
+            Self::AutoUpgrade => VersioningBehavior::AutoUpgrade,
         }
     }
 }

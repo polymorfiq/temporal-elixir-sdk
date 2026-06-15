@@ -61,7 +61,7 @@ defmodule TemporalEngine.Data.Payload do
   def record_from_value({:etf, val}),
     do:
       payload(
-        data: val,
+        data: :erlang.term_to_binary(val),
         metadata: %{"encoding" => "application/x-erlang-term"}
       )
 

@@ -1,16 +1,19 @@
 defmodule Temporal.Activity.ActivityProgressReporter do
   use GenServer
 
-  alias Temporal.Supervisor.ActivitySupervisor
-
   require Logger
   require Record
+
+  import TemporalEngine.Data.ActivityTaskCompletion
+
+  alias Temporal.Supervisor.ActivitySupervisor
+  alias TemporalEngine.Data.Payload
 
   Record.defrecordp(:progress_state, [
     :activity_id,
     :task_token,
     :runtime,
-    :worker
+    :core_worker
   ])
 
   @type progress_state() :: term()
@@ -33,22 +36,22 @@ defmodule Temporal.Activity.ActivityProgressReporter do
        activity_id: exec_ctx.activity_id,
        task_token: exec_ctx.activity_task_token,
        runtime: exec_ctx.runtime,
-       worker: exec_ctx.worker
+       core_worker: exec_ctx.core_worker
      )}
   end
 
   @spec report_success(pid, term()) :: :ok | {:error, term()}
   def report_success(pid, result),
-    do: GenServer.call(pid, {:report_success, result}, :infinity)
+    do: GenServer.call(pid, {:report_success, Payload.record_from_value(result)}, :infinity)
 
   def handle_call({:report_success, result}, _from, state) do
     task_token = progress_state(state, :task_token)
-    worker = progress_state(state, :worker)
+    core_worker = progress_state(state, :core_worker)
 
     resp =
       TemporalEngine.Worker.complete_activity_task(
-        worker,
-        {:activity, :completed, result, task_token}
+        core_worker.core,
+        task_completed(payload: result, task_token: task_token)
       )
 
     {:reply, resp, state, {:continue, :stop_activity}}

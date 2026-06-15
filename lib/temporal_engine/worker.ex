@@ -29,4 +29,8 @@ defprotocol TemporalEngine.Worker do
 
   @spec finalize_shutdown(t()) :: :ok | {:error, reason :: term()}
   def finalize_shutdown(worker)
+
+  @doc "A unique identifier for the worker"
+  @spec id(t()) :: String.t()
+  def id(worker)
 end

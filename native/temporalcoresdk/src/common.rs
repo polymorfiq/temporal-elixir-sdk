@@ -47,7 +47,7 @@ impl Into<core::time::Duration> for SdkDuration {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Shared.Timestamp"]
+#[module = "TemporalEngineNif.Data.Timestamp"]
 pub struct SdkTimestamp {
     seconds: i64,
     nanos: i32,
@@ -188,7 +188,7 @@ impl From<temporalio_sdk_client::Priority> for SdkPriority {
         Self {
             priority_key: match external.priority_key {
                 None => None,
-                Some(val) => Some(val as i32)
+                Some(val) => Some(val as i32),
             },
             fairness_key: external.fairness_key,
             fairness_weight: external.fairness_weight,
@@ -211,7 +211,7 @@ impl Into<temporalio_sdk_client::Priority> for SdkPriority {
         temporalio_sdk_client::Priority {
             priority_key: match self.priority_key {
                 None => None,
-                Some(val) => Some(val as u32)
+                Some(val) => Some(val as u32),
             },
             fairness_key: self.fairness_key,
             fairness_weight: self.fairness_weight,
@@ -220,7 +220,7 @@ impl Into<temporalio_sdk_client::Priority> for SdkPriority {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "Temporal.Comms.Shared.RetryPolicy"]
+#[module = "TemporalEngineNif.Data.RetryPolicy"]
 pub struct SdkRetryPolicy {
     pub initial_interval: Option<SdkDuration>,
     pub backoff_coefficient: f64,

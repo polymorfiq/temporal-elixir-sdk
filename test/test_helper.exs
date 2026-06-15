@@ -1,4 +1,5 @@
 ExUnit.start()
+TemporalEngine.Mock.Storage.initialize!()
 
 defmodule ChannelHelpers do
   defmacro __using__(_opts) do

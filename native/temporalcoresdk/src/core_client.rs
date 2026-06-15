@@ -1,7 +1,7 @@
+use crate::common::SdkDuration;
 use rustler::{NifStruct, Resource};
 use std::collections::HashMap;
 use temporalio_sdk_client::Client;
-use crate::common::SdkDuration;
 
 pub struct ElixirClient {
     pub client: Client,

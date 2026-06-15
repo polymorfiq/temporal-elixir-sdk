@@ -21,10 +21,10 @@ defmodule TemporalEngineNif.Data.WorkflowStartOptions do
   ]
 
   alias TemporalEngineNif.Data
-  alias Temporal.Comms.Payload
-  alias Temporal.Comms.Shared.Duration
-  alias Temporal.Comms.Shared.Priority
-  alias Temporal.Comms.Shared.RetryPolicy
+  alias TemporalEngineNif.Data.Payload
+  alias TemporalEngineNif.Data.Duration
+  alias TemporalEngineNif.Data.Priority
+  alias TemporalEngineNif.Data.RetryPolicy
 
   @type id_conflict_policy :: :unspecified | :fail | :use_existing | :terminate_existing
   @type id_reuse_policy ::

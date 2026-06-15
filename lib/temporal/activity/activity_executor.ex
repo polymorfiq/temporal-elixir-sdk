@@ -5,14 +5,13 @@ defmodule Temporal.Activity.ActivityExecutor do
   require Record
   alias Temporal.Activity.ActivityProgressReporter
   alias Temporal.Activity.ActivityContext
-  alias Temporal.Comms.Payload
   alias Temporal.Supervisor.ActivitySupervisor
 
   Record.defrecordp(:activity_state, [
     :activity_id,
     :activity_type,
     :activity_fn,
-    :start,
+    :activity_inputs,
     :exec_ctx
   ])
 
@@ -33,7 +32,7 @@ defmodule Temporal.Activity.ActivityExecutor do
        activity_id: exec_ctx.activity_id,
        activity_type: exec_ctx.activity_type,
        activity_fn: exec_ctx.activity_fn,
-       start: exec_ctx.activity_start,
+       activity_inputs: exec_ctx.activity_inputs,
        exec_ctx: exec_ctx
      ), {:continue, :execute}}
   end
@@ -43,12 +42,11 @@ defmodule Temporal.Activity.ActivityExecutor do
       "Activity started (Type: #{activity_state(state, :activity_type)}, ID: #{activity_state(state, :activity_id)})"
     )
 
-    start = activity_state(state, :start)
     activity_fn = activity_state(state, :activity_fn)
     ctx = ActivityContext.new(activity_state(state, :exec_ctx))
+    inputs = activity_state(state, :activity_inputs)
 
-    inputs = Enum.map(start[:input] || [], &Payload.to_value/1)
-    resp = apply(activity_fn, [ctx] ++ inputs)
+    resp = apply(activity_fn, [ctx | inputs])
 
     {:noreply, state, {:continue, {:complete, resp}}}
   end

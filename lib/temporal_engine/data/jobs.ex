@@ -8,7 +8,7 @@ defmodule TemporalEngine.Data.Jobs do
   alias TemporalEngine.Data.RetryPolicy
   alias TemporalEngine.Data.Timestamp
 
-  @type job :: initialize_workflow() | fire_timer() | resolve_activity()
+  @type job :: initialize_workflow() | fire_timer() | resolve_activity() | remove_from_cache()
 
   Record.defrecord(:initialize_workflow, [
     :workflow_type,
@@ -37,6 +37,9 @@ defmodule TemporalEngine.Data.Jobs do
     root_workflow: nil,
     priority: nil
   ])
+
+  @initialize_workflow_fields @__records__[:initialize_workflow]
+  def initialize_workflow_fields, do: @initialize_workflow_fields
 
   @type initialize_workflow ::
           record(:initialize_workflow,

@@ -220,4 +220,8 @@ defprotocol TemporalEngine.Client do
 
   Record.defrecord(:internal_cb, [:data, links: []])
   @type internal_cb :: record(:internal_cb, data: binary(), links: [link()])
+
+  @doc "A unique identifier for the client"
+  @spec id(t()) :: String.t()
+  def id(client)
 end

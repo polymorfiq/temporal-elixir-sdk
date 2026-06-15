@@ -14,4 +14,11 @@ defmodule TemporalEngineNif.Data.WorkflowExecution do
   def to_record(%__MODULE__{workflow_id: workflow_id, run_id: run_id}) do
     run(workflow_id: workflow_id, run_id: run_id)
   end
+
+  @spec from_record(Jobs.run() | nil) :: t() | nil
+  def from_record(nil), do: nil
+
+  def from_record(run(workflow_id: workflow_id, run_id: run_id)) do
+    %__MODULE__{workflow_id: workflow_id, run_id: run_id}
+  end
 end

@@ -1,7 +1,7 @@
 defmodule Temporal.Workflow.WorkflowExecutor do
   use GenServer
 
-  alias Temporal.Comms.Payload
+  alias TemporalEngine.Data.Payload
   alias Temporal.Supervisor.WorkflowSupervisor
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Workflow.WorkflowContext
@@ -15,8 +15,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
     :worker_id,
     :module,
     :exec_ctx,
-    :args,
-    :initialize
+    :args
   ])
 
   def start_link({exec_ctx, args, server_opts}) do
@@ -38,8 +37,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
        workflow_id: exec_ctx.workflow_id,
        worker_id: exec_ctx.worker_id,
        module: exec_ctx.workflow_module,
-       exec_ctx: exec_ctx,
-       initialize: exec_ctx.workflow_initialize
+       exec_ctx: exec_ctx
      ), {:continue, :execute}}
   end
 
@@ -54,7 +52,7 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(run_id),
          {:ok, ctx} <- WorkflowContext.new(exec_ctx) do
-      inputs = Enum.map(workflow_state(state, :args), &Payload.to_value/1)
+      inputs = Enum.map(workflow_state(state, :args), &Payload.value_from_record/1)
 
       case apply(mod, :execute, [ctx] ++ inputs) do
         {:ok, result} ->
