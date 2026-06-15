@@ -330,7 +330,7 @@ defmodule Temporal.TaskQueue do
           header: opts[:header],
           static_summary: opts[:static_summary],
           static_details: opts[:static_details]
-        ) |> IO.inspect(label: "sending...")
+        )
 
       with {:ok, core_client} <- CoreClient.existing_for_identity(queue.client.identity),
            :ok <- validate_workflow_inputs(workflow_name, inputs) do
