@@ -38,7 +38,7 @@ defmodule Temporal.Supervisor.ClientSupervisor do
       DynamicSupervisor.which_children(workers_sup)
       |> Enum.each(fn
         {_, worker_sup, :supervisor, _} ->
-          Supervisor.stop(worker_sup, :shutdown, :infinity)
+          DynamicSupervisor.terminate_child(workers_sup, worker_sup)
           :ok
 
         _ ->
