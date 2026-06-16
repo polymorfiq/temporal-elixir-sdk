@@ -12,6 +12,8 @@ defmodule Temporal.Workflow do
   alias Temporal.Workflow.WorkflowContext
   alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
+  alias Temporal.Workflow.WorkflowQueryExecutor
+  alias Temporal.Supervisor.ExecutionContext
   alias Temporal.Supervisor.WorkflowSupervisor
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
@@ -59,6 +61,13 @@ defmodule Temporal.Workflow do
 
   @returned_error_type "_Temporal::ReturnedError"
   def returned_error_type, do: @returned_error_type
+
+  @spec query_handler(ctx :: ExecutionContext.t(), name :: String.t(), qry_fn :: fun()) :: :ok
+  def query_handler(ctx, name, qry_fn) do
+    with {:ok, executor} <- WorkflowSupervisor.query_executor_pid(ctx.run_id) do
+      WorkflowQueryExecutor.set_handler(executor, name, qry_fn)
+    end
+  end
 
   @spec result(workflow_exec_handle(), get_results_opts()) ::
           {:ok, TemporalEngine.Data.Payload.t()} | {:error, ResultError.t() | term()}

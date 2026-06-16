@@ -50,6 +50,7 @@ defmodule WorkflowHelpers do
     with {:ok, worker} <- worker_resp do
       :ok = Worker.register_workflow(worker, TestWorkflows.ActivitiesWithAwait)
       :ok = Worker.register_workflow(worker, TestWorkflows.TimerWithAwait)
+      :ok = Worker.register_workflow(worker, TestWorkflows.Queries)
 
       :ok =
         Worker.register_workflow(

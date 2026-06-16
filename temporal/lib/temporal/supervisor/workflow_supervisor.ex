@@ -6,6 +6,7 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
   alias Temporal.Workflow.WorkflowFlowController
   alias Temporal.Workflow.WorkflowProgressReporter
   alias Temporal.Workflow.WorkflowExecutor
+  alias Temporal.Workflow.WorkflowQueryExecutor
   alias Temporal.Supervisor.ExecutionContext
 
   @type workflow_id :: String.t()
@@ -31,6 +32,7 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
       {WorkflowProgressReporter,
        {exec_ctx, [name: via_registry({:progress_reporter, run_id}), shutdown: 5_000]}},
       {WorkflowContext, {exec_ctx, [name: via_registry({:context, run_id})]}},
+      {WorkflowQueryExecutor, {exec_ctx, [name: via_registry({:query_executor, run_id})]}},
       {WorkflowExecutor, {exec_ctx, args, [name: via_registry({:executor, run_id})]}}
     ]
 
@@ -44,6 +46,15 @@ defmodule Temporal.Supervisor.WorkflowSupervisor do
     spawn(fn ->
       Supervisor.stop(sup, :shutdown, 60_000)
     end)
+  end
+
+  @spec query_executor_pid(run_id()) :: {:ok, term()} | {:error, term()}
+  def query_executor_pid(run_id) do
+    if pid = GenServer.whereis(via_registry({:query_executor, run_id})) do
+      {:ok, pid}
+    else
+      {:error, :progress_reporter_not_running}
+    end
   end
 
   @spec progress_reporter_pid(run_id()) :: {:ok, term()} | {:error, term()}
