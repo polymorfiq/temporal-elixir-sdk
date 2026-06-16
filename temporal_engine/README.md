@@ -3,15 +3,15 @@
 This is the set of protocols, data structures and behaviors that facilitate communication of Elixir-based Temporal Frontends (Workflow Definitions, Runtimes...) with a Temporal Backend service (Core NIF, Pure Erlang/Elixir gRPC..)
 
 ### Sample Usage
-- [Temporal Elixir SDK Samples](https://github.com/polymorfiq/temporal-elixir-sdk-samples)
+- [Temporal Elixir SDK Samples](../temporal_samples)
 
 ### Known Frontends
 
-- [Temporal Elixir SDK](https://github.com/polymorfiq/temporal-elixir-sdk)
+- [Temporal Elixir SDK](../temporal)
 
 ### Known Backends
 
-- [Temporal Engine NIF](https://github.com/polymorfiq/temporal-engine-nif)
+- [Temporal Engine NIF](../temporal_engine_nif)
 
 ## Installation
 

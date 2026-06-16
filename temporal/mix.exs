@@ -36,20 +36,8 @@ defmodule Temporal.MixProject do
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
-    temporal_libs =
-      if System.get_env("LOCAL_TEMPORAL") == "1" do
-        [
-          {:temporal_engine, "~> 0.1.0", path: "../temporal_engine", override: true}
-        ]
-      else
-        [
-          {:temporal_engine, "~> 0.1.0",
-           github: "polymorfiq/temporal-engine-elixir", ref: "d21511b"}
-        ]
-      end
-
-    temporal_libs ++
       [
+        {:temporal_engine, "~> 0.1.0", path: "../temporal_engine"},
         {:nimble_options, "~> 1.1"},
         {:ex_doc, "~> 0.21", only: :dev, runtime: false},
         {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}

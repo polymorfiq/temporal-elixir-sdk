@@ -62,8 +62,8 @@ defmodule Temporal.Supervisor.ActivitySupervisor do
     end
   end
 
-  @spec process_name(activity_id :: String.t()) :: {:via, atom(), term()}
-  def process_name(activity_id), do: via_registry({:activity, activity_id})
+  @spec process_name(run_id :: String.t(), activity_id :: String.t()) :: {:via, atom(), term()}
+  def process_name(run_id, activity_id), do: via_registry({:activity, run_id, activity_id})
 
   defp via_registry(name), do: {:via, Registry, {ActivityRegistry, name}}
 end

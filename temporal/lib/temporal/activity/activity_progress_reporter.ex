@@ -10,6 +10,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
   alias TemporalEngine.Data.Payload
 
   Record.defrecordp(:progress_state, [
+    :run_id,
     :activity_id,
     :task_token,
     :runtime,
@@ -33,6 +34,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
 
     {:ok,
      progress_state(
+      run_id: exec_ctx.run_id,
        activity_id: exec_ctx.activity_id,
        task_token: exec_ctx.activity_task_token,
        runtime: exec_ctx.runtime,
@@ -58,8 +60,9 @@ defmodule Temporal.Activity.ActivityProgressReporter do
   end
 
   def handle_continue(:stop_activity, state) do
+    run_id = progress_state(state, :run_id)
     activity_id = progress_state(state, :activity_id)
-    ActivitySupervisor.stop_activity(activity_id)
+    ActivitySupervisor.stop_activity(run_id, activity_id)
 
     {:noreply, state}
   end

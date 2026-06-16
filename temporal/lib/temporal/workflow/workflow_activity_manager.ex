@@ -42,7 +42,7 @@ defmodule Temporal.Workflow.WorkflowActivityManager do
           :ok
 
         {:error, {:already_started, _}} ->
-          ActivitySupervisor.stop_activity(exec_ctx.run_id, wait: true)
+          ActivitySupervisor.stop_activity(exec_ctx.run_id, exec_ctx.activity_id, wait: true)
           start_or_restart_activity(exec_ctx)
 
         {:error, err} ->

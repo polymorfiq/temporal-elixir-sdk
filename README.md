@@ -1,10 +1,10 @@
 # Temporal Elixir SDK
 
-This is a Frontend library that, when paired through the [Temporal Engine](https://github.com/polymorfiq/temporal-engine) protocols to a [Temporal Backend library](https://github.com/polymorfiq/temporal-engine-nif), becomes the Temporal Elixir SDK.
+This is a Frontend library that, when paired through the [Temporal Engine](/temporal_engine) protocols to a [Temporal Backend library](/temporal_engine_nif), becomes the Temporal Elixir SDK.
 
 This is in active development and this README will be updated when it is ready for general use.
 
-Here is a [repository of examples](https://github.com/polymorfiq/temporal-elixir-sdk-samples) for using the SDK, that will be expanded as I continue building out the features and building tests!
+Here is a [project of example Workflows](/temporal_samples) for using the SDK, that will be expanded as I continue building out the features and building tests!
 
 # Installation
 
@@ -12,8 +12,8 @@ Here is a [repository of examples](https://github.com/polymorfiq/temporal-elixir
 defp deps do
   [
     ...
-    {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", branch: "main"}
-    {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", branch: "main"}
+    {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", branch: "main", subdir: "temporal"}
+    {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", branch: "main", subdir: "temporal_engine_nif"}
   ]
 end
 ```
