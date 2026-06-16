@@ -22,77 +22,77 @@ defmodule TemporalEngine.Data.Commands do
   @type start_timer ::
           record(:start_timer, seq: pos_integer(), start_to_fire_timeout: Duration.t())
 
-  deftype :my_schedule_activity do
-    @required true
-    @type seq :: pos_integer()
+  deftype :schedule_activity do
+    @structdoc """
+    Tells Temporal Server that the Workflow needs to execute an Activity to complete its steps.
+    """
 
-    @required true
-    @doc "The activity ID for the scheduled activity."
-    @type activity_id :: String.t()
+    @doc "Lang’s incremental sequence number, used as the operation identifier"
+    @type seq :: required :: pos_integer()
 
-    @required true
-    @type activity_type :: String.t()
+    @type activity_id :: required :: String.t()
 
-    @required true
-    @type task_queue :: String.t()
+    @type activity_type :: required :: String.t()
 
-    @required true
+    @doc "The name of the task queue to place this activity request in"
+    @type task_queue :: required :: String.t()
+
     @doc "These headers represent this, this and this"
-    @type headers :: %{String.t() => Payload.payload()}
+    @type headers :: required :: %{String.t() => Payload.payload()}
 
-    @required true
-    @type arguments :: [Payload.payload()]
+    @doc "Arguments/input to the activity. Called “input” upstream."
+    @type arguments :: required :: [Payload.payload()]
 
     @doc """
-    This is a test. One two, three...
+    Indicates how long the caller is willing to wait for an activity completion.
+    Limits how long retries will be attempted. Either this or `start_to_close_timeout` must be specified.
+
+    When not specified defaults to the workflow execution timeout.
     """
     @type schedule_to_close_timeout :: Duration.t()
+
+    @doc """
+    Limits time an activity task can stay in a task queue before a worker picks it up.
+    This timeout is always non retryable as all a retry would achieve is to put it back into the same queue.
+
+    Defaults to schedule_to_close_timeout or workflow execution timeout if not specified.
+    """
     @type schedule_to_start_timeout :: Duration.t()
+
+    @doc """
+    Maximum time an activity is allowed to execute after a pick up by a worker. This timeout is always retryable. Either this or schedule_to_close_timeout must be specified.
+    """
     @type start_to_close_timeout :: Duration.t()
+
+    @doc "Maximum time allowed between successful worker heartbeats."
     @type heartbeat_timeout :: Duration.t()
+
+    @doc """
+    Activities are provided by a default retry policy controlled through the service dynamic configuration.
+    Retries are happening up to schedule_to_close_timeout.
+
+    To disable retries set `retry_policy.maximum_attempts` to 1.
+    """
     @type retry_policy :: RetryPolicy.policy()
-    @type cancellation_type :: cancellation_type()
+
+    @doc "Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed"
+    @default :: :try_cancel
+    @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
+
+    @doc """
+    If set, the worker will not tell the service that it can immediately start executing this activity.
+
+    When unset/default, workers will always attempt to do so if activity execution slots are available.
+    """
     @type do_not_eagerly_execute :: bool()
-    @type versioning_intent :: versioning_intent()
+
+    @doc "Whether this activity should run on a worker with a compatible build id or not."
+    @default :: :unspecified
+    @type versioning_intent :: :unspecified | :compatible | :default
+
+    @doc "The Priority to use for this activity"
     @type priority :: Priority.priority()
   end
-
-  Record.defrecord(:schedule_activity, [
-    :seq,
-    :activity_id,
-    :activity_type,
-    :task_queue,
-    arguments: [],
-    cancellation_type: :try_cancel,
-    do_not_eagerly_execute: false,
-    headers: %{},
-    versioning_intent: :unspecified,
-    schedule_to_close_timeout: nil,
-    schedule_to_start_timeout: nil,
-    start_to_close_timeout: nil,
-    heartbeat_timeout: nil,
-    retry_policy: nil,
-    priority: nil
-  ])
-
-  @type schedule_activity ::
-          record(:schedule_activity,
-            seq: pos_integer(),
-            activity_id: String.t(),
-            activity_type: String.t(),
-            task_queue: String.t(),
-            headers: %{String.t() => Payload.payload()},
-            arguments: [Payload.payload()],
-            schedule_to_close_timeout: Duration.t() | nil,
-            schedule_to_start_timeout: Duration.t() | nil,
-            start_to_close_timeout: Duration.t() | nil,
-            heartbeat_timeout: Duration.t() | nil,
-            retry_policy: RetryPolicy.policy() | nil,
-            cancellation_type: cancellation_type(),
-            do_not_eagerly_execute: bool(),
-            versioning_intent: versioning_intent(),
-            priority: Priority.priority() | nil
-          )
 
   @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
   @type versioning_intent :: :unspecified | :compatible | :default
