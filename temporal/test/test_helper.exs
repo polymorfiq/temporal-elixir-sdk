@@ -1,38 +1,61 @@
 ExUnit.start()
 TemporalEngine.Mock.Storage.initialize!()
 
-defmodule ChannelHelpers do
-  defmacro __using__(_opts) do
-    quote do
-      defmacro assert_client_sends_completion(_ctx, pattern) do
-        quote do
-          assert_receive {:to_engine, :completion, unquote(pattern)}, 5000
-        end
-      end
+defmodule WorkflowHelpers do
+  use ExUnit.Case
 
-      defmacro assert_client_sends_commands(_ctx, cmd_patterns) do
-        Enum.map(cmd_patterns, fn pattern ->
-          quote do
-            assert_receive {:to_engine, :command, unquote(pattern)}, 5000
-          end
-        end)
-      end
+  alias TemporalEngine.Mock.Worker, as: WorkerMock
 
-      defmacro assert_engine_sends_jobs(_ctx, job_patterns) do
-        Enum.map(job_patterns, fn pattern ->
-          quote do
-            assert_receive {:to_client, :job, unquote(pattern)}, 5000
-          end
-        end)
-      end
+  def setup_client(ctx) do
+    alias Temporal.{Client, Runtime}
 
-      defmacro assert_engine_sends_activity_tasks(_ctx, task_patterns) do
-        Enum.map(task_patterns, fn pattern ->
-          quote do
-            assert_receive {:to_client, :activity_task, unquote(pattern)}, 5000
-          end
-        end)
-      end
+    # Connect to Temporal Server
+    {:ok, runtime} = Runtime.with_id(System.unique_integer(), engine: TemporalEngine.Mock.Engine)
+    {:ok, client} = Client.new("localhost:7233", runtime: runtime, identity: ctx.task_queue)
+    on_exit(fn -> Client.stop(client) end)
+    on_exit(fn -> Runtime.stop(runtime) end)
+
+    Map.put(ctx, :client, client)
+  end
+
+  def setup_worker(ctx) do
+    alias Temporal.{TaskQueue, Worker}
+    queue = TaskQueue.new(ctx.client, ctx.task_queue)
+
+    worker_opts = Map.get(ctx, :worker_opts, [])
+
+    worker_resp =
+      Worker.new(
+        queue,
+        [
+          max_cached_workflows: 100,
+          deployment_options: [
+            version: [build_id: "0.1.0", deployment_name: "elixir-sdk"],
+            use_worker_versioning: false,
+            default_versioning_behavior: nil
+          ],
+          task_types: [
+            enable_workflows: true,
+            enable_local_activities: true,
+            enable_remote_activities: true
+          ],
+          tuner: [
+            workflow_slot_supplier: [fixed_size: 10],
+            activity_slot_supplier: [fixed_size: 10],
+            local_activity_slot_supplier: [fixed_size: 10]
+          ]
+        ] ++ worker_opts
+      )
+
+    with {:ok, worker} <- worker_resp do
+      :ok = Worker.register_workflow(worker, TestWorkflows.ActivitiesWithAwait)
+      :ok = Worker.register_workflow(worker, TestWorkflows.TimerWithAwait)
+      {:ok, mocked_worker} = WorkerMock.mocked_for_id(worker.id)
+
+      on_exit(fn -> Worker.shutdown(worker) end)
+      %{queue: queue, worker: worker, mocked_worker: mocked_worker}
+    else
+      {:error, err} -> {:error, err}
     end
   end
 end

@@ -1,27 +1,29 @@
 defmodule Temporal.Workflows.CoreTest do
   use ExUnit.Case
-  use ChannelHelpers
-
-  require TestWorkflows.ActivitiesWithAwait
 
   import TemporalEngine.Data.Activation
   import TemporalEngine.Data.Commands
   import TemporalEngine.Data.Jobs
+  import TemporalEngine.Data.ActivationCompletion
   import TemporalEngine.Data.ActivityTask
   import TemporalEngine.Data.ActivityTaskCompletion
 
-  alias Temporal.{Client, Runtime, TaskQueue, Worker}
+  alias Temporal.TaskQueue
   alias TestWorkflows.ActivitiesWithAwait
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Mock.Worker, as: WorkerMock
 
-  setup_all [:setup_worker]
+  setup_all [
+    :configure_task_queue,
+    {WorkflowHelpers, :setup_client},
+    {WorkflowHelpers, :setup_worker}
+  ]
 
   test "can simulate a workflow", ctx do
     TaskQueue.start_workflow(
       ctx.queue,
-      unique_name("core-test"),
+      "simulate-workflow",
       ActivitiesWithAwait,
       ["Testing"],
       id_conflict_policy: :terminate_existing
@@ -83,50 +85,5 @@ defmodule Temporal.Workflows.CoreTest do
     WorkerMock.send_commands(ctx.mocked_worker, run_id, [])
   end
 
-  def setup_worker(ctx) do
-    {:ok, runtime} = Runtime.with_id("#{__MODULE__}", engine: TemporalEngine.Mock.Engine)
-    {:ok, client} = Client.new("localhost:7233", runtime: runtime, identity: "#{__MODULE__}")
-
-    queue = TaskQueue.new(client, "#{__MODULE__}")
-
-    {:ok, worker} =
-      Worker.new(queue,
-        max_cached_workflows: 100,
-        deployment_options: [
-          version: [build_id: "#{__MODULE__}", deployment_name: "elixir-test"],
-          use_worker_versioning: false,
-          default_versioning_behavior: nil
-        ],
-        task_types: [
-          enable_workflows: true,
-          enable_local_activities: true,
-          enable_remote_activities: true
-        ],
-        tuner: [
-          workflow_slot_supplier: [fixed_size: 10],
-          activity_slot_supplier: [fixed_size: 10],
-          local_activity_slot_supplier: [fixed_size: 10]
-        ]
-      )
-
-    Worker.register_workflow(worker, ActivitiesWithAwait)
-
-    {:ok, mocked_worker} = WorkerMock.mocked_for_id(worker.id)
-
-    on_exit(fn -> Worker.shutdown(worker) end)
-    on_exit(fn -> Client.stop(client) end)
-    on_exit(fn -> Runtime.stop(runtime) end)
-
-    Map.merge(ctx, %{
-      client: client,
-      runtime: runtime,
-      queue: queue,
-      worker: worker,
-      mocked_worker: mocked_worker
-    })
-  end
-
-  defp unique_name(base_name) do
-    "#{base_name}-#{System.unique_integer([:monotonic])}"
-  end
+  defp configure_task_queue(_), do: %{task_queue: "#{__MODULE__}"}
 end
