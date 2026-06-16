@@ -8,6 +8,7 @@ defmodule Temporal.Activity.ActivityExecutor do
   alias Temporal.Supervisor.ActivitySupervisor
 
   Record.defrecordp(:activity_state, [
+    :run_id,
     :activity_id,
     :activity_type,
     :activity_fn,
@@ -29,6 +30,7 @@ defmodule Temporal.Activity.ActivityExecutor do
 
     {:ok,
      activity_state(
+       run_id: exec_ctx.run_id,
        activity_id: exec_ctx.activity_id,
        activity_type: exec_ctx.activity_type,
        activity_fn: exec_ctx.activity_fn,
@@ -51,12 +53,21 @@ defmodule Temporal.Activity.ActivityExecutor do
     {:noreply, state, {:continue, {:complete, resp}}}
   end
 
-  def handle_continue({:complete, {:ok, result}}, state) do
+  def handle_continue({:complete, output}, state) do
     activity_type = activity_state(state, :activity_type)
     activity_id = activity_state(state, :activity_id)
+    run_id = activity_state(state, :run_id)
 
-    with {:ok, reporter} <- ActivitySupervisor.progress_reporter_pid(activity_id) do
-      case ActivityProgressReporter.report_success(reporter, result) do
+    with {:ok, reporter} <- ActivitySupervisor.progress_reporter_pid(run_id, activity_id) do
+      resp = case output do
+        :ok -> ActivityProgressReporter.report_success(reporter, nil)
+
+         {:ok, result} -> ActivityProgressReporter.report_success(reporter, result)
+
+         {:error, err} -> ActivityProgressReporter.report_failure(reporter, err)
+      end
+
+      case resp do
         :ok ->
           Logger.debug(
             "Activity completion reported (Type: #{inspect(activity_type)}, ID: #{inspect(activity_id)})"

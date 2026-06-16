@@ -21,13 +21,13 @@ defmodule Temporal.Supervisor.ActivitySupervisor do
 
   @impl true
   def init(exec_ctx) do
-    Process.set_label({:activity_supervisor, exec_ctx.activity_id})
+    Process.set_label({:activity_supervisor, exec_ctx.run_id, exec_ctx.activity_id})
 
     children = [
-      {ActivityContext, {exec_ctx, [name: via_registry({:context, exec_ctx.activity_id})]}},
+      {ActivityContext, {exec_ctx, [name: via_registry({:context, exec_ctx.run_id, exec_ctx.activity_id})]}},
       {ActivityProgressReporter,
-       {exec_ctx, [name: via_registry({:progress_reporter, exec_ctx.activity_id})]}},
-      {ActivityExecutor, {exec_ctx, [name: via_registry({:executor, exec_ctx.activity_id})]}}
+       {exec_ctx, [name: via_registry({:progress_reporter, exec_ctx.run_id, exec_ctx.activity_id})]}},
+      {ActivityExecutor, {exec_ctx, [name: via_registry({:executor, exec_ctx.run_id, exec_ctx.activity_id})]}}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
@@ -53,9 +53,9 @@ defmodule Temporal.Supervisor.ActivitySupervisor do
     end
   end
 
-  @spec progress_reporter_pid(activity_id()) :: {:ok, term()} | {:error, term()}
-  def progress_reporter_pid(activity_id) do
-    if pid = GenServer.whereis(via_registry({:progress_reporter, activity_id})) do
+  @spec progress_reporter_pid(run_id :: String.t(), activity_id()) :: {:ok, term()} | {:error, term()}
+  def progress_reporter_pid(run_id, activity_id) do
+    if pid = GenServer.whereis(via_registry({:progress_reporter, run_id, activity_id})) do
       {:ok, pid}
     else
       {:error, :progress_reporter_not_running}

@@ -50,10 +50,17 @@ defmodule WorkflowHelpers do
     with {:ok, worker} <- worker_resp do
       :ok = Worker.register_workflow(worker, TestWorkflows.ActivitiesWithAwait)
       :ok = Worker.register_workflow(worker, TestWorkflows.TimerWithAwait)
+
+      :ok =
+        Worker.register_workflow(
+          worker,
+          {TestWorkflows.Activities, [:workflow_with_long_activity]}
+        )
+
       {:ok, mocked_worker} = WorkerMock.mocked_for_id(worker.id)
 
       on_exit(fn -> Worker.shutdown(worker) end)
-      %{queue: queue, worker: worker, mocked_worker: mocked_worker}
+      %{queue: queue, worker: mocked_worker}
     else
       {:error, err} -> {:error, err}
     end

@@ -1,9 +1,10 @@
 defmodule Temporal.Workflows.BasicTest do
   use ExUnit.Case
 
+  require TemporalEngine.Data.ActivationCompletion
+
   import TemporalEngine.Data.Jobs
   import TemporalEngine.Data.Commands
-  import TemporalEngine.Data.ActivationCompletion
 
   alias Temporal.TaskQueue
   alias TestWorkflows.ActivitiesWithAwait
@@ -16,17 +17,17 @@ defmodule Temporal.Workflows.BasicTest do
     {WorkflowHelpers, :setup_worker}
   ]
 
-  test "should send the correct messages at the correct time", ctx do
+  test "should send the correct messages at the correct time", %{queue: queue, worker: worker} do
     TaskQueue.start_workflow(
-      ctx.queue,
+      queue,
       "sends-basic-messages",
       ActivitiesWithAwait,
       ["Testing"],
       id_conflict_policy: :terminate_existing
     )
 
-    WorkerMock.forward_sent_commands(ctx.mocked_worker)
-    WorkerMock.forward_received_jobs(ctx.mocked_worker)
+    WorkerMock.forward_sent_commands(worker)
+    WorkerMock.forward_received_jobs(worker)
 
     assert_receive {:job, initialize_workflow(arguments: ["Testing"])}, 1000
 
@@ -63,7 +64,7 @@ defmodule Temporal.Workflows.BasicTest do
     assert_receive {:command, complete_workflow_execution(result: "Hello, Testing2!")}, 1000
     assert_receive {:job, remove_from_cache(reason: :workflow_execution_ending)}, 1000
 
-    WorkerMock.forward_sent_completions(ctx.mocked_worker)
+    WorkerMock.forward_sent_completions(worker)
 
     assert_receive {:completion,
                     ActivationCompletion.completion(

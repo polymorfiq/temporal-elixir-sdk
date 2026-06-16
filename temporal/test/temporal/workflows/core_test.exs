@@ -1,10 +1,11 @@
 defmodule Temporal.Workflows.CoreTest do
   use ExUnit.Case
 
+  require TemporalEngine.Data.ActivationCompletion
+
   import TemporalEngine.Data.Activation
   import TemporalEngine.Data.Commands
   import TemporalEngine.Data.Jobs
-  import TemporalEngine.Data.ActivationCompletion
   import TemporalEngine.Data.ActivityTask
   import TemporalEngine.Data.ActivityTaskCompletion
 
@@ -20,20 +21,20 @@ defmodule Temporal.Workflows.CoreTest do
     {WorkflowHelpers, :setup_worker}
   ]
 
-  test "can simulate a workflow", ctx do
+  test "can simulate a workflow", %{worker: worker, queue: queue} do
     TaskQueue.start_workflow(
-      ctx.queue,
+      queue,
       "simulate-workflow",
       ActivitiesWithAwait,
       ["Testing"],
       id_conflict_policy: :terminate_existing
     )
 
-    WorkerMock.forward_sent_commands(ctx.mocked_worker)
-    WorkerMock.forward_received_jobs(ctx.mocked_worker)
-    WorkerMock.forward_received_activations(ctx.mocked_worker)
-    WorkerMock.forward_received_activity_tasks(ctx.mocked_worker)
-    WorkerMock.set_silence_engine(ctx.mocked_worker, true)
+    WorkerMock.forward_sent_commands(worker)
+    WorkerMock.forward_received_jobs(worker)
+    WorkerMock.forward_received_activations(worker)
+    WorkerMock.forward_received_activity_tasks(worker)
+    WorkerMock.set_silence_engine(worker, true)
 
     {:ok, run_id} =
       receive do
@@ -45,12 +46,12 @@ defmodule Temporal.Workflows.CoreTest do
 
     assert_receive {:job, initialize_workflow()}, 1000
 
-    WorkerMock.send_commands(ctx.mocked_worker, run_id, [
+    WorkerMock.send_commands(worker, run_id, [
       schedule_activity(
         seq: 1,
         activity_id: "my-activity",
         activity_type: "my-activity-type",
-        task_queue: ctx.queue.queue_name,
+        task_queue: queue.queue_name,
         arguments: [],
         schedule_to_close_timeout: Duration.from_tuple({5, :seconds})
       )
@@ -66,7 +67,7 @@ defmodule Temporal.Workflows.CoreTest do
       end
 
     WorkerMock.send_activity_task_completion(
-      ctx.mocked_worker,
+      worker,
       task_completed(payload: Payload.record_from_value("My test"), task_token: task_token)
     )
 
@@ -77,12 +78,12 @@ defmodule Temporal.Workflows.CoreTest do
                     )},
                    1000
 
-    WorkerMock.send_commands(ctx.mocked_worker, run_id, [
+    WorkerMock.send_commands(worker, run_id, [
       complete_workflow_execution(result: Payload.record_from_value("Workflow output"))
     ])
 
     assert_receive {:job, remove_from_cache(reason: :workflow_execution_ending)}, 1000
-    WorkerMock.send_commands(ctx.mocked_worker, run_id, [])
+    WorkerMock.send_commands(worker, run_id, [])
   end
 
   defp configure_task_queue(_), do: %{task_queue: "#{__MODULE__}"}

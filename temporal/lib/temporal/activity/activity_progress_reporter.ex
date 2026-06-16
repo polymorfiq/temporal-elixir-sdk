@@ -5,6 +5,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
   require Record
 
   import TemporalEngine.Data.ActivityTaskCompletion
+  import TemporalEngine.Data.Failure
 
   alias Temporal.Supervisor.ActivitySupervisor
   alias TemporalEngine.Data.Payload
@@ -34,7 +35,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
 
     {:ok,
      progress_state(
-      run_id: exec_ctx.run_id,
+       run_id: exec_ctx.run_id,
        activity_id: exec_ctx.activity_id,
        task_token: exec_ctx.activity_task_token,
        runtime: exec_ctx.runtime,
@@ -46,6 +47,10 @@ defmodule Temporal.Activity.ActivityProgressReporter do
   def report_success(pid, result),
     do: GenServer.call(pid, {:report_success, Payload.record_from_value(result)}, :infinity)
 
+  @spec report_failure(pid, term()) :: :ok | {:error, term()}
+  def report_failure(pid, result),
+      do: GenServer.call(pid, {:report_failure, Payload.record_from_value(result)}, :infinity)
+
   def handle_call({:report_success, result}, _from, state) do
     task_token = progress_state(state, :task_token)
     core_worker = progress_state(state, :core_worker)
@@ -54,6 +59,19 @@ defmodule Temporal.Activity.ActivityProgressReporter do
       TemporalEngine.Worker.complete_activity_task(
         core_worker.core,
         task_completed(payload: result, task_token: task_token)
+      )
+
+    {:reply, resp, state, {:continue, :stop_activity}}
+  end
+
+  def handle_call({:report_failure, err}, _from, state) do
+    task_token = progress_state(state, :task_token)
+    core_worker = progress_state(state, :core_worker)
+
+    resp =
+      TemporalEngine.Worker.complete_activity_task(
+        core_worker.core,
+        task_failed(failure: failure(message: "#{inspect(err)}"), task_token: task_token)
       )
 
     {:reply, resp, state, {:continue, :stop_activity}}
