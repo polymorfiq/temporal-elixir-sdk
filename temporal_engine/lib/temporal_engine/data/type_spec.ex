@@ -78,7 +78,7 @@ defmodule TemporalEngine.Data.TypeSpec do
           """
       end)
 
-    map_ast = {:%{}, [], Enum.map(fields_to_types, fn {k, v} -> {k, v} end)}
+    map_ast = {:%, [], [{:__MODULE__, [], Elixir}, {:%{}, [], Enum.map(fields_to_types, fn {k, v} -> {k, v} end)}]}
 
     quote do
       @typedoc unquote(~s|#{structdoc}\n\n---\n\n#{Enum.join(fields_to_docs, "\n\n")}|)
