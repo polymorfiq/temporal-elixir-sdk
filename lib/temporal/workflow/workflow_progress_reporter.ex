@@ -8,6 +8,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
   import TemporalEngine.Data.Jobs
   import TemporalEngine.Data.Priority, only: [priority: 1]
   import TemporalEngine.Data.RetryPolicy, only: [policy: 1]
+  import TemporalEngine.Data.Timestamp, only: [timestamp: 1]
 
   alias Temporal.Worker
   alias TemporalEngine.Data.Payload
@@ -239,9 +240,191 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                               ]
                             )
 
+  @schedule_local_activity_schema NimbleOptions.new!(
+                                    attempt: [
+                                      default: 1,
+                                      type: :pos_integer,
+                                      doc:
+                                        "Local activities can start with a non-1 attempt, if lang has been told to backoff using a timer before retrying. It should pass the attempt number from a DoBackoff activity resolution."
+                                    ],
+                                    original_schedule_time: [
+                                      required: false,
+                                      type: :any,
+                                      type_doc: "`t:DateTime.t/0`",
+                                      doc:
+                                        "If this local activity is a retry (as per the attempt field) this needs to be the original scheduling time (as provided in DoBackoff)"
+                                    ],
+                                    schedule_to_close_timeout: [
+                                      required: false,
+                                      type:
+                                        {:tuple,
+                                         [
+                                           :pos_integer,
+                                           {:in,
+                                            [
+                                              :weeks,
+                                              :days,
+                                              :hours,
+                                              :minutes,
+                                              :seconds,
+                                              :millseconds
+                                            ]}
+                                         ]},
+                                      type_doc:
+                                        "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                      doc:
+                                        "Indicates how long the caller is willing to wait for local activity completion. Limits how long retries will be attempted. When not specified defaults to the workflow execution timeout (which may be unset)."
+                                    ],
+                                    schedule_to_start_timeout: [
+                                      required: false,
+                                      type:
+                                        {:tuple,
+                                         [
+                                           :pos_integer,
+                                           {:in,
+                                            [
+                                              :weeks,
+                                              :days,
+                                              :hours,
+                                              :minutes,
+                                              :seconds,
+                                              :millseconds
+                                            ]}
+                                         ]},
+                                      type_doc:
+                                        "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                      doc:
+                                        "Limits time the local activity can idle internally before being executed. That can happen if the worker is currently at max concurrent local activity executions. This timeout is always non retryable as all a retry would achieve is to put it back into the same queue. Defaults to `schedule_to_close_timeout` if not specified and that is set. Must be <= `schedule_to_close_timeout` when set, otherwise, it will be clamped down."
+                                    ],
+                                    start_to_close_timeout: [
+                                      required: false,
+                                      type:
+                                        {:tuple,
+                                         [
+                                           :pos_integer,
+                                           {:in,
+                                            [
+                                              :weeks,
+                                              :days,
+                                              :hours,
+                                              :minutes,
+                                              :seconds,
+                                              :millseconds
+                                            ]}
+                                         ]},
+                                      type_doc:
+                                        "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                      doc:
+                                        "Maximum time the local activity is allowed to execute after the task is dispatched. This timeout is always retryable. Either or both of `schedule_to_close_timeout` and this must be specified. If set, this must be <= `schedule_to_close_timeout`, otherwise, it will be clamped down."
+                                    ],
+                                    local_retry_threshold: [
+                                      required: false,
+                                      type:
+                                        {:tuple,
+                                         [
+                                           :pos_integer,
+                                           {:in,
+                                            [
+                                              :weeks,
+                                              :days,
+                                              :hours,
+                                              :minutes,
+                                              :seconds,
+                                              :millseconds
+                                            ]}
+                                         ]},
+                                      type_doc:
+                                        "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                      doc:
+                                        "If the activity is retrying and backoff would exceed this value, lang will be told to schedule a timer and retry the activity after. Otherwise, backoff will happen internally in core. Defaults to 1 minute."
+                                    ],
+                                    retry_policy: [
+                                      required: false,
+                                      type: :keyword_list,
+                                      doc:
+                                        "Specify a retry policy for the local activity. By default local activities will be retried indefinitely.",
+                                      keys: [
+                                        initial_interval: [
+                                          required: false,
+                                          type:
+                                            {:tuple,
+                                             [
+                                               :pos_integer,
+                                               {:in,
+                                                [
+                                                  :weeks,
+                                                  :days,
+                                                  :hours,
+                                                  :minutes,
+                                                  :seconds,
+                                                  :millseconds
+                                                ]}
+                                             ]},
+                                          type_doc:
+                                            "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                          doc:
+                                            "Interval of the first retry. If retryBackoffCoefficient is 1.0 then it is used for all retries."
+                                        ],
+                                        backoff_coefficient: [
+                                          default: 2.0,
+                                          type: :float,
+                                          doc:
+                                            "Coefficient used to calculate the next retry interval. The next retry interval is previous interval multiplied by the coefficient. Must be 1 or larger."
+                                        ],
+                                        maximum_interval: [
+                                          required: false,
+                                          type:
+                                            {:tuple,
+                                             [
+                                               :pos_integer,
+                                               {:in,
+                                                [
+                                                  :weeks,
+                                                  :days,
+                                                  :hours,
+                                                  :minutes,
+                                                  :seconds,
+                                                  :millseconds
+                                                ]}
+                                             ]},
+                                          type_doc:
+                                            "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                          doc:
+                                            "Maximum interval between retries. Exponential backoff leads to interval increase. This value is the cap of the increase. Default is 100x of the initial interval."
+                                        ],
+                                        maximum_attempts: [
+                                          default: 0,
+                                          type: :pos_integer,
+                                          doc:
+                                            "Maximum number of attempts. When exceeded the retries stop even if not expired yet. 1 disables retries. 0 means unlimited (up to the timeouts)"
+                                        ],
+                                        non_retryable_error_types: [
+                                          default: [],
+                                          type: {:list, :string},
+                                          doc:
+                                            "Non-Retryable errors types. Will stop retrying if the error type matches this list. Note that this is not a substring match, the error type (not message) must match exactly."
+                                        ]
+                                      ]
+                                    ],
+                                    cancellation_type: [
+                                      default: :try_cancel,
+                                      type:
+                                        {:in,
+                                         [:try_cancel, :wait_cancellation_completed, :abandon]},
+                                      type_doc:
+                                        "`:try_cancel` | `:wait_cancellation_completed` | `:abandon`",
+                                      doc:
+                                        "Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed"
+                                    ]
+                                  )
+
   @typedoc "Supported options:\n#{NimbleOptions.docs(@schedule_activity_schema)}"
   @type schedule_activity_opts ::
           unquote(NimbleOptions.option_typespec(@schedule_activity_schema))
+
+  @typedoc "Supported options:\n#{NimbleOptions.docs(@schedule_local_activity_schema)}"
+  @type schedule_local_activity_opts ::
+          unquote(NimbleOptions.option_typespec(@schedule_local_activity_schema))
 
   @type priority_opts :: [
           {:priority_key, integer()} | {:fairness_key, String.t()} | {:fairness_weight, float()}
@@ -299,6 +482,55 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                   fairness_weight: priority[:fairness_weight]
                 )
             )
+        )
+
+      GenServer.call(reporter, {:command, command}, :infinity)
+    end
+  end
+
+  @spec schedule_local_activity(
+          pid(),
+          activity_type :: String.t(),
+          args :: [term()],
+          schedule_local_activity_opts()
+        ) :: :ok | {:error, term()}
+  def schedule_local_activity(reporter, activity_type, args, opts \\ []) do
+    with {:ok, opts} <- NimbleOptions.validate(opts, @schedule_local_activity_schema) do
+      command =
+        schedule_local_activity(
+          activity_type: activity_type,
+          attempt: opts[:attempt],
+          original_schedule_time:
+            if(dt = opts[:original_schedule_time],
+              do:
+                timestamp(
+                  seconds: DateTime.to_unix(dt, :second),
+                  nanos: Integer.mod(DateTime.to_unix(dt, :nanosecond), 1_000_000_000)
+                )
+            ),
+          arguments: Enum.map(args, &Payload.record_from_value/1),
+          schedule_to_close_timeout:
+            if(tm = opts[:schedule_to_close_timeout], do: Duration.from_tuple(tm)),
+          schedule_to_start_timeout:
+            if(tm = opts[:schedule_to_start_timeout], do: Duration.from_tuple(tm)),
+          start_to_close_timeout:
+            if(tm = opts[:start_to_close_timeout], do: Duration.from_tuple(tm)),
+          local_retry_threshold:
+            if(tm = opts[:local_retry_threshold], do: Duration.from_tuple(tm)),
+          retry_policy:
+            if(policy = opts[:retry_policy],
+              do:
+                policy(
+                  initial_interval:
+                    if(tm = policy[:initial_interval], do: Duration.from_tuple(tm)),
+                  backoff_coefficient: policy[:backoff_coefficient],
+                  maximum_interval:
+                    if(tm = policy[:maximum_interval], do: Duration.from_tuple(tm)),
+                  maximum_attempts: policy[:maximum_attempts],
+                  non_retryable_error_types: policy[:non_retryable_error_types]
+                )
+            ),
+          cancellation_type: opts[:cancellation_type]
         )
 
       GenServer.call(reporter, {:command, command}, :infinity)
@@ -398,6 +630,23 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
      )}
   end
 
+  def handle_call({:command, schedule_local_activity() = cmd}, _from, state) do
+    next_seq = progress_state(state, :next_seq)
+    activity_id = "#{next_seq}"
+
+    cmd =
+      schedule_local_activity(cmd,
+        seq: next_seq,
+        activity_id: "#{next_seq}"
+      )
+
+    {:reply, {:ok, activity_id},
+     progress_state(state,
+       command_batch: progress_state(state, :command_batch) ++ [cmd],
+       next_seq: next_seq + 1
+     )}
+  end
+
   def handle_call({:process_activation, activation(run_id: run_id) = activation}, _from, state) do
     jobs = activation(activation, :jobs)
 
@@ -411,8 +660,10 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
       WorkflowFlowController.will_resolutions_unlock?(
         run_id,
         Enum.map(activity_resolve_jobs, fn resolve_activity(seq: seq) ->
-          schedule_activity(activity_id: activity_id) = sequences[seq]
-          activity_id
+          case sequences[seq] do
+            schedule_activity(activity_id: activity_id) -> activity_id
+            schedule_local_activity(activity_id: activity_id) -> activity_id
+          end
         end)
       )
 
@@ -548,17 +799,17 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     run_id = progress_state(state, :run_id)
 
     Enum.each(activities, fn resolve_activity(seq: seq) ->
-      cmd = sequences[seq]
+      case sequences[seq] do
+        schedule_activity(activity_id: activity_id, activity_type: activity_type) ->
+          Logger.debug("Job: resolve_activity (#{activity_type} - #{activity_id}) for #{run_id}")
 
-      Logger.debug(
-        "Job: resolve_activity (#{schedule_activity(cmd, :activity_type)} - #{schedule_activity(cmd, :activity_id)}) for #{run_id}"
-      )
+        schedule_local_activity(activity_id: activity_id, activity_type: activity_type) ->
+          Logger.debug("Job: resolve_activity (#{activity_type} - #{activity_id}) for #{run_id}")
+      end
     end)
 
     results =
       Enum.map(activities, fn resolve_activity(seq: seq, result: result) ->
-        activity = sequences[seq]
-
         output =
           case result do
             activity_completed(result: value) ->
@@ -576,7 +827,13 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                 "TODO: Local Activity backoff (https://docs.rs/temporalio-common/0.4.0/temporalio_common/protos/coresdk/activity_result/struct.DoBackoff.html) not yet implemented."}}
           end
 
-        {schedule_activity(activity, :activity_id), output}
+        case sequences[seq] do
+          schedule_activity() = activity ->
+            {schedule_activity(activity, :activity_id), output}
+
+          schedule_local_activity() = activity ->
+            {schedule_local_activity(activity, :activity_id), output}
+        end
       end)
 
     with {:ok, flow_control} <- WorkflowSupervisor.flow_control_pid(run_id),
@@ -627,6 +884,13 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     state =
       Enum.reduce(commands, state, fn
         schedule_activity(seq: seq) = cmd, state ->
+          sequences = progress_state(state, :sequences)
+
+          progress_state(state,
+            sequences: Map.put(sequences, seq, cmd)
+          )
+
+        schedule_local_activity(seq: seq) = cmd, state ->
           sequences = progress_state(state, :sequences)
 
           progress_state(state,

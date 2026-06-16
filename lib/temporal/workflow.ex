@@ -313,6 +313,61 @@ defmodule Temporal.Workflow do
     end
   end
 
+  @spec execute_local_activity(WorkflowContext.t(), term(), [term()], activity_exec_opts()) ::
+          {:ok, ActivityExecHandle.t()} | {:error, term()}
+  def execute_local_activity(%WorkflowContext{} = ctx, activity_type, args \\ [], opts \\ []) do
+    args =
+      if is_list(args) do
+        args
+      else
+        [args]
+      end
+
+    activity_valid =
+      cond do
+        is_binary(activity_type) ->
+          :ok
+
+        is_function(activity_type) ->
+          {:name, function_name} = Function.info(activity_type, :name)
+          {:arity, arity} = Function.info(activity_type, :arity)
+
+          if arity == Enum.count(args) + 1 do
+            :ok
+          else
+            {:error, "Wrong number of arguments passed to activity (#{function_name}/#{arity})"}
+          end
+
+        is_atom(activity_type) ->
+          :ok
+      end
+
+    with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(ctx.run_id),
+         :ok <- activity_valid do
+      activity_type =
+        Keyword.get_lazy(opts, :name, fn ->
+          Activity.name_for_type(activity_type)
+        end)
+
+      with {:ok, activity_id} <-
+             WorkflowProgressReporter.schedule_local_activity(
+               reporter,
+               activity_type,
+               args,
+               Map.new(opts)
+             ) do
+        {:ok,
+         %ActivityExecHandle{
+           activity_id: activity_id,
+           activity_type: activity_type,
+           run_id: ctx.run_id,
+           workflow_id: ctx.workflow_id,
+           is_local: true
+         }}
+      end
+    end
+  end
+
   @spec start(
           TaskQueue.t(),
           workflow_id :: String.t(),
