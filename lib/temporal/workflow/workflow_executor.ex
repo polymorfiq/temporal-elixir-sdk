@@ -1,14 +1,14 @@
 defmodule Temporal.Workflow.WorkflowExecutor do
   use GenServer
 
-  require TemporalEngine.Data.Failure
+  import TemporalEngine.Data.Failure
 
   alias TemporalEngine.Data.Payload
   alias Temporal.Supervisor.WorkflowSupervisor
-  alias Temporal.Workflow.WorkflowProgressReporter
+  alias Temporal.Workflow
+  alias Temporal.Workflow.WorkflowProgressReporter, as: Reporter
   alias Temporal.Workflow.WorkflowContext
   alias TemporalEngine.Data.Duration
-  alias TemporalEngine.Data.Failure
 
   require Logger
   require Record
@@ -68,17 +68,17 @@ defmodule Temporal.Workflow.WorkflowExecutor do
               "Workflow finished (ID: #{workflow_state(state, :workflow_id)}, Run ID: #{workflow_state(state, :id)} -> Reporting Completion..."
             )
 
-            :ok = WorkflowProgressReporter.report_completed_success(reporter, result)
+            :ok = Reporter.report_completed_success(reporter, result)
 
-          {:error, Failure.application(details: details) = err} ->
+          {:error, application(details: details) = err} ->
             :ok =
-              WorkflowProgressReporter.report_completed_failure(reporter,
+              Reporter.report_completed_failure(reporter,
                 message: "Specific Application Error Returned... Check 'info'.",
                 info:
-                  Failure.application(err,
+                  application(err,
                     details: Enum.map(details, &Payload.record_from_value/1),
                     next_retry_delay:
-                      if(d = Failure.application(err, :next_retry_delay),
+                      if(d = application(err, :next_retry_delay),
                         do: Duration.from_tuple(d)
                       )
                   )
@@ -86,11 +86,11 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
           {:error, err} ->
             :ok =
-              WorkflowProgressReporter.report_completed_failure(reporter,
+              Reporter.report_completed_failure(reporter,
                 message: "Returned error from workflow function",
                 info:
-                  Failure.application(
-                    failure_type: Temporal.Workflow.returned_error_type(),
+                  application(
+                    failure_type: Workflow.returned_error_type(),
                     details: [Payload.record_from_value(err)]
                   )
               )
@@ -102,10 +102,10 @@ defmodule Temporal.Workflow.WorkflowExecutor do
           )
 
           :ok =
-            WorkflowProgressReporter.report_completed_failure(reporter,
+            Reporter.report_completed_failure(reporter,
               message: Exception.message(e),
               stack_trace: "#{Exception.format_stacktrace(__STACKTRACE__)}",
-              info: Failure.application(failure_type: Atom.to_string(e.__struct__))
+              info: application(failure_type: Atom.to_string(e.__struct__))
             )
       end
 
