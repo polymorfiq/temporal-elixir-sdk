@@ -69,18 +69,22 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
             :ok = WorkflowProgressReporter.report_completed_success(reporter, result)
 
-          {:error, err} when is_binary(err) ->
+          {:error, Failure.application() = err} ->
             :ok =
               WorkflowProgressReporter.report_completed_failure(reporter,
-                message: err,
-                info: Failure.application(failure_type: "ReturnedError")
+                message: "Specific Application Error Returned... Check 'info'.",
+                info: err
               )
 
-          {:error, {err, info}} when is_binary(err) and is_tuple(info) ->
+          {:error, err} ->
             :ok =
               WorkflowProgressReporter.report_completed_failure(reporter,
-                message: err,
-                info: info
+                message: "Returned error from workflow function",
+                info:
+                  Failure.application(
+                    failure_type: Temporal.Workflow.returned_error_type(),
+                    details: [Payload.record_from_value(err)]
+                  )
               )
         end
       rescue
