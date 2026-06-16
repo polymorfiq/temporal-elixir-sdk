@@ -93,6 +93,16 @@ defmodule TemporalEngine.Data.Jobs do
   Record.defrecord(:fire_timer, [:seq])
   @type fire_timer :: record(:fire_timer, seq: pos_integer())
 
+  Record.defrecord(:query_workflow, [:query_id, :query_type, arguments: [], headers: %{}])
+
+  @type query_workflow ::
+          record(:query_workflow,
+            query_id: String.t(),
+            query_type: String.t(),
+            arguments: [Payload.payload()],
+            headers: %{String.t() => Payload.payload()}
+          )
+
   Record.defrecord(:resolve_activity, [:seq, :is_local, result: nil])
 
   @type resolve_activity ::

@@ -14,6 +14,13 @@ defmodule TemporalEngine.Mock.Worker do
     }
   end
 
+  def latest_run_id(handle) do
+    case :ets.lookup(TemporalEngine.Mock.Storage.set(), {:latest_run_id, handle.workflow_id}) do
+      [{_, run_id}] -> {:ok, run_id}
+      _ -> {:error, "No run_id found"}
+    end
+  end
+
   def mocked_for_id(id) do
     case :ets.lookup(TemporalEngine.Mock.Storage.set(), {:worker, id}) do
       [{_, mocked}] -> {:ok, mocked}
@@ -88,14 +95,28 @@ end
 
 defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
   alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Mock
 
   def id(worker) do
     "mocked(#{worker.real_id})"
   end
 
   def poll_workflow_activation(worker) do
+    import TemporalEngine.Data.Jobs
+    import TemporalEngine.Data.Activation
+
     resp =
       with {:ok, activation} <- TemporalEngine.Worker.poll_workflow_activation(worker.real_worker) do
+        activation(activation, :jobs)
+        |> Enum.each(fn
+          initialize_workflow(workflow_id: workflow_id) ->
+            run_id = activation(activation, :run_id)
+            :ets.insert(Mock.Storage.set(), {{:latest_run_id, workflow_id}, run_id})
+
+          _ ->
+            :ok
+        end)
+
         Registry.lookup(
           TemporalEngine.Mock.Registry,
           {:worker, worker.real_id, :received_activations}

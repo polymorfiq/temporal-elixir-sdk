@@ -27,7 +27,9 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   alias TemporalEngineNif.Data.WorkflowActivationCompletionFailureStatus, as: FailureResult
   alias TemporalEngineNif.Data.WorkflowCommand
   alias TemporalEngineNif.Data.WorkflowCommandScheduleActivity, as: ScheduleActivity
+  alias TemporalEngineNif.Data.WorkflowCommandRequestCancelActivity, as: RequestCancelActivity
   alias TemporalEngineNif.Data.WorkflowCommandScheduleLocalActivity, as: ScheduleLocalActivity
+  alias TemporalEngineNif.Data.WorkflowCommandRequestCancelLocalActivity, as: RequestCancelLocalActivity
   alias TemporalEngineNif.Data.WorkflowCommandStartTimer, as: StartTimer
 
   alias TemporalEngineNif.Data.WorkflowCommandCompleteWorkflowExecution,
@@ -204,6 +206,11 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
                           }}
                      }
 
+                   request_cancel_activity(seq: seq) ->
+                     %WorkflowCommand{
+                       variant: {:request_cancel_activity, %RequestCancelActivity{seq: seq}}
+                     }
+
                    schedule_local_activity() = cmd ->
                      %WorkflowCommand{
                        variant:
@@ -246,6 +253,11 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
                               RetryPolicy.from_record(schedule_local_activity(cmd, :retry_policy)),
                             cancellation_type: schedule_local_activity(cmd, :cancellation_type)
                           }}
+                     }
+
+                   request_cancel_local_activity(seq: seq) ->
+                     %WorkflowCommand{
+                       variant: {:request_cancel_local_activity, %RequestCancelLocalActivity{seq: seq}}
                      }
 
                    complete_workflow_execution(result: result) ->

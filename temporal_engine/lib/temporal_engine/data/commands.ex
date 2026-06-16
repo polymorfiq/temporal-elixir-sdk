@@ -1,5 +1,5 @@
 defmodule TemporalEngine.Data.Commands do
-  require Record
+  use TemporalEngine.Data.TypeSpec
 
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
@@ -21,6 +21,36 @@ defmodule TemporalEngine.Data.Commands do
 
   @type start_timer ::
           record(:start_timer, seq: pos_integer(), start_to_fire_timeout: Duration.t())
+
+  deftype :my_schedule_activity do
+    @required true
+    @type seq :: pos_integer()
+
+    @required true
+    @type activity_id :: String.t()
+
+    @required true
+    @type activity_type :: String.t()
+
+    @required true
+    @type task_queue :: String.t()
+
+    @required true
+    @type headers :: %{String.t() => Payload.payload()}
+
+    @required true
+    @type arguments :: [Payload.payload()]
+
+    @type schedule_to_close_timeout :: Duration.t()
+    @type schedule_to_start_timeout :: Duration.t()
+    @type start_to_close_timeout :: Duration.t()
+    @type heartbeat_timeout :: Duration.t()
+    @type retry_policy :: RetryPolicy.policy()
+    @type cancellation_type :: cancellation_type()
+    @type do_not_eagerly_execute :: bool()
+    @type versioning_intent :: versioning_intent()
+    @type priority :: Priority.priority()
+  end
 
   Record.defrecord(:schedule_activity, [
     :seq,

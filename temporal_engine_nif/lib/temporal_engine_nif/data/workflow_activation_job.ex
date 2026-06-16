@@ -24,6 +24,7 @@ defmodule TemporalEngineNif.Data.WorkflowActivationJob do
   def to_record(%__MODULE__{variant: {:initialize_workflow, job}}) do
     initialize_workflow(
       workflow_type: job.workflow_type,
+      workflow_id: job.workflow_id,
       arguments: Enum.map(job.arguments, &Payload.to_record/1),
       randomness_seed: job.randomness_seed,
       headers: job.headers,
@@ -77,6 +78,15 @@ defmodule TemporalEngineNif.Data.WorkflowActivationJob do
             )
         end,
       is_local: job.is_local
+    )
+  end
+
+  def to_record(%__MODULE__{variant: {:query_workflow, job}}) do
+    query_workflow(
+      query_id: job.query_id,
+      query_type: job.query_type,
+      arguments: job.arguments |> Enum.map(&Payload.to_record/1),
+      headers: job.headers |> Map.new(fn {k, v} -> {k, Payload.to_record(v)} end)
     )
   end
 
