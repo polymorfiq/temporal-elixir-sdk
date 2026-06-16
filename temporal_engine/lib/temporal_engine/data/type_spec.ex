@@ -32,9 +32,19 @@ defmodule TemporalEngine.Data.TypeSpec do
         end
       )
 
-    fields = Enum.filter(extracted, & &1.field) |> Enum.map(& &1.field[:type_name]) |> Enum.map(& elem(&1, 0))
+    fields =
+      Enum.filter(extracted, & &1.field)
+      |> Enum.map(& &1.field[:type_name])
+      |> Enum.map(&elem(&1, 0))
 
-    fields_to_types = Enum.filter(extracted, & &1.field) |> Enum.map(& {elem(&1.field[:type_name], 0), &1.field[:type_spec]})
+    fields_to_types =
+      Enum.filter(extracted, & &1.field)
+      |> Enum.map(
+        &{
+          elem(&1.field[:type_name], 0),
+          if(&1[:require], do: &1.field[:typespec], else: {:|, [], [&1.field[:typespec], nil]})
+        }
+      )
 
     quote do
       @type unquote({name, [], nil}) ::
