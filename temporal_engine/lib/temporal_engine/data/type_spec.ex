@@ -46,10 +46,16 @@ defmodule TemporalEngine.Data.TypeSpec do
         }
       )
 
+    fields_to_docs =
+      Enum.filter(extracted, & &1[:doc])
+      |> Enum.map(&"- **`#{elem(&1.field[:type_name], 0)}`**\n\n\t#{&1.doc[:contents]}")
+
     quote do
+      @typedoc unquote(Enum.join(fields_to_docs, "\n"))
       @type unquote({name, [], nil}) ::
               record(unquote(name), unquote(fields_to_types))
 
+      @doc "See `t:#{unquote(name)}/0` for more details."
       Record.defrecord(unquote(name), unquote(fields))
     end
   end

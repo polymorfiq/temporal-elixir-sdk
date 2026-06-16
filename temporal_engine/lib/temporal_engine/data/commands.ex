@@ -27,6 +27,7 @@ defmodule TemporalEngine.Data.Commands do
     @type seq :: pos_integer()
 
     @required true
+    @doc "The activity ID for the scheduled activity."
     @type activity_id :: String.t()
 
     @required true
@@ -36,11 +37,15 @@ defmodule TemporalEngine.Data.Commands do
     @type task_queue :: String.t()
 
     @required true
+    @doc "These headers represent this, this and this"
     @type headers :: %{String.t() => Payload.payload()}
 
     @required true
     @type arguments :: [Payload.payload()]
 
+    @doc """
+    This is a test. One two, three...
+    """
     @type schedule_to_close_timeout :: Duration.t()
     @type schedule_to_start_timeout :: Duration.t()
     @type start_to_close_timeout :: Duration.t()
