@@ -1,5 +1,5 @@
 defmodule TemporalEngine.Data.Jobs do
-  require Record
+  use TemporalEngine.Data.TypeSpec
 
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
@@ -7,139 +7,235 @@ defmodule TemporalEngine.Data.Jobs do
   alias TemporalEngine.Data.Priority
   alias TemporalEngine.Data.RetryPolicy
   alias TemporalEngine.Data.Timestamp
+  alias TemporalEngine.Data.Jobs
 
   @type job :: initialize_workflow() | fire_timer() | resolve_activity() | remove_from_cache()
 
-  Record.defrecord(:initialize_workflow, [
-    :workflow_type,
-    :workflow_id,
-    :arguments,
-    :randomness_seed,
-    :headers,
-    :identity,
-    :continued_from_execution_run_id,
-    :continued_initiator,
-    :first_execution_run_id,
-    :attempt,
-    :cron_schedule,
-    parent_workflow_info: nil,
-    workflow_execution_timeout: nil,
-    workflow_run_timeout: nil,
-    workflow_task_timeout: nil,
-    continued_failure: nil,
-    last_completion_result: nil,
-    retry_policy: nil,
-    workflow_execution_expiration_time: nil,
-    cron_schedule_to_schedule_interval: nil,
-    memo: nil,
-    search_attributes: nil,
-    start_time: nil,
-    root_workflow: nil,
-    priority: nil
-  ])
+  deftype :initialize_workflow do
+    @structdoc "Initialize a new workflow"
 
-  @initialize_workflow_fields @__records__[:initialize_workflow]
-  def initialize_workflow_fields, do: @initialize_workflow_fields
+    @doc "The identifier the lang-specific sdk uses to execute workflow code"
+    @type workflow_type :: required :: String.t()
 
-  @type initialize_workflow ::
-          record(:initialize_workflow,
-            workflow_type: String.t(),
-            workflow_id: String.t(),
-            arguments: Payload.payload(),
-            randomness_seed: pos_integer(),
-            headers: %{String.t() => Payload.payload()},
-            identity: String.t(),
-            parent_workflow_info: namespaced_run() | nil,
-            workflow_execution_timeout: Duration.duration() | nil,
-            workflow_run_timeout: Duration.duration() | nil,
-            workflow_task_timeout: Duration.duration() | nil,
-            continued_from_execution_run_id: String.t(),
-            continued_initiator: integer(),
-            continued_failure: Failure.failure() | nil,
-            last_completion_result: Payload.payload() | nil,
-            first_execution_run_id: String.t(),
-            retry_policy: RetryPolicy.policy() | nil,
-            attempt: integer(),
-            cron_schedule: String.t(),
-            workflow_execution_expiration_time: Timestamp.timestamp() | nil,
-            cron_schedule_to_schedule_interval: Duration.duration() | nil,
-            memo: memo() | nil,
-            search_attributes: search_attribs() | nil,
-            start_time: Timestamp.timestamp() | nil,
-            root_workflow: run() | nil,
-            priority: Priority.priority() | nil
-          )
+    @doc "The workflow id used on the temporal server"
+    @type workflow_id :: required :: String.t()
 
-  Record.defrecord(:run, [:workflow_id, :run_id])
-  @type run :: record(:run, workflow_id: String.t(), run_id: String.t())
+    @doc "Inputs to the workflow code"
+    @default []
+    @type arguments :: required :: [Payload.payload()]
 
-  Record.defrecord(:namespaced_run, [:namespace, :workflow_id, :run_id])
+    @doc "The seed must be used to initialize the random generator used by SDK. `RandomSeedUpdatedAttributes` are used to deliver seed updates."
+    @type randomness_seed :: required :: pos_integer()
 
-  @type namespaced_run ::
-          record(:namespaced_run,
-            namespace: String.t(),
-            workflow_id: String.t(),
-            run_id: String.t()
-          )
+    @doc "Used to add metadata e.g. for tracing and auth, meant to be read and written to by interceptors."
+    @type headers :: required :: %{String.t() => Payload.payload()}
 
-  Record.defrecord(:memo, [:fields])
-  @type memo :: record(:memo, fields: %{String.t() => Payload.payload()})
+    @doc "Identity of the client who requested this execution"
+    @type identity :: required :: String.t()
 
-  Record.defrecord(:search_attribs, [:indexed_fields])
+    @doc "If this workflow is a child, information about the parent"
+    @type parent_workflow_info :: Jobs.namespaced_run()
 
-  @type search_attribs ::
-          record(:search_attribs, indexed_fields: %{String.t() => Payload.payload()})
+    @doc "Total workflow execution timeout including retries and continue as new."
+    @type workflow_execution_timeout :: Duration.duration()
 
-  Record.defrecord(:fire_timer, [:seq])
-  @type fire_timer :: record(:fire_timer, seq: pos_integer())
+    @doc "Timeout of a single workflow run."
+    @type workflow_run_timeout :: Duration.duration()
 
-  Record.defrecord(:query_workflow, [:query_id, :query_type, arguments: [], headers: %{}])
+    @doc "Timeout of a single workflow task."
+    @type workflow_task_timeout :: Duration.duration()
 
-  @type query_workflow ::
-          record(:query_workflow,
-            query_id: String.t(),
-            query_type: String.t(),
-            arguments: [Payload.payload()],
-            headers: %{String.t() => Payload.payload()}
-          )
+    @doc "Run id of the previous workflow which continued-as-new or retired or cron executed into this workflow, if any."
+    @type continued_from_execution_run_id :: required :: String.t()
 
-  Record.defrecord(:resolve_activity, [:seq, :is_local, result: nil])
+    @doc "If this workflow was a continuation, indicates the type of continuation."
+    @default :unspecified
+    @type continued_initiator :: required :: Jobs.continued_as_new_initiator()
 
-  @type resolve_activity ::
-          record(:resolve_activity,
-            seq: pos_integer(),
-            result: activity_status(),
-            is_local: bool()
-          )
+    @doc "If this workflow was a continuation and that continuation failed, the details of that."
+    @type continued_failure :: Failure.failure()
+
+    @doc "If this workflow was a continuation and that continuation completed, the details of that."
+    @type last_completion_result :: [Payload.payload()]
+
+    @doc "This is the very first run id the workflow ever had, following continuation chains."
+    @type first_execution_run_id :: required :: String.t()
+
+    @doc "This workflow’s retry policy"
+    @type retry_policy :: RetryPolicy.policy()
+
+    @doc "Starting at 1, the number of times we have tried to execute this workflow"
+    @type attempt :: required :: integer()
+
+    @doc "If this workflow runs on a cron schedule, it will appear here"
+    @type cron_schedule :: required :: String.t()
+
+    @doc "The absolute time at which the workflow will be timed out. This is passed without change to the next run/retry of a workflow."
+    @type workflow_execution_expiration_time :: Timestamp.timestamp()
+
+    @doc "For a cron workflow, this contains the amount of time between when this iteration of the cron workflow was scheduled and when it should run next per its cron_schedule."
+    @type cron_schedule_to_schedule_interval :: Duration.duration()
+
+    @doc "User-defined memo"
+    @type memo :: Jobs.memo()
+
+    @doc "Search attributes created/updated when this workflow was started"
+    @type search_attributes :: Jobs.search_attribs()
+
+    @doc "When the workflow execution started event was first written"
+    @type start_time :: Timestamp.timestamp()
+
+    @doc """
+    Contains information about the root workflow execution.
+    It is possible for the namespace to be different than this workflow if using OSS and cross-namespace children, but this information is not retained. Users should take care to track it by other means in such situations.
+
+    The root workflow execution is defined as follows:
+      1. A workflow without parent workflow is its own root workflow.
+      2. A workflow that has a parent workflow has the same root workflow as its parent workflow.
+
+    See field in `WorkflowExecutionStarted` for more detail.
+    """
+    @type root_workflow :: Jobs.run()
+
+    @doc "Priority of this workflow execution"
+    @type priority :: Priority.priority()
+  end
+
+  deftype :fire_timer do
+    @structdoc "Notify a workflow that a timer has fired"
+
+    @doc "Sequence number as provided by lang in the corresponding StartTimer command"
+    @type seq :: required :: pos_integer()
+  end
+
+  deftype :query_workflow do
+    @structdoc "Query a workflow"
+
+    @doc """
+    For `PollWFTResp` query field, this will be set to the special value legacy. For the queries field, the server provides a unique identifier.
+
+    If it is a legacy query, lang cannot issue any commands in response other than to answer the query.
+    """
+    @type query_id :: required :: String.t()
+
+    @doc "The query’s function/method/etc name"
+    @type query_type :: required :: String.t()
+
+    @default []
+    @type arguments :: required :: [Payload.payload()]
+
+    @doc "Headers attached to the query"
+    @default %{}
+    @type headers :: required :: %{String.t() => Payload.payload()}
+  end
+
+  deftype :resolve_activity do
+    @structdoc "Notify a workflow that an activity has been resolved"
+
+    @doc "Sequence number as provided by lang in the corresponding ScheduleActivity command"
+    @type seq :: required :: pos_integer()
+    @type result :: required :: Jobs.activity_status()
+
+    @doc """
+    Set to true if the resolution is for a local activity.
+
+    This is used internally by Core and lang does not need to care about it.
+    """
+    @type is_local :: required :: bool()
+  end
+
+  deftype :remove_from_cache do
+    @type reason :: required :: Jobs.cache_eviction_reason()
+    @type message :: required :: String.t()
+  end
+
+  @type continued_as_new_initiator :: :unspecified | :workflow | :retry | :cron_schedule
+
+  deftype :run do
+    @structdoc """
+    Identifies a specific workflow within a namespace. Practically speaking, because run_id is a uuid, a workflow execution is globally unique.
+
+    Note that many commands allow specifying an empty run id as a way of saying “target the latest run of the workflow”.
+    """
+
+    @type workflow_id :: required :: String.t()
+    @type run_id :: required :: String.t()
+  end
+
+  deftype :namespaced_run do
+    @structdoc "Identifying information about a particular workflow execution, including namespace"
+
+    @type namespace :: required :: String.t()
+    @type workflow_id :: required :: String.t()
+    @type run_id :: required :: String.t()
+  end
+
+  deftype :memo do
+    @structdoc "A user-defined set of unindexed fields that are exposed when listing/searching workflows"
+
+    @default %{}
+    @type fields :: required :: %{String.t() => Payload.payload()}
+  end
+
+  deftype :search_attribs do
+    @structdoc """
+    A user-defined set of indexed fields that are used/exposed when listing/searching workflows.
+
+    The payload is not serialized in a user-defined way.
+    """
+
+    @default %{}
+    @type indexed_fields :: required :: %{String.t() => Payload.payload()}
+  end
+
   @type activity_status ::
           activity_completed() | activity_failed() | activity_cancelled() | activity_backoff()
 
-  Record.defrecord(:activity_completed, [:result])
-  @type activity_completed :: record(:activity_completed, result: Payload.payload())
+  deftype :activity_completed do
+    @structdoc "Used to report successful completion either when executing or resolving"
 
-  Record.defrecord(:activity_failed, [:failure])
-  @type activity_failed :: record(:activity_failed, failure: Failure.failure())
+    @type result :: Payload.payload()
+  end
 
-  Record.defrecord(:activity_cancelled, [:failure])
-  @type activity_cancelled :: record(:activity_cancelled, failure: Failure.failure())
+  deftype :activity_failed do
+    @structdoc "Used to report activity failure either when executing or resolving"
 
-  Record.defrecord(:activity_backoff, [
-    :attempt,
-    backoff_duration: nil,
-    original_schedule_time: nil
-  ])
+    @type failure :: Failure.failure()
+  end
 
-  @type activity_backoff ::
-          record(:activity_backoff,
-            attempt: pos_integer(),
-            backoff_duration: Duration.duration() | nil,
-            original_schedule_time: Timestamp.timestamp() | nil
-          )
+  deftype :activity_cancelled do
+    @structdoc """
+    Used to report cancellation from both Core and Lang.
 
-  Record.defrecord(:remove_from_cache, [:message, :reason])
+    When Lang reports a cancelled activity, it must put a CancelledFailure in the failure field.
 
-  @type remove_from_cache ::
-          record(:remove_from_cache, message: String.t(), reason: cache_eviction_reason())
+    When Core reports a cancelled activity, it must put an ActivityFailure with CancelledFailure as the cause in the failure field.
+    """
+
+    @type failure :: Failure.failure()
+  end
+
+  deftype :activity_backoff do
+    @structdoc """
+    Issued when a local activity needs to retry but also wants to back off more than would be reasonable to WFT heartbeat for.
+
+    Lang is expected to schedule a timer for the duration and then start a local activity of the same type & same inputs with the provided attempt number after the timer has elapsed.
+
+    This exists because Core does not have a concept of starting commands by itself, they originate from lang. So expecting lang to start the timer / next pass of the activity fits more smoothly.
+    """
+
+    @doc """
+    The attempt number that lang should provide when scheduling the retry.
+
+    If the LA failed on attempt 4 and we told lang to back off with a timer, this number will be 5.
+    """
+    @type attempt :: required :: pos_integer()
+
+    @type backoff_duration :: Duration.duration()
+
+    @doc "The time the first attempt of this local activity was scheduled. Must be passed with attempt to the retry LA."
+    @type original_schedule_time :: Timestamp.timestamp()
+  end
 
   @type cache_eviction_reason ::
           :unspecified

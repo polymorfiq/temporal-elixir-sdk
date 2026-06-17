@@ -236,7 +236,7 @@ pub struct SdkActivationInitializeWorkflow {
     pub workflow_run_timeout: Option<SdkDuration>,
     pub workflow_task_timeout: Option<SdkDuration>,
     pub continued_from_execution_run_id: String,
-    pub continued_initiator: i32,
+    pub continued_initiator: SdkContinuedAsNewInitiator,
     pub continued_failure: Option<SdkWorkflowFailure>,
     pub last_completion_result: Option<SdkPayloads>,
     pub first_execution_run_id: String,
@@ -270,7 +270,7 @@ impl From<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWo
             workflow_run_timeout: external.workflow_run_timeout.try_into_or_none(),
             workflow_task_timeout: external.workflow_task_timeout.try_into_or_none(),
             continued_from_execution_run_id: external.continued_from_execution_run_id,
-            continued_initiator: external.continued_initiator,
+            continued_initiator: external.continued_initiator.into(),
             continued_failure: external.continued_failure.try_into_or_none(),
             last_completion_result: external.last_completion_result.try_into_or_none(),
             first_execution_run_id: external.first_execution_run_id,
@@ -310,7 +310,7 @@ impl Into<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWo
             workflow_run_timeout: self.workflow_run_timeout.try_into_or_none(),
             workflow_task_timeout: self.workflow_task_timeout.try_into_or_none(),
             continued_from_execution_run_id: self.continued_from_execution_run_id,
-            continued_initiator: self.continued_initiator,
+            continued_initiator: self.continued_initiator.into(),
             continued_failure: self.continued_failure.try_into_or_none(),
             last_completion_result: self.last_completion_result.try_into_or_none(),
             first_execution_run_id: self.first_execution_run_id,
@@ -328,6 +328,38 @@ impl Into<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWo
             start_time: self.start_time.try_into_or_none(),
             root_workflow: self.root_workflow.try_into_or_none(),
             priority: self.priority.try_into_or_none(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkContinuedAsNewInitiator {
+    Unspecified = 0,
+    Workflow = 1,
+    Retry = 2,
+    CronSchedule = 3
+}
+
+impl Into<i32> for SdkContinuedAsNewInitiator {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Workflow => 1,
+            Self::Retry => 2,
+            Self::CronSchedule => 3,
+        }
+    }
+}
+
+impl From<i32> for SdkContinuedAsNewInitiator {
+    fn from(intent: i32) -> SdkContinuedAsNewInitiator {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Workflow,
+            2 => Self::Retry,
+            3 => Self::CronSchedule,
+            _ => Self::Unspecified,
         }
     }
 }
