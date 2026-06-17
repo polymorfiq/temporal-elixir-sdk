@@ -146,7 +146,7 @@ defmodule TemporalEngine.Data.Commands do
     @type start_to_close_timeout :: Duration.t()
 
     @doc "Specify a retry policy for the local activity. By default local activities will be retried indefinitely."
-    @type retry_policy :: Duration.t()
+    @type retry_policy :: RetryPolicy.policy()
 
     @doc "If the activity is retrying and backoff would exceed this value, lang will be told to schedule a timer and retry the activity after. Otherwise, backoff will happen internally in core. Defaults to 1 minute."
     @type local_retry_threshold :: Duration.t()
