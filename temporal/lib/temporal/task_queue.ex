@@ -58,7 +58,7 @@ defmodule Temporal.TaskQueue do
                                  {:in, [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                ]},
                             type_doc:
-                              "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                              "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                             doc:
                               "Optionally set the execution timeout for the workflow https://docs.temporal.io/workflows/#workflow-execution-timeout"
                           ],
@@ -71,7 +71,7 @@ defmodule Temporal.TaskQueue do
                                  {:in, [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                ]},
                             type_doc:
-                              "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                              "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                             doc: "Optionally indicates the default run timeout for a workflow run"
                           ],
                           task_timeout: [
@@ -83,7 +83,7 @@ defmodule Temporal.TaskQueue do
                                  {:in, [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                ]},
                             type_doc:
-                              "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                              "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                             doc:
                               "Optionally indicates the default task timeout for a workflow run"
                           ],
@@ -118,7 +118,7 @@ defmodule Temporal.TaskQueue do
                                       [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                    ]},
                                 type_doc:
-                                  "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                  "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                 doc:
                                   "Interval of the first retry. If retryBackoffCoefficient is 1.0 then it is used for all retries."
                               ],
@@ -138,7 +138,7 @@ defmodule Temporal.TaskQueue do
                                       [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                    ]},
                                 type_doc:
-                                  "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                  "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                 doc:
                                   "Maximum interval between retries. Exponential backoff leads to interval increase. This value is the cap of the increase. Default is 100x of the initial interval."
                               ],

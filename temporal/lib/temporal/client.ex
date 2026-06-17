@@ -62,7 +62,7 @@ defmodule Temporal.Client do
                              # 100 ms wait by default.
                              default: {100, :milliseconds},
                              type_doc:
-                               "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)"
+                               "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)"
                            ],
                            # +-20% jitter.
                            randomization_factor: [type: :float, default: 0.2],
@@ -73,14 +73,14 @@ defmodule Temporal.Client do
                              type: {:tuple, [:pos_integer, {:in, [:seconds]}]},
                              default: {5, :seconds},
                              type_doc:
-                               "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)"
+                               "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)"
                            ],
                            # 10 seconds total allocated time for all retries.
                            max_elapsed_time: [
                              type: {:tuple, [:pos_integer, {:in, [:seconds]}]},
                              default: {10, :seconds},
                              type_doc:
-                               "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)"
+                               "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)"
                            ],
                            max_retries: [type: :pos_integer, default: 10]
                          ]
@@ -154,7 +154,7 @@ defmodule Temporal.Client do
                                   {:in, [:seconds, :milliseconds]}
                                 ]},
                              type_doc:
-                               "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)"
+                               "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)"
                            ],
                            timeout: [
                              default: {15, :seconds},
@@ -165,7 +165,7 @@ defmodule Temporal.Client do
                                   {:in, [:seconds, :milliseconds]}
                                 ]},
                              type_doc:
-                               "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)"
+                               "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)"
                            ]
                          ]
                        ],
@@ -206,7 +206,7 @@ defmodule Temporal.Client do
                                   {:in, [:seconds, :milliseconds]}
                                 ]},
                              type_doc:
-                               "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)"
+                               "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)"
                            ]
                          ]
                        ]

@@ -43,7 +43,7 @@ defmodule Temporal.Workflow do
   @type workflow_exec_handle() :: WorkflowExecHandle.t()
   @type get_results_opts() :: [
           {:follow_runs, bool()},
-          {:timeout, Duration.duration()}
+          {:timeout, Duration.shorthand()}
         ]
   @type activity_exec_opts ::
           [{:name, String.t()}] | WorkflowProgressReporter.schedule_activity_opts()
@@ -255,7 +255,7 @@ defmodule Temporal.Workflow do
     }
   end
 
-  @spec new_timer(WorkflowContext.t(), Duration.duration()) ::
+  @spec new_timer(WorkflowContext.t(), Duration.shorthand()) ::
           {:ok, TimerHandle.t()} | {:error, term()}
   def new_timer(%WorkflowContext{} = ctx, duration) do
     with {:ok, reporter} <- WorkflowSupervisor.progress_reporter_pid(ctx.run_id) do

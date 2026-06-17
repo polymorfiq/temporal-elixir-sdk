@@ -21,7 +21,7 @@ defmodule TemporalEngine.Data.Commands do
     @doc "Lang’s incremental sequence number, used as the operation identifier"
     @type seq :: required :: pos_integer()
 
-    @type start_to_fire_timeout :: Duration.t()
+    @type start_to_fire_timeout :: Duration.duration()
   end
 
   deftype :schedule_activity do
@@ -53,7 +53,7 @@ defmodule TemporalEngine.Data.Commands do
 
     When not specified defaults to the workflow execution timeout.
     """
-    @type schedule_to_close_timeout :: Duration.t()
+    @type schedule_to_close_timeout :: Duration.duration()
 
     @doc """
     Limits time an activity task can stay in a task queue before a worker picks it up.
@@ -61,15 +61,15 @@ defmodule TemporalEngine.Data.Commands do
 
     Defaults to schedule_to_close_timeout or workflow execution timeout if not specified.
     """
-    @type schedule_to_start_timeout :: Duration.t()
+    @type schedule_to_start_timeout :: Duration.duration()
 
     @doc """
     Maximum time an activity is allowed to execute after a pick up by a worker. This timeout is always retryable. Either this or schedule_to_close_timeout must be specified.
     """
-    @type start_to_close_timeout :: Duration.t()
+    @type start_to_close_timeout :: Duration.duration()
 
     @doc "Maximum time allowed between successful worker heartbeats."
-    @type heartbeat_timeout :: Duration.t()
+    @type heartbeat_timeout :: Duration.duration()
 
     @doc """
     Activities are provided by a default retry policy controlled through the service dynamic configuration.
@@ -127,7 +127,7 @@ defmodule TemporalEngine.Data.Commands do
     @type original_schedule_time :: Timestamp.timestamp()
 
     @doc "Indicates how long the caller is willing to wait for local activity completion. Limits how long retries will be attempted. When not specified defaults to the workflow execution timeout (which may be unset)."
-    @type schedule_to_close_timeout :: Duration.t()
+    @type schedule_to_close_timeout :: Duration.duration()
 
     @doc """
     Limits time the local activity can idle internally before being executed which can happen if the worker is currently at max concurrent local activity executions.
@@ -136,7 +136,7 @@ defmodule TemporalEngine.Data.Commands do
 
     Defaults to schedule_to_close_timeout if not specified and that is set. Must be `<= schedule_to_close_timeout` when set, otherwise, it will be clamped down.
     """
-    @type schedule_to_start_timeout :: Duration.t()
+    @type schedule_to_start_timeout :: Duration.duration()
 
     @doc """
     Maximum time the local activity is allowed to execute after the task is dispatched.
@@ -145,13 +145,13 @@ defmodule TemporalEngine.Data.Commands do
 
     If set, this must be <= schedule_to_close_timeout, otherwise, it will be clamped down.
     """
-    @type start_to_close_timeout :: Duration.t()
+    @type start_to_close_timeout :: Duration.duration()
 
     @doc "Specify a retry policy for the local activity. By default local activities will be retried indefinitely."
     @type retry_policy :: RetryPolicy.policy()
 
     @doc "If the activity is retrying and backoff would exceed this value, lang will be told to schedule a timer and retry the activity after. Otherwise, backoff will happen internally in core. Defaults to 1 minute."
-    @type local_retry_threshold :: Duration.t()
+    @type local_retry_threshold :: Duration.duration()
 
     @doc """
     Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed. Lang should default this to `WAIT_CANCELLATION_COMPLETED`, even though proto will default to `TRY_CANCEL` automatically.

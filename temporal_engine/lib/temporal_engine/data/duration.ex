@@ -1,14 +1,16 @@
 defmodule TemporalEngine.Data.Duration do
-  require Record
+  use TemporalEngine.Data.TypeSpec
 
-  Record.defrecord(:duration, [:seconds, :nanos])
-  @type t :: record(:duration, seconds: integer(), nanos: integer())
+  deftype :duration do
+    @type seconds :: required :: integer()
+    @type nanos :: required :: integer()
+  end
 
-  @type duration ::
+  @type shorthand ::
           {pos_integer(),
            :weeks | :days | :hours | :minutes | :seconds | :milliseconds | :microseconds}
 
-  @spec from_tuple(duration()) :: t()
+  @spec from_tuple(shorthand()) :: duration()
   def from_tuple({weeks, :weeks}) when is_integer(weeks),
     do: Duration.new!(week: weeks) |> from_native()
 
@@ -32,7 +34,7 @@ defmodule TemporalEngine.Data.Duration do
 
   def from_tuple(%Duration{} = duration), do: from_native(duration)
 
-  @spec to_tuple(t()) :: duration()
+  @spec to_tuple(duration()) :: shorthand()
   def to_tuple(duration(seconds: seconds, nanos: nanos)) do
     cond do
       nanos === 0 && Integer.mod(seconds, 86400 * 7) == 0 ->
@@ -58,7 +60,7 @@ defmodule TemporalEngine.Data.Duration do
     end
   end
 
-  @spec to_milliseconds(t()) :: integer
+  @spec to_milliseconds(duration()) :: integer
   def to_milliseconds(duration(seconds: seconds, nanos: nanos)) do
     seconds * 1000 + Integer.floor_div(nanos, 1_000_000)
   end

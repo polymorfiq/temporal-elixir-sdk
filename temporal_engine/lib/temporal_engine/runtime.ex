@@ -48,11 +48,11 @@ defprotocol TemporalEngine.Runtime do
 
   @type retry_policy ::
           record(:retry_policy,
-            initial_interval: Duration.t(),
+            initial_interval: Duration.duration(),
             randomization_factor: float(),
             multiplier: float(),
-            max_interval: Duration.t(),
-            max_elapsed_time: Duration.t(),
+            max_interval: Duration.duration(),
+            max_elapsed_time: Duration.duration(),
             max_retries: pos_integer()
           )
 
@@ -75,8 +75,8 @@ defprotocol TemporalEngine.Runtime do
 
   @type keep_alive ::
           record(:keep_alive,
-            interval: Duration.t(),
-            timeout: Duration.t()
+            interval: Duration.duration(),
+            timeout: Duration.duration()
           )
 
   Record.defrecord(:http_proxy, [:target_host, basic_auth_user: nil, basic_auth_pass: nil])
@@ -89,7 +89,7 @@ defprotocol TemporalEngine.Runtime do
           )
 
   Record.defrecord(:lb, [:resolution_interval])
-  @type lb :: record(:lb, resolution_interval: Duration.t())
+  @type lb :: record(:lb, resolution_interval: Duration.duration())
 
   @spec create_client(t(), client_opts()) :: {:ok, Client.t()} | {:error, reason :: term()}
   def create_client(runtime, opts)

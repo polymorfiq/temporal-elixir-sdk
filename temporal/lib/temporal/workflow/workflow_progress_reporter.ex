@@ -58,7 +58,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
      )}
   end
 
-  @spec request_start_timer(pid(), Duration.duration()) :: :ok | {:error, term()}
+  @spec request_start_timer(pid(), Duration.shorthand()) :: :ok | {:error, term()}
   def request_start_timer(reporter, duration),
     do:
       GenServer.call(
@@ -78,7 +78,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                       [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                    ]},
                                 type_doc:
-                                  "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                  "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                 doc:
                                   "Indicates how long the caller is willing to wait for an activity completion. Limits how long retries will be attempted. Either this or start_to_close_timeout_seconds must be specified. When not specified defaults to the workflow execution timeout."
                               ],
@@ -92,7 +92,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                       [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                    ]},
                                 type_doc:
-                                  "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                  "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                 doc:
                                   "Limits time an activity task can stay in a task queue before a worker picks it up. This timeout is always non retryable as all a retry would achieve is to put it back into the same queue. Defaults to `schedule_to_close_timeout` or workflow execution timeout if not specified."
                               ],
@@ -106,7 +106,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                       [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                    ]},
                                 type_doc:
-                                  "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                  "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                 doc:
                                   "Maximum time an activity is allowed to execute after a pick up by a worker. This timeout is always retryable. Either this or schedule_to_close_timeout must be specified."
                               ],
@@ -120,7 +120,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                       [:weeks, :days, :hours, :minutes, :seconds, :millseconds]}
                                    ]},
                                 type_doc:
-                                  "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                  "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                 doc: "Maximum time allowed between successful worker heartbeats."
                               ],
                               retry_policy: [
@@ -146,7 +146,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                           ]}
                                        ]},
                                     type_doc:
-                                      "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                      "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                     doc:
                                       "Interval of the first retry. If retryBackoffCoefficient is 1.0 then it is used for all retries."
                                   ],
@@ -173,7 +173,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                           ]}
                                        ]},
                                     type_doc:
-                                      "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                      "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                     doc:
                                       "Maximum interval between retries. Exponential backoff leads to interval increase. This value is the cap of the increase. Default is 100x of the initial interval."
                                   ],
@@ -271,7 +271,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                             ]}
                                          ]},
                                       type_doc:
-                                        "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                        "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                       doc:
                                         "Indicates how long the caller is willing to wait for local activity completion. Limits how long retries will be attempted. When not specified defaults to the workflow execution timeout (which may be unset)."
                                     ],
@@ -292,7 +292,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                             ]}
                                          ]},
                                       type_doc:
-                                        "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                        "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                       doc:
                                         "Limits time the local activity can idle internally before being executed. That can happen if the worker is currently at max concurrent local activity executions. This timeout is always non retryable as all a retry would achieve is to put it back into the same queue. Defaults to `schedule_to_close_timeout` if not specified and that is set. Must be <= `schedule_to_close_timeout` when set, otherwise, it will be clamped down."
                                     ],
@@ -313,7 +313,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                             ]}
                                          ]},
                                       type_doc:
-                                        "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                        "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                       doc:
                                         "Maximum time the local activity is allowed to execute after the task is dispatched. This timeout is always retryable. Either or both of `schedule_to_close_timeout` and this must be specified. If set, this must be <= `schedule_to_close_timeout`, otherwise, it will be clamped down."
                                     ],
@@ -334,7 +334,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                             ]}
                                          ]},
                                       type_doc:
-                                        "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                        "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                       doc:
                                         "If the activity is retrying and backoff would exceed this value, lang will be told to schedule a timer and retry the activity after. Otherwise, backoff will happen internally in core. Defaults to 1 minute."
                                     ],
@@ -361,7 +361,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                                 ]}
                                              ]},
                                           type_doc:
-                                            "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                            "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                           doc:
                                             "Interval of the first retry. If retryBackoffCoefficient is 1.0 then it is used for all retries."
                                         ],
@@ -388,7 +388,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
                                                 ]}
                                              ]},
                                           type_doc:
-                                            "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                                            "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                                           doc:
                                             "Maximum interval between retries. Exponential backoff leads to interval increase. This value is the cap of the increase. Default is 100x of the initial interval."
                                         ],
@@ -431,9 +431,9 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
         ]
 
   @type retry_opts :: [
-          {:initial_interval, Duration.duration()}
+          {:initial_interval, Duration.shorthand()}
           | {:backoff_coefficient, float()}
-          | {:maximum_interval, Duration.duration()}
+          | {:maximum_interval, Duration.shorthand()}
           | {:maximum_attempts, pos_integer()}
           | {:non_retryable_error_types, [String.t()]}
         ]

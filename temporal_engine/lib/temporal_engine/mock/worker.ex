@@ -40,8 +40,8 @@ defmodule TemporalEngine.Mock.Worker do
     )
   end
 
-  def send_activity_task_completion(worker, completion) do
-    TemporalEngine.Worker.complete_activity_task(worker, completion)
+  def send_activity_task_completion(worker, task_token, completion) do
+    TemporalEngine.Worker.complete_activity_task(worker, task_token, completion)
   end
 
   def set_silence_client(worker, silence) do

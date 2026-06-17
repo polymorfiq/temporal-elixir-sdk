@@ -128,20 +128,23 @@ defmodule Temporal.Worker do
                  sticky_queue_schedule_to_start_timeout: [
                    default: {10, :seconds},
                    type: {:tuple, [:pos_integer, {:in, [:seconds, :milliseconds]}]},
-                   type_doc: "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                   type_doc:
+                     "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                    doc:
                      "How long a workflow task is allowed to sit on the sticky queue before it is timed out and moved to the non-sticky queue where it may be picked up by any worker."
                  ],
                  max_heartbeat_throttle_interval: [
                    default: {60, :seconds},
                    type: {:tuple, [:pos_integer, {:in, [:seconds, :milliseconds]}]},
-                   type_doc: "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                   type_doc:
+                     "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                    doc: "Longest interval for throttling activity heartbeats"
                  ],
                  default_heartbeat_throttle_interval: [
                    default: {30, :seconds},
                    type: {:tuple, [:pos_integer, {:in, [:seconds, :milliseconds]}]},
-                   type_doc: "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                   type_doc:
+                     "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                    doc:
                      "Default interval for throttling activity heartbeats in case ActivityOptions.heartbeat_timeout is unset. When the timeout is set in the ActivityOptions, throttling is set to heartbeat_timeout * 0.8"
                  ],
@@ -170,7 +173,8 @@ defmodule Temporal.Worker do
                  graceful_shutdown_period: [
                    required: false,
                    type: {:tuple, [:pos_integer, {:in, [:seconds, :milliseconds]}]},
-                   type_doc: "[Duration.t/0](`t:TemporalEngine.Data.Duration.duration/0`)",
+                   type_doc:
+                     "[Duration.shorthand/0](`t:TemporalEngine.Data.Duration.shorthand/0`)",
                    doc:
                      "If set, core will issue cancels for all outstanding activities and nexus operations after shutdown has been initiated and this amount of time has elapsed"
                  ],

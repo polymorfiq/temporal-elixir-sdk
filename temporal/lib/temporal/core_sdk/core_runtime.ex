@@ -11,7 +11,7 @@ defmodule Temporal.CoreSdk.CoreRuntime do
   @type runtime_id() :: String.t() | atom()
   @type runtime_opts() :: [
           {:runtime_id, runtime_id()}
-          | {:heartbeat_interval, Duration.duration()}
+          | {:heartbeat_interval, Duration.shorthand()}
           | {:engine, module()}
         ]
   @type t :: %__MODULE__{core: term()}
