@@ -20,9 +20,9 @@ defprotocol TemporalEngine.Worker do
           :ok | {:error, reason :: term()}
   def complete_workflow_activation(worker, completion)
 
-  @spec complete_activity_task(t(), ActivityTaskCompletion.completion()) ::
+  @spec complete_activity_task(t(), task_token :: String.t(), ActivityTaskCompletion.completion()) ::
           :ok | {:error, reason :: term()}
-  def complete_activity_task(worker, completion)
+  def complete_activity_task(worker, task_token, completion)
 
   @spec initiate_shutdown(t()) :: :ok | {:error, reason :: term()}
   def initiate_shutdown(worker)

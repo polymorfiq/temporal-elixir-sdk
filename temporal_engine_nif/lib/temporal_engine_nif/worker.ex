@@ -319,13 +319,13 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   end
 
   @impl true
-  def complete_activity_task(worker, task_completed(payload: payload, task_token: task_token)) do
+  def complete_activity_task(worker, task_token, activity_completed(result: result)) do
     parent = self()
 
     completion = %ActivityTaskCompletion{
       task_token: :binary.bin_to_list(task_token),
       result: %ActivityResult{
-        status: {:completed, %ActivitySuccess{result: Payload.from_record(payload)}}
+        status: {:completed, %ActivitySuccess{result: Payload.from_record(result)}}
       }
     }
 

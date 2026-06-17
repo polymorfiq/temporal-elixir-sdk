@@ -15,11 +15,11 @@ defmodule Temporal.Workflow.WorkflowQueryExecutor do
 
   def init(exec_ctx) do
     {:ok,
-      queries_state(
-        run_id: exec_ctx.run_id,
-        workflow_id: exec_ctx.workflow_id,
-        worker_id: exec_ctx.worker_id
-      )}
+     queries_state(
+       run_id: exec_ctx.run_id,
+       workflow_id: exec_ctx.workflow_id,
+       worker_id: exec_ctx.worker_id
+     )}
   end
 
   def set_handler(pid, name, handler_fn) do
@@ -40,15 +40,16 @@ defmodule Temporal.Workflow.WorkflowQueryExecutor do
     handlers = queries_state(state, :handlers)
     arity = Enum.count(args)
 
-    resp = if handler_fn = handlers[{"#{name}", arity}] do
-      try do
-        apply(handler_fn, args)
-      rescue
-        err -> {:error, err}
+    resp =
+      if handler_fn = handlers[{"#{name}", arity}] do
+        try do
+          apply(handler_fn, args)
+        rescue
+          err -> {:error, err}
+        end
+      else
+        {:error, "No query with the name '#{name}' and arity (#{arity}) was found"}
       end
-    else
-      {:error, "No query with the name '#{name}' and arity (#{arity}) was found"}
-    end
 
     {:reply, resp, state}
   end

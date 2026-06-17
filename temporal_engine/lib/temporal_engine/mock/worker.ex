@@ -260,11 +260,11 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
     end
   end
 
-  def complete_activity_task(worker, completion) do
+  def complete_activity_task(worker, task_token, completion) do
     if Agent.get(worker.state, & &1.silence_client) do
       :ok
     else
-      TemporalEngine.Worker.complete_activity_task(worker.real_worker, completion)
+      TemporalEngine.Worker.complete_activity_task(worker.real_worker, task_token, completion)
     end
   end
 

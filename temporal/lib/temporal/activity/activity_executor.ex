@@ -59,13 +59,12 @@ defmodule Temporal.Activity.ActivityExecutor do
     run_id = activity_state(state, :run_id)
 
     with {:ok, reporter} <- ActivitySupervisor.progress_reporter_pid(run_id, activity_id) do
-      resp = case output do
-        :ok -> ActivityProgressReporter.report_success(reporter, nil)
-
-         {:ok, result} -> ActivityProgressReporter.report_success(reporter, result)
-
-         {:error, err} -> ActivityProgressReporter.report_failure(reporter, err)
-      end
+      resp =
+        case output do
+          :ok -> ActivityProgressReporter.report_success(reporter, nil)
+          {:ok, result} -> ActivityProgressReporter.report_success(reporter, result)
+          {:error, err} -> ActivityProgressReporter.report_failure(reporter, err)
+        end
 
       case resp do
         :ok ->

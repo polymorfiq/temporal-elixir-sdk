@@ -49,7 +49,7 @@ defmodule Temporal.Activity.ActivityProgressReporter do
 
   @spec report_failure(pid, term()) :: :ok | {:error, term()}
   def report_failure(pid, result),
-      do: GenServer.call(pid, {:report_failure, Payload.record_from_value(result)}, :infinity)
+    do: GenServer.call(pid, {:report_failure, Payload.record_from_value(result)}, :infinity)
 
   def handle_call({:report_success, result}, _from, state) do
     task_token = progress_state(state, :task_token)
@@ -58,7 +58,8 @@ defmodule Temporal.Activity.ActivityProgressReporter do
     resp =
       TemporalEngine.Worker.complete_activity_task(
         core_worker.core,
-        task_completed(payload: result, task_token: task_token)
+        task_token,
+        activity_completed(result: result)
       )
 
     {:reply, resp, state, {:continue, :stop_activity}}
@@ -71,7 +72,8 @@ defmodule Temporal.Activity.ActivityProgressReporter do
     resp =
       TemporalEngine.Worker.complete_activity_task(
         core_worker.core,
-        task_failed(failure: failure(message: "#{inspect(err)}"), task_token: task_token)
+        task_token,
+        activity_failed(failure: failure(message: "#{inspect(err)}"))
       )
 
     {:reply, resp, state, {:continue, :stop_activity}}

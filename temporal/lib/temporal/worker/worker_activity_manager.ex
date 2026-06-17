@@ -44,7 +44,10 @@ defmodule Temporal.Worker.WorkerActivityManager do
 
   def handle_call(
         {:process_task,
-         activity_task(task_token: task_token, variant: start_activity(activity_id: activity_id, activity_type: activity_type) = start)},
+         activity_task(
+           task_token: task_token,
+           variant: start_activity(activity_id: activity_id, activity_type: activity_type) = start
+         )},
         _from,
         state
       ) do
@@ -58,7 +61,9 @@ defmodule Temporal.Worker.WorkerActivityManager do
       end
 
     inputs = start_activity(start, :input) |> Enum.map(&Payload.value_from_record/1)
-    workflow_execution(workflow_id: workflow_id, run_id: run_id) = start_activity(start, :workflow_execution)
+
+    workflow_execution(workflow_id: workflow_id, run_id: run_id) =
+      start_activity(start, :workflow_execution)
 
     cond do
       !activity_fn ->

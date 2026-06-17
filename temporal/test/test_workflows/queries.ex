@@ -1,6 +1,6 @@
 defmodule TestWorkflows.Queries do
   use Temporal.Workflow,
-      activities: [really_long: 1]
+    activities: [really_long: 1]
 
   alias Temporal.Workflow
 

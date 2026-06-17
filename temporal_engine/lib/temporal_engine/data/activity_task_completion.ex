@@ -1,27 +1,56 @@
 defmodule TemporalEngine.Data.ActivityTaskCompletion do
-  require Record
+  use TemporalEngine.Data.TypeSpec
 
+  alias TemporalEngine.Data.ActivityTaskCompletion
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Payload
 
-  @type task_completion ::
-          task_completed() | task_failed() | task_cancelled() | task_will_complete_async()
+  deftype :task_completion do
+    @structdoc "A request as given to `complete_activity_task`"
 
-  Record.defrecord(:task_completed, [:payload, :task_token])
+    @type task_token :: required :: String.t()
+    @type result :: ActivityTaskCompletion.activity_execution_result()
+  end
 
-  @type task_completed ::
-          record(:task_completed, payload: Payload.payload() | nil, task_token: binary())
+  deftype :activity_execution_result do
+    @structdoc "Used to report activity completions to core"
 
-  Record.defrecord(:task_failed, [:failure, :task_token])
+    @type status ::
+            ActivityTaskCompletion.activity_completed()
+            | ActivityTaskCompletion.activity_failed()
+            | ActivityTaskCompletion.activity_cancelled()
+            | ActivityTaskCompletion.activity_will_complete_async()
+  end
 
-  @type task_failed ::
-          record(:task_failed, failure: Failure.failure() | nil, task_token: binary())
+  deftype :activity_completed do
+    @structdoc "Used to report successful completion either when executing or resolving"
 
-  Record.defrecord(:task_cancelled, [:failure, :task_token])
+    @type result :: Payload.payload()
+  end
 
-  @type task_cancelled ::
-          record(:task_cancelled, failure: Failure.failure() | nil, task_token: binary())
+  deftype :activity_failed do
+    @structdoc "Used to report activity failure either when executing or resolving"
 
-  Record.defrecord(:task_will_complete_async, [:task_token])
-  @type task_will_complete_async :: record(:task_will_complete_async, task_token: binary())
+    @type failure :: Failure.failure()
+  end
+
+  deftype :activity_cancelled do
+    @structdoc """
+    Used to report cancellation from both Core and Lang.
+
+    When Lang reports a cancelled activity, it must put a CancelledFailure in the failure field.
+
+    When Core reports a cancelled activity, it must put an ActivityFailure with CancelledFailure as the cause in the failure field.
+    """
+
+    @type failure :: Failure.failure()
+  end
+
+  deftype :activity_will_complete_async do
+    @structdoc """
+    Used in ActivityExecutionResult to notify Core that this Activity will complete asynchronously.
+
+    Core will forget about this Activity and free up resources used to track this Activity.
+    """
+  end
 end
