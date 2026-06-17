@@ -3,6 +3,7 @@ defmodule TemporalEngine.Data.Failure do
 
   require Record
 
+  alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Failure
@@ -112,13 +113,8 @@ defmodule TemporalEngine.Data.Failure do
     @type started_event_id :: required :: integer()
     @type retry_state :: required :: Failure.retry_state()
 
-    @type workflow_execution :: Failure.run()
+    @type workflow_execution :: Common.workflow_execution()
     @type workflow_type :: Failure.workflow_type()
-  end
-
-  deftype :run do
-    @type workflow_id :: required :: String.t()
-    @type run_id :: required :: String.t()
   end
 
   deftype :workflow_type do

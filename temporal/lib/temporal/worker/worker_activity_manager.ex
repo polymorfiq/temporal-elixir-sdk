@@ -2,6 +2,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
   use GenServer
 
   import TemporalEngine.Data.ActivityTask
+  import TemporalEngine.Data.Common
 
   alias Temporal.Worker
   alias Temporal.Supervisor.ExecutionContext
@@ -43,7 +44,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
 
   def handle_call(
         {:process_task,
-         start_activity(activity_id: activity_id, activity_type: activity_type) = start},
+         activity_task(task_token: task_token, variant: start_activity(activity_id: activity_id, activity_type: activity_type) = start)},
         _from,
         state
       ) do
@@ -57,7 +58,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
       end
 
     inputs = start_activity(start, :input) |> Enum.map(&Payload.value_from_record/1)
-    run(workflow_id: workflow_id, run_id: run_id) = start_activity(start, :workflow_execution)
+    workflow_execution(workflow_id: workflow_id, run_id: run_id) = start_activity(start, :workflow_execution)
 
     cond do
       !activity_fn ->
@@ -81,7 +82,7 @@ defmodule Temporal.Worker.WorkerActivityManager do
             activity_id: activity_id,
             activity_fn: activity_fn,
             activity_inputs: inputs,
-            activity_task_token: start_activity(start, :task_token)
+            activity_task_token: task_token
         }
 
         {:reply, WorkflowActivityManager.start_or_restart_activity(exec_ctx), state}

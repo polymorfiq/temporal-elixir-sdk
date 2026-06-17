@@ -1,6 +1,7 @@
 defmodule TemporalEngine.Data.Jobs do
   use TemporalEngine.Data.TypeSpec
 
+  alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Payload
@@ -34,7 +35,7 @@ defmodule TemporalEngine.Data.Jobs do
     @type identity :: required :: String.t()
 
     @doc "If this workflow is a child, information about the parent"
-    @type parent_workflow_info :: Jobs.namespaced_run()
+    @type parent_workflow_info :: Common.namespaced_workflow_execution()
 
     @doc "Total workflow execution timeout including retries and continue as new."
     @type workflow_execution_timeout :: Duration.duration()
@@ -95,7 +96,7 @@ defmodule TemporalEngine.Data.Jobs do
 
     See field in `WorkflowExecutionStarted` for more detail.
     """
-    @type root_workflow :: Jobs.run()
+    @type root_workflow :: Common.workflow_execution()
 
     @doc "Priority of this workflow execution"
     @type priority :: Priority.priority()
@@ -150,25 +151,6 @@ defmodule TemporalEngine.Data.Jobs do
   end
 
   @type continued_as_new_initiator :: :unspecified | :workflow | :retry | :cron_schedule
-
-  deftype :run do
-    @structdoc """
-    Identifies a specific workflow within a namespace. Practically speaking, because run_id is a uuid, a workflow execution is globally unique.
-
-    Note that many commands allow specifying an empty run id as a way of saying “target the latest run of the workflow”.
-    """
-
-    @type workflow_id :: required :: String.t()
-    @type run_id :: required :: String.t()
-  end
-
-  deftype :namespaced_run do
-    @structdoc "Identifying information about a particular workflow execution, including namespace"
-
-    @type namespace :: required :: String.t()
-    @type workflow_id :: required :: String.t()
-    @type run_id :: required :: String.t()
-  end
 
   deftype :memo do
     @structdoc "A user-defined set of unindexed fields that are exposed when listing/searching workflows"

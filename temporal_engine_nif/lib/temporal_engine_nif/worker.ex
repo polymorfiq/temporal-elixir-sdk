@@ -29,7 +29,10 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   alias TemporalEngineNif.Data.WorkflowCommandScheduleActivity, as: ScheduleActivity
   alias TemporalEngineNif.Data.WorkflowCommandRequestCancelActivity, as: RequestCancelActivity
   alias TemporalEngineNif.Data.WorkflowCommandScheduleLocalActivity, as: ScheduleLocalActivity
-  alias TemporalEngineNif.Data.WorkflowCommandRequestCancelLocalActivity, as: RequestCancelLocalActivity
+
+  alias TemporalEngineNif.Data.WorkflowCommandRequestCancelLocalActivity,
+    as: RequestCancelLocalActivity
+
   alias TemporalEngineNif.Data.WorkflowCommandStartTimer, as: StartTimer
 
   alias TemporalEngineNif.Data.WorkflowCommandCompleteWorkflowExecution,
@@ -257,7 +260,8 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
 
                    request_cancel_local_activity(seq: seq) ->
                      %WorkflowCommand{
-                       variant: {:request_cancel_local_activity, %RequestCancelLocalActivity{seq: seq}}
+                       variant:
+                         {:request_cancel_local_activity, %RequestCancelLocalActivity{seq: seq}}
                      }
 
                    complete_workflow_execution(result: result) ->

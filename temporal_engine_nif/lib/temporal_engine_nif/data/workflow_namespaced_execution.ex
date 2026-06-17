@@ -5,7 +5,7 @@ defmodule TemporalEngineNif.Data.WorkflowNamespacedExecution do
     :run_id
   ]
 
-  import TemporalEngine.Data.Jobs
+  import TemporalEngine.Data.Common
 
   @type t :: %__MODULE__{
           namespace: String.t(),
@@ -13,10 +13,10 @@ defmodule TemporalEngineNif.Data.WorkflowNamespacedExecution do
           run_id: String.t()
         }
 
-  @spec to_record(t() | nil) :: Jobs.namespaced_run() | nil
+  @spec to_record(t() | nil) :: Common.namespaced_workflow_execution() | nil
   def to_record(nil), do: nil
 
   def to_record(%__MODULE__{namespace: namespace, workflow_id: workflow_id, run_id: run_id}) do
-    namespaced_run(namespace: namespace, workflow_id: workflow_id, run_id: run_id)
+    namespaced_workflow_execution(namespace: namespace, workflow_id: workflow_id, run_id: run_id)
   end
 end

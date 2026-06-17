@@ -1,6 +1,7 @@
 defmodule Temporal.Workflow do
   require TemporalEngine.Data.Failure
 
+  import TemporalEngine.Data.Common
   import TemporalEngine.WorkflowHandle
 
   alias Temporal.Activity
@@ -219,7 +220,7 @@ defmodule Temporal.Workflow do
       namespace: Failure.child_execution(info, :namespace),
       workflow_execution:
         if(r = Failure.child_execution(info, :workflow_execution),
-          do: %{workflow_id: Failure.run(r, :workflow_id), run_id: Failure.run(r, :run_id)}
+          do: %{workflow_id: workflow_execution(r, :workflow_id), run_id: workflow_execution(r, :run_id)}
         ),
       workflow_type:
         if(wt = Failure.child_execution(info, :workflow_type),

@@ -1,85 +1,101 @@
 defmodule TemporalEngine.Data.ActivityTask do
-  require Record
+  use TemporalEngine.Data.TypeSpec
 
+  alias TemporalEngine.Data.ActivityTask
+  alias TemporalEngine.Data.Common
+  alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Priority
   alias TemporalEngine.Data.RetryPolicy
   alias TemporalEngine.Data.Timestamp
 
-  @type activity_task :: start_activity() | cancel_activity()
+  deftype :activity_task do
+    @type task_token :: required :: String.t()
+    @type variant :: ActivityTask.start_activity() | ActivityTask.cancel_activity()
+  end
 
-  Record.defrecord(:start_activity, [
-    :activity_type,
-    :activity_id,
-    :workflow_type,
-    :workflow_namespace,
-    :header_fields,
-    :input,
-    :heartbeat_details,
-    :attempt,
-    :is_local,
-    :run_id,
-    :task_token,
-    workflow_execution: nil,
-    scheduled_time: nil,
-    current_attempt_scheduled_time: nil,
-    started_time: nil,
-    schedule_to_close_timeout: nil,
-    start_to_close_timeout: nil,
-    heartbeat_timeout: nil,
-    retry_policy: nil,
-    priority: nil
-  ])
+  deftype :start_activity do
+    @structdoc "Begin executing an activity"
 
-  @type start_activity ::
-          record(:start_activity,
-            workflow_namespace: String.t(),
-            activity_id: String.t(),
-            activity_type: String.t(),
-            run_id: String.t(),
-            workflow_type: String.t(),
-            workflow_execution: run() | nil,
-            header_fields: map(),
-            input: [Payload.payload()],
-            heartbeat_details: [Payload.payload()],
-            scheduled_time: Timestamp.timestamp() | nil,
-            current_attempt_scheduled_time: Timestamp.timestamp() | nil,
-            started_time: Timestamp.timestamp() | nil,
-            attempt: pos_integer(),
-            schedule_to_close_timeout: Duration.duration() | nil,
-            start_to_close_timeout: Duration.duration() | nil,
-            heartbeat_timeout: Duration.duration() | nil,
-            retry_policy: RetryPolicy.policy() | nil,
-            priority: Priority.priority(),
-            is_local: bool(),
-            task_token: binary()
-          )
+    @doc "The namespace the workflow lives in"
+    @type workflow_namespace :: required :: String.t()
 
-  Record.defrecord(:run, [:workflow_id, :run_id])
-  @type run :: record(:run, workflow_id: String.t(), run_id: String.t())
+    @doc "The workflow’s type name or function identifier"
+    @type workflow_type :: required :: String.t()
 
-  Record.defrecord(:cancel_activity, [:reason, details: nil, task_token: nil])
-  @type cancel_activity :: record(:cancel_activity, reason: cancel_reason(), task_token: binary())
+    @doc "The workflow execution which requested this activity"
+    @type workflow_execution :: Common.workflow_execution()
+
+    @doc "The activity’s ID"
+    @type activity_id :: required :: String.t()
+
+    @doc "The activity’s type name or function identifier"
+    @type activity_type :: required :: String.t()
+
+    @default %{}
+    @type header_fields :: required :: %{String.t() => Payload.payload()}
+
+    @doc "Arguments to the activity"
+    @default []
+    @type input :: required :: [Payload.payload()]
+
+    @doc "The last details that were recorded by a heartbeat when this task was generated"
+    @default []
+    @type heartbeat_details :: [Payload.payload()]
+
+    @doc "When the task was *first* scheduled"
+    @type scheduled_time :: Timestamp.timestamp()
+
+    @doc "When this current attempt at the task was scheduled"
+    @type current_attempt_scheduled_time :: Timestamp.timestamp()
+
+    @doc "When this attempt was started, which is to say when core received it by polling."
+    @type started_time :: Timestamp.timestamp()
+
+    @type attempt :: pos_integer()
+
+    @doc "Timeout from the first schedule time to completion"
+    @type schedule_to_close_timeout :: Duration.duration()
+
+    @doc "Timeout from starting an attempt to reporting its result"
+    @type start_to_close_timeout :: Duration.duration()
+
+    @doc "If set a heartbeat must be reported within this interval"
+    @type heartbeat_timeout :: Duration.duration()
+
+    @doc "This is an actual retry policy the service uses. It can be different from the one provided (or not) during activity scheduling as the service can override the provided one in case its values are not specified or exceed configured system limits."
+    @type retry_policy :: RetryPolicy.policy()
+
+    @doc "Priority of this activity. Local activities will always have this field set to the default."
+    @type priority :: Priority.priority()
+
+    @doc "Set to true if this is a local activity. Note that heartbeating does not apply to local activities."
+    @type is_local :: required :: bool()
+
+    @doc "Run ID of this activity execution. Only set for standalone activities."
+    @default ""
+    @type run_id :: required :: String.t()
+  end
+
+  deftype :cancel_activity do
+    @structdoc "Attempt to cancel a running activity"
+
+    @doc "Primary cancellation reason"
+    @type reason :: required :: ActivityTask.cancel_reason()
+
+    @doc "Activity cancellation details, surfaces all cancellation reasons."
+    @type details :: ActivityTask.cancel_details()
+  end
 
   @type cancel_reason() ::
           :not_found | :cancelled | :timed_out | :worker_shutdown | :paused | :reset
 
-  Record.defrecord(:details, [
-    :is_not_found,
-    :is_cancelled,
-    :is_paused,
-    :is_timed_out,
-    :is_worker_shutdown,
-    :is_reset
-  ])
-
-  @type details ::
-          record(:details,
-            is_not_found: bool(),
-            is_cancelled: bool(),
-            is_paused: bool(),
-            is_timed_out: bool(),
-            is_worker_shutdown: bool(),
-            is_reset: bool()
-          )
+  deftype :cancel_details do
+    @type is_not_found :: bool()
+    @type is_cancelled :: bool()
+    @type is_paused :: bool()
+    @type is_timed_out :: bool()
+    @type is_worker_shutdown :: bool()
+    @type is_reset :: bool()
+  end
 end
