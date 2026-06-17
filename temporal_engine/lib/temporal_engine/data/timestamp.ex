@@ -1,8 +1,12 @@
 defmodule TemporalEngine.Data.Timestamp do
-  require Record
+  use TemporalEngine.Data.TypeSpec
 
-  Record.defrecord(:timestamp, [:seconds, :nanos])
-  @type t :: record(:timestamp, seconds: integer(), nanos: integer())
+  deftype :timestamp do
+    @type seconds :: required :: integer()
+    @type nanos :: required :: integer()
+  end
+
+  @type shorthand :: DateTime.t()
 
   def to_native(timestamp(seconds: seconds, nanos: nanos)),
     do: DateTime.from_unix!(seconds) |> DateTime.add(nanos, :nanosecond)

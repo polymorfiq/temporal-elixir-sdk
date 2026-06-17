@@ -55,6 +55,7 @@ defmodule TemporalEngine.Data.NexusTask do
     @doc "Why Core is asking for this operation to be cancelled"
     @type reason :: required :: NexusTask.cancel_reason()
   end
+
   @type cancel_reason :: :timed_out | :worker_shutdown
 
   deftype :request do
@@ -112,7 +113,7 @@ defmodule TemporalEngine.Data.NexusTask do
 
     @doc "Header that is expected to be attached to the callback request when the operation completes."
     @default %{}
-    @type callback_header %{String.t() => String.t()}
+    @type callback_header(%{String.t() => String.t()})
 
     @doc "Links contain caller information and can be attached to the operations started by the handler."
     @default []
