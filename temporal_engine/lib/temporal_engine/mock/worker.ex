@@ -35,7 +35,7 @@ defmodule TemporalEngine.Mock.Worker do
       worker,
       completion(
         run_id: run_id,
-        result: success(commands: commands)
+        status: success(commands: commands)
       )
     )
   end
@@ -220,7 +220,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
     import TemporalEngine.Data.Commands
 
     case completion do
-      completion(result: success(commands: commands)) ->
+      completion(status: success(commands: commands)) ->
         Registry.lookup(TemporalEngine.Mock.Registry, {:worker, worker.real_id, :sent_commands})
         |> Enum.each(fn {forward_to, _} ->
           commands

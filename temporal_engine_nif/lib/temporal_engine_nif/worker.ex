@@ -148,7 +148,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   end
 
   @impl true
-  def complete_workflow_activation(worker, completion(run_id: run_id, result: result)) do
+  def complete_workflow_activation(worker, completion(run_id: run_id, status: result)) do
     parent = self()
 
     completion = %WorkflowActivationCompletion{
@@ -278,7 +278,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
                versioning_behavior: versioning
              }}
 
-          failure(failure: failure, cause: cause) ->
+          failure(failure: failure, force_cause: cause) ->
             {:failed,
              %FailureResult{failure: WorkflowFailure.from_record(failure), force_cause: cause}}
         end

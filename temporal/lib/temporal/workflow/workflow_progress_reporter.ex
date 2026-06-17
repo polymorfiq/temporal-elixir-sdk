@@ -923,7 +923,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
       worker,
       ActivationCompletion.completion(
         run_id: run_id,
-        result: ActivationCompletion.success(commands: commands)
+        status: ActivationCompletion.success(commands: commands)
       )
     )
   end
@@ -938,7 +938,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
 
     TemporalEngine.Worker.complete_workflow_activation(
       worker,
-      ActivationCompletion.completion(run_id: run_id, result: completion)
+      ActivationCompletion.completion(run_id: run_id, status: completion)
     )
   end
 
