@@ -11,8 +11,8 @@ defmodule TemporalEngine.Data.TypeSpec do
   patterns(:patterns) do
     doc :: @doc extract!(contents)
     structdoc :: @structdoc extract!(contents)
-    require :: @required extract!(is_required)
-    default :: @default :: extract!(value)
+    default :: @default extract!(value)
+    deprecated :: @deprecated :: extract!(message)
     required_field :: @type extract!(type_name) :: required :: extract!(typespec)
     field :: @type extract!(type_name) :: extract!(typespec)
   end
@@ -20,7 +20,6 @@ defmodule TemporalEngine.Data.TypeSpec do
   defmacro deftype(name, do: do_block) do
     extracted =
       extract_with_patterns(@patterns, do_block)
-      |> IO.inspect(label: "DEFAULT", limit: :infinity)
       |> Enum.chunk_while(
         %{},
         fn
@@ -47,8 +46,16 @@ defmodule TemporalEngine.Data.TypeSpec do
 
     field_names =
       fields
-      |> Enum.map(& &1[:field][:type_name])
-      |> Enum.map(&elem(&1, 0))
+      |> Enum.map(fn
+        %{field: field, default: default} ->
+          {elem(field[:type_name], 0), default[:value]}
+
+        %{field: field, required: _} ->
+          elem(field[:type_name], 0)
+
+        %{field: field} ->
+          {elem(field[:type_name], 0), nil}
+      end)
 
     fields_to_types =
       fields
@@ -70,6 +77,7 @@ defmodule TemporalEngine.Data.TypeSpec do
 
 
           #{doc[:contents]}
+          #{if(f[:deprecated], do: "\n**Deprecated:** #{inspect(f[:deprecated][:message])})", else: "")}
           """
 
         f ->
@@ -78,7 +86,9 @@ defmodule TemporalEngine.Data.TypeSpec do
           """
       end)
 
-    map_ast = {:%, [], [{:__MODULE__, [], Elixir}, {:%{}, [], Enum.map(fields_to_types, fn {k, v} -> {k, v} end)}]}
+    map_ast =
+      {:%, [],
+       [{:__MODULE__, [], Elixir}, {:%{}, [], Enum.map(fields_to_types, fn {k, v} -> {k, v} end)}]}
 
     quote do
       @typedoc unquote(~s|#{structdoc}\n\n---\n\n#{Enum.join(fields_to_docs, "\n\n")}|)
@@ -92,7 +102,7 @@ defmodule TemporalEngine.Data.TypeSpec do
         @moduledoc unquote(~s|#{structdoc}\n\n|)
 
         @typedoc unquote(~s|#{Enum.join(fields_to_docs, "\n\n")}|)
-        @type t() :: unquote(map_ast)
+        @type t() :: unquote(Macro.expand(map_ast, __CALLER__))
 
         defstruct unquote(field_names)
       end

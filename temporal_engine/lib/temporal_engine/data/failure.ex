@@ -1,27 +1,36 @@
 defmodule TemporalEngine.Data.Failure do
+  use TemporalEngine.Data.TypeSpec
+
   require Record
 
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
 
-  Record.defrecord(:failure, [
-    :message,
-    source: "elixir-sdk",
-    stack_trace: "",
-    encoded_attributes: nil,
-    cause: nil,
-    failure_info: nil
-  ])
+  deftype :failure do
+    @type message :: required :: String.t()
 
-  @type failure ::
-          record(:failure,
-            message: String.t(),
-            source: String.t(),
-            stack_trace: String.t(),
-            encoded_attributes: Payload.payload() | nil,
-            cause: failure() | nil,
-            failure_info: info() | nil
-          )
+    @doc "The source this Failure originated in, e.g. TypeScriptSDK / JavaSDK In some SDKs this is used to rehydrate the stack trace into an exception object."
+    @default "elixir-sdk"
+    @type source :: required :: String.t()
+
+    @default ""
+    @type stack_trace :: required :: String.t()
+
+    @doc """
+    Alternative way to supply message and stack_trace and possibly other attributes, used for encryption of errors originating in user code which might contain sensitive information. The encoded_attributes Payload could represent any serializable object, e.g. JSON object or a Failure proto message.
+
+    SDK authors:
+      - The SDK should provide a default encodeFailureAttributes and decodeFailureAttributes implementation that:
+      - - Uses a JSON object to represent { message, stack_trace }.
+      - - Overwrites the original message with “Encoded failure” to indicate that more information could be extracted.
+      - - Overwrites the original stack_trace with an empty string.
+      - - The resulting JSON object is converted to Payload using the default PayloadConverter and should be processed by the user-provided PayloadCodec
+      - If there’s demand, we could allow overriding the default SDK implementation to encode other opaque Failure attributes. (– api-linter: core::0203::optional=disabled –)
+    """
+    @type encoded_attributes :: Payload.payload()
+    @type cause :: TemporalEngine.Data.Failure.failure()
+    @type failure_info :: TemporalEngine.Data.Failure.info()
+  end
 
   @type info ::
           application()
@@ -35,73 +44,120 @@ defmodule TemporalEngine.Data.Failure do
           | nexus_operation()
           | nexus_handler()
 
-  Record.defrecord(:application, [
-    :failure_type,
-    non_retryable: false,
-    category: :unspecified,
-    details: [],
-    next_retry_delay: nil
-  ])
+  deftype :application do
+    @type failure_type :: required :: String.t()
 
-  @type application ::
-          record(:application,
-            failure_type: String.t(),
-            non_retryable: bool(),
-            details: [Payload.payload()],
-            next_retry_delay: Duration.duration() | nil,
-            category: category()
-          )
+    @default false
+    @type non_retryable :: required :: bool()
+
+    @default []
+    @type details :: required :: [Payload.payload()]
+
+    @doc """
+    `next_retry_delay` can be used by the client to override the activity retry interval calculated by the retry policy. Retry attempts will still be subject to the maximum retries limit and total time limit defined by the policy.
+    """
+    @type next_retry_delay :: Duration.duration()
+
+    @default :unspecified
+    @type category :: required :: TemporalEngine.Data.Failure.category()
+  end
 
   @type category :: :unspecified | :benign
 
-  Record.defrecord(:timeout_reached,
-    timeout_type: :unspecified,
-    last_heartbeat_details: nil
-  )
+  deftype :timeout_reached do
+    @default :unspecified
+    @type timeout_type :: required :: TemporalEngine.Data.Failure.timeout_type()
+    @type last_heartbeat_details :: [Payload.payload()]
+  end
 
-  @type timeout_reached ::
-          record(:timeout_reached,
-            timeout_type: timeout_type(),
-            last_heartbeat_details: Payload.payload() | nil
-          )
   @type timeout_type ::
           :unspecified | :start_to_close | :schedule_to_start | :schedule_to_close | :heartbeat
 
-  Record.defrecord(:cancelled, [:identity, details: nil])
+  deftype :cancelled do
+    @doc "The identity of the worker or client that requested the cancellation."
+    @type identity :: required :: String.t()
+    @type details :: [Payload.payload()]
+  end
 
-  @type cancelled ::
-          record(:cancelled,
-            identity: String.t(),
-            details: Payload.payload() | nil
-          )
+  deftype :terminated do
+    @doc "The identity of the worker or client that requested the termination."
+    @type identity :: required :: String.t()
+  end
 
-  Record.defrecord(:terminated, [:identity])
-  @type terminated :: record(:terminated, identity: String.t())
+  deftype :server do
+    @type non_retryable :: required :: bool()
+  end
 
-  Record.defrecord(:server, [:non_retryable])
-  @type server :: record(:server, non_retryable: bool())
+  deftype :reset_workflow do
+    @type last_heartbeat_details :: required :: [Payload.payload()]
+  end
 
-  Record.defrecord(:reset_workflow, last_heartbeat_details: nil)
-  @type reset_workflow :: record(:reset_workflow, last_heartbeat_details: Payload.payload() | nil)
+  deftype :activity do
+    @type scheduled_event_id :: required :: integer()
+    @type started_event_id :: required :: integer()
+    @type identity :: required :: String.t()
+    @type activity_id :: required :: TemporalEngine.Data.Failure.activity_type()
+    @type retry_state :: required :: TemporalEngine.Data.Failure.retry_state()
+    @type activity_type :: TemporalEngine.Data.Failure.activity_type()
+  end
 
-  Record.defrecord(:activity, [
-    :scheduled_event_id,
-    :started_event_id,
-    :identity,
-    :activity_id,
-    retry_state: :unspecified,
-    activity_type: nil
-  ])
+  deftype :activity_type do
+    @type name :: required :: String.t()
+  end
 
-  @type activity ::
-          record(:activity,
-            scheduled_event_id: integer(),
-            started_event_id: integer(),
-            identity: String.t(),
-            activity_type: activity_type() | nil,
-            activity_id: String.t(),
-            retry_state: retry_state()
-          )
+  deftype :child_execution do
+    @type namespace :: required :: String.t()
+    @type initiated_event_id :: required :: integer()
+    @type started_event_id :: required :: integer()
+    @type retry_state :: required :: TemporalEngine.Data.Failure.retry_state()
+
+    @type workflow_execution :: TemporalEngine.Data.Failure.run()
+    @type workflow_type :: TemporalEngine.Data.Failure.workflow_type()
+  end
+
+  deftype :run do
+    @type workflow_id :: required :: String.t()
+    @type run_id :: required :: String.t()
+  end
+
+  deftype :workflow_type do
+    @type name :: required :: String.t()
+  end
+
+  deftype :nexus_operation do
+    @doc "The NexusOperationScheduled event ID."
+    @type scheduled_event_id :: required :: integer()
+
+    @doc "Endpoint name."
+    @type endpoint :: required :: String.t()
+
+    @doc "Service name."
+    @type service :: required :: String.t()
+
+    @doc "Operation name."
+    @type operation :: required :: String.t()
+
+    @doc """
+    Operation ID - may be empty if the operation completed synchronously.
+    """
+
+    @deprecated "Renamed to operation_token."
+    @type operation_id :: required :: String.t()
+
+    @doc "Operation token - may be empty if the operation completed synchronously."
+    @type operation_token :: required :: String.t()
+  end
+
+  deftype :nexus_handler do
+    @doc "The Nexus error type as defined in the spec: https://github.com/nexus-rpc/api/blob/main/SPEC.md#predefined-handler-errors"
+    @type failure_type :: required :: String.t()
+
+    @doc "Retry behavior, defaults to the retry behavior of the error type as defined in the spec."
+    @default :unspecified
+    @type retry_behavior :: required :: TemporalEngine.Data.Failure.retry_behavior()
+  end
+
+  @type retry_behavior :: :unspecified | :retryable | :non_retryable
 
   @type retry_state ::
           :unspecified
@@ -113,83 +169,38 @@ defmodule TemporalEngine.Data.Failure do
           | :internal_server_error
           | :cancel_requested
 
-  Record.defrecord(:activity_type, [:name])
-  @type activity_type :: record(:activity_type, name: String.t())
+  deftype :workflow_failed do
+    @type failure :: required :: TemporalEngine.Data.Failure.failure()
+  end
 
-  Record.defrecord(:child_execution, [
-    :namespace,
-    :initiated_event_id,
-    :started_event_id,
-    :retry_state,
-    workflow_execution: nil,
-    workflow_type: nil
-  ])
+  deftype :workflow_cancelled do
+    @default []
+    @type details :: required :: [Payload.payload()]
+  end
 
-  @type child_execution ::
-          record(:child_execution,
-            namespace: String.t(),
-            workflow_execution: run() | nil,
-            workflow_type: workflow_type() | nil,
-            initiated_event_id: integer(),
-            started_event_id: integer(),
-            retry_state: retry_state()
-          )
+  deftype :workflow_terminated do
+    @default []
+    @type details :: required :: [Payload.payload()]
+  end
 
-  Record.defrecord(:run, [:workflow_id, :run_id])
-  @type run :: record(:run, workflow_id: String.t(), run_id: String.t())
+  deftype :workflow_timed_out do
+  end
 
-  Record.defrecord(:workflow_type, [:name])
-  @type workflow_type :: record(:workflow_type, name: String.t())
+  deftype :workflow_continued_as_new do
+  end
 
-  Record.defrecord(:nexus_operation, [
-    :scheduled_event_id,
-    :endpoint,
-    :service,
-    :operation,
-    :operation_id,
-    :operation_token
-  ])
+  deftype :workflow_not_found do
+  end
 
-  @type nexus_operation ::
-          record(:nexus_operation,
-            scheduled_event_id: integer(),
-            endpoint: String.t(),
-            service: String.t(),
-            operation: String.t(),
-            operation_id: String.t(),
-            operation_token: String.t()
-          )
+  deftype :workflow_payload_conversion do
+    @type message :: required :: String.t()
+  end
 
-  Record.defrecord(:nexus_handler, [:failure_type, retry_behavior: :unspecified])
+  deftype :workflow_rpc_error do
+    @type message :: required :: String.t()
+  end
 
-  @type nexus_handler ::
-          record(:nexus_handler, failure_type: String.t(), retry_behavior: retry_behavior())
-  @type retry_behavior :: :unspecified | :retryable | :non_retryable
-
-  Record.defrecord(:workflow_failed, [:failure])
-  @type workflow_failed :: record(:workflow_failed, failure: failure())
-
-  Record.defrecord(:workflow_cancelled, [:details])
-  @type workflow_cancelled :: record(:workflow_cancelled, details: [Payload.payload()])
-
-  Record.defrecord(:workflow_terminated, [:details])
-  @type workflow_terminated :: record(:workflow_terminated, details: [Payload.payload()])
-
-  Record.defrecord(:workflow_timed_out, [])
-  @type workflow_timed_out :: record(:workflow_timed_out)
-
-  Record.defrecord(:workflow_continued_as_new, [])
-  @type workflow_continued_as_new :: record(:workflow_continued_as_new)
-
-  Record.defrecord(:workflow_not_found, [])
-  @type workflow_not_found :: record(:workflow_not_found)
-
-  Record.defrecord(:workflow_payload_conversion, [:message])
-  @type workflow_payload_conversion :: record(:workflow_payload_conversion, message: String.t())
-
-  Record.defrecord(:workflow_rpc_error, [:message])
-  @type workflow_rpc_error :: record(:workflow_rpc_error, message: String.t())
-
-  Record.defrecord(:workflow_other_error, [:message])
-  @type workflow_other_error :: record(:workflow_other_error, message: String.t())
+  deftype :workflow_other_error do
+    @type message :: required :: String.t()
+  end
 end

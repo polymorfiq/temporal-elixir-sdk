@@ -38,9 +38,11 @@ defmodule TemporalEngine.Data.Commands do
     @type task_queue :: required :: String.t()
 
     @doc "These headers represent this, this and this"
+    @default %{}
     @type headers :: required :: %{String.t() => Payload.payload()}
 
     @doc "Arguments/input to the activity. Called “input” upstream."
+    @default []
     @type arguments :: required :: [Payload.payload()]
 
     @doc """
@@ -76,7 +78,7 @@ defmodule TemporalEngine.Data.Commands do
     @type retry_policy :: RetryPolicy.policy()
 
     @doc "Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed"
-    @default :: :try_cancel
+    @default :try_cancel
     @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
 
     @doc """
@@ -87,7 +89,7 @@ defmodule TemporalEngine.Data.Commands do
     @type do_not_eagerly_execute :: bool()
 
     @doc "Whether this activity should run on a worker with a compatible build id or not."
-    @default :: :unspecified
+    @default :unspecified
     @type versioning_intent :: :unspecified | :compatible | :default
 
     @doc "The Priority to use for this activity"
@@ -143,8 +145,7 @@ defmodule TemporalEngine.Data.Commands do
   @type complete_workflow_execution ::
           record(:complete_workflow_execution, result: Payload.payload() | nil)
 
-  Record.defrecord(:fail_workflow_execution, failure: nil)
-
-  @type fail_workflow_execution ::
-          record(:fail_workflow_execution, failure: Failure.failure() | nil)
+  deftype :fail_workflow_execution do
+    @type failure :: Failure.failure()
+  end
 end
