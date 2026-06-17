@@ -99,51 +99,79 @@ defmodule TemporalEngine.Data.Commands do
   @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
   @type versioning_intent :: :unspecified | :compatible | :default
 
-  Record.defrecord(:request_cancel_activity, [:seq])
-  @type request_cancel_activity :: record(:request_cancel_activity, seq: pos_integer())
+  deftype :schedule_local_activity do
+    @doc "Lang’s incremental sequence number, used as the operation identifier"
+    @type seq :: required :: pos_integer()
 
-  Record.defrecord(:schedule_local_activity, [
-    :seq,
-    :activity_id,
-    :activity_type,
-    attempt: 1,
-    original_schedule_time: nil,
-    headers: %{},
-    arguments: [],
-    schedule_to_close_timeout: nil,
-    schedule_to_start_timeout: nil,
-    start_to_close_timeout: nil,
-    retry_policy: nil,
-    local_retry_threshold: nil,
-    cancellation_type: :wait_cancellation_completed
-  ])
+    @type activity_id :: required :: String.t()
+    @type activity_type :: required :: String.t()
 
-  @type schedule_local_activity ::
-          record(:schedule_local_activity,
-            seq: pos_integer(),
-            activity_id: String.t(),
-            activity_type: String.t(),
-            attempt: pos_integer(),
-            original_schedule_time: Timestamp.timestamp() | nil,
-            headers: %{String.t() => Payload.payload()},
-            arguments: [Payload.payload()],
-            schedule_to_close_timeout: Duration.t() | nil,
-            schedule_to_start_timeout: Duration.t() | nil,
-            start_to_close_timeout: Duration.t() | nil,
-            retry_policy: RetryPolicy.policy() | nil,
-            local_retry_threshold: Duration.t() | nil,
-            cancellation_type: cancellation_type()
-          )
+    @doc """
+    Local activities can start with a non-1 attempt.
 
-  Record.defrecord(:request_cancel_local_activity, [:seq])
+    If lang has been told to backoff using a timer before retrying. It should pass the attempt number from a DoBackoff activity resolution.
+    """
+    @default 1
+    @type attempt :: required :: pos_integer()
 
-  @type request_cancel_local_activity ::
-          record(:request_cancel_local_activity, seq: pos_integer())
+    @default %{}
+    @type headers :: required :: %{String.t() => Payload.payload()}
 
-  Record.defrecord(:complete_workflow_execution, result: nil)
+    @doc "Arguments/input to the activity."
+    @default []
+    @type arguments :: required :: [Payload.payload()]
 
-  @type complete_workflow_execution ::
-          record(:complete_workflow_execution, result: Payload.payload() | nil)
+    @doc "If this local activity is a retry (as per the attempt field) this needs to be the original scheduling time (as provided in DoBackoff)"
+    @type original_schedule_time :: Timestamp.timestamp()
+
+    @doc "Indicates how long the caller is willing to wait for local activity completion. Limits how long retries will be attempted. When not specified defaults to the workflow execution timeout (which may be unset)."
+    @type schedule_to_close_timeout :: Duration.t()
+
+    @doc """
+    Limits time the local activity can idle internally before being executed which can happen if the worker is currently at max concurrent local activity executions.
+
+    This timeout is always non retryable as all a retry would achieve is to put it back into the same queue.
+
+    Defaults to schedule_to_close_timeout if not specified and that is set. Must be `<= schedule_to_close_timeout` when set, otherwise, it will be clamped down.
+    """
+    @type schedule_to_start_timeout :: Duration.t()
+
+    @doc """
+    Maximum time the local activity is allowed to execute after the task is dispatched.
+
+    This timeout is always retryable. Either or both of `schedule_to_close_timeout` and this must be specified.
+
+    If set, this must be <= schedule_to_close_timeout, otherwise, it will be clamped down.
+    """
+    @type start_to_close_timeout :: Duration.t()
+
+    @doc "Specify a retry policy for the local activity. By default local activities will be retried indefinitely."
+    @type retry_policy :: Duration.t()
+
+    @doc "If the activity is retrying and backoff would exceed this value, lang will be told to schedule a timer and retry the activity after. Otherwise, backoff will happen internally in core. Defaults to 1 minute."
+    @type local_retry_threshold :: Duration.t()
+
+    @doc """
+    Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed. Lang should default this to `WAIT_CANCELLATION_COMPLETED`, even though proto will default to `TRY_CANCEL` automatically.
+    """
+    @default :wait_cancellation_completed
+    @type cancellation_type :: TemporalEngine.Data.Commands.cancellation_type()
+  end
+
+  deftype :request_cancel_activity do
+    @doc "Lang’s incremental sequence number as passed to ScheduleActivity"
+    @type seq :: required :: pos_integer()
+  end
+
+  deftype :request_cancel_local_activity do
+    @doc "Lang’s incremental sequence number as passed to ScheduleLocalActivity"
+    @type seq :: required :: pos_integer()
+  end
+
+  deftype :complete_workflow_execution do
+    @structdoc "Issued when the workflow completes successfully"
+    @type result :: Payload.payload()
+  end
 
   deftype :fail_workflow_execution do
     @type failure :: Failure.failure()
