@@ -1,111 +1,154 @@
 defmodule TemporalEngine.Data.NexusTask do
-  require Record
+  use TemporalEngine.Data.TypeSpec
 
+  alias TemporalEngine.Data.NexusTask
+  alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Timestamp
 
-  @type nexus_task :: start_task() | cancel_task()
+  deftype :nexus_task do
+    @doc """
+    The deadline for this request, parsed from the “Request-Timeout” header.
 
-  Record.defrecord(:start_task, [
-    :endpoint,
-    :poller_group_id,
-    :poller_group_infos,
-    request_deadline: nil,
-    request: nil,
-    poller_scaling_decision: nil,
-    task_token: nil
-  ])
+    Only set when variant is task and the header was present with a valid value. Represented as an absolute timestamp.
+    """
+    @type request_deadline :: Timestamp.timestamp()
 
-  @type start_task ::
-          record(:start_task,
-            endpoint: String.t(),
-            request_deadline: Timestamp.timestamp() | nil,
-            task_token: binary(),
-            request: request() | nil,
-            poller_scaling_decision: decision(),
-            poller_group_id: String.t(),
-            poller_group_infos: [group_info()]
-          )
+    @doc "The endpoint this request was addressed to. Extracted from the request for convenient access. Only set when variant is task."
+    @default ""
+    @type endpoint :: required :: String.t()
 
-  @type request :: start_operation() | cancel_operation()
+    @type variant :: NexusTask.task() | NexusTask.cancel_task()
+  end
 
-  Record.defrecord(:decision, [:poll_request_delta_suggestion])
-  @type decision :: record(:decision, poll_request_delta_suggestion: integer())
+  deftype :task do
+    @doc "An opaque unique identifier for this task for correlating a completion request the embedded request."
+    @type task_token :: required :: String.t()
 
-  Record.defrecord(:group_info, [:id, :weight])
-  @type group_info :: record(:group_info, id: String.t(), weight: float())
+    @doc "Embedded request as translated from the incoming frontend request."
+    @type request :: NexusTask.request()
 
-  Record.defrecord(:start_operation, [
-    :header,
-    :endpoint,
-    :service,
-    :operation,
-    :request_id,
-    :callback,
-    :callback_header,
-    :links,
-    scheduled_time: nil,
-    capabilities: nil,
-    payload: nil
-  ])
+    @doc "Server-advised information the SDK may use to adjust its poller count."
+    @type poller_scaling_decision :: NexusTask.poller_scaling_decision()
 
-  @type start_operation ::
-          record(:start_operation,
-            header: %{String.t() => String.t()},
-            scheduled_time: Timestamp.timestamp() | nil,
-            capabilities: capabilities() | nil,
-            endpoint: String.t(),
-            service: String.t(),
-            operation: String.t(),
-            request_id: String.t(),
-            callback: String.t(),
-            payload: Payload.payload() | nil,
-            callback_header: %{String.t() => String.t()},
-            links: [link()]
-          )
+    @doc """
+    This poller group ID identifies the owner of the nexus task awaiting for synchronous response.
 
-  Record.defrecord(:cancel_operation, [
-    :header,
-    :endpoint,
-    :service,
-    :operation,
-    :operation_id,
-    :operation_token,
-    scheduled_time: nil,
-    capabilities: nil
-  ])
+    Corresponding RespondNexusTaskCompleted and RespondNexusTaskFailed calls should pass this value for proper response routing.
+    """
+    @type poller_group_id :: required :: String.t()
 
-  @type cancel_operation ::
-          record(:cancel_operation,
-            header: %{String.t() => String.t()},
-            scheduled_time: Timestamp.timestamp() | nil,
-            capabilities: capabilities() | nil,
-            endpoint: String.t(),
-            service: String.t(),
-            operation: String.t(),
-            operation_id: String.t(),
-            operation_token: String.t()
-          )
+    @doc """
+    The weighted list of poller groups IDs that client should use for future polls to this task queue.
 
-  Record.defrecord(:capabilities, [:temporal_failure_responses])
-  @type capabilities :: record(:capabilities, temporal_failure_responses: bool())
+    Client is expected to:
+    1. Maintain minimum number of pollers no less than the number of groups.
+    2. Try to assign the next poll to a group without any pending polls,
+    3. If every group has some pending polls, assign the next poll to a group randomly according to the weights.
+    """
+    @type poller_group_infos :: required :: [NexusTask.poller_group_info()]
+  end
 
-  Record.defrecord(:link, [:url, :link_type])
-  @type link :: record(:link, url: String.t(), link_type: String.t())
+  deftype :cancel_task do
+    @doc "The task token from the `PollNexusTaskQueueResponse`"
+    @type task_token :: String.t()
 
-  Record.defrecord(:cancel_task, [
-    :endpoint,
-    :reason,
-    request_deadline: nil,
-    task_token: nil
-  ])
-
-  @type cancel_task ::
-          record(:cancel_task,
-            endpoint: String.t(),
-            reason: cancel_reason(),
-            request_deadline: Timestamp.timestamp() | nil,
-            task_token: binary()
-          )
-
+    @doc "Why Core is asking for this operation to be cancelled"
+    @type reason :: required :: NexusTask.cancel_reason()
+  end
   @type cancel_reason :: :timed_out | :worker_shutdown
+
+  deftype :request do
+    @doc """
+    Headers extracted from the original request in the Temporal frontend.
+
+    When using Nexus over HTTP, this includes the request’s HTTP headers ignoring multiple values.
+    """
+    @default %{}
+    @type header :: required :: %{String.t() => String.t()}
+
+    @doc "The timestamp when the request was scheduled in the frontend."
+    @type scheduled_time :: Timestamp.timestamp()
+
+    @type capabilities :: NexusTask.capabilities()
+
+    @doc "The endpoint this request was addressed to before forwarding to the worker. Supported from server version 1.30.0."
+    @type endpoint :: required :: String.t()
+
+    @type variant :: NexusTask.start_operation_request() | NexusTask.cancel_operation_request()
+  end
+
+  deftype :poller_scaling_decision do
+    @doc """
+    How many poll requests to suggest should be added or removed, if any.
+
+    As of now, server only scales up or down by 1. However, SDKs should allow for other values (while staying within defined min/max).
+    """
+    @type poll_request_delta_suggestion :: required :: :integer
+  end
+
+  deftype :poller_group_info do
+    @type id :: required :: String.t()
+    @type weight :: required :: float()
+  end
+
+  deftype :start_operation_request do
+    @structdoc "A request to start an operation."
+
+    @doc "Name of service to start the operation in."
+    @type service :: required :: String.t()
+
+    @doc "Type of operation to start."
+    @type operation :: required :: String.t()
+
+    @doc "A request ID that can be used as an idempotentency key."
+    @type request_id :: required :: String.t()
+
+    @doc "Callback URL to call upon completion if the started operation is async."
+    @default ""
+    @type callback :: required :: String.t()
+
+    @doc "Full request body from the incoming HTTP request."
+    @type payload :: Payload.payload()
+
+    @doc "Header that is expected to be attached to the callback request when the operation completes."
+    @default %{}
+    @type callback_header %{String.t() => String.t()}
+
+    @doc "Links contain caller information and can be attached to the operations started by the handler."
+    @default []
+    @type links :: required :: [NexusTask.link()]
+  end
+
+  deftype :cancel_operation_request do
+    @structdoc "A request to cancel an operation."
+
+    @doc "Service name."
+    @type service :: required :: String.t()
+
+    @doc "Type of operation to cancel."
+    @type operation :: required :: String.t()
+
+    @doc "Operation ID as originally generated by a Handler."
+    @deprecated "Renamed to operation_token."
+    @type operation_id :: required :: String.t()
+
+    @doc "Operation token as originally generated by a Handler."
+    @type operation_token :: required :: String.t()
+  end
+
+  deftype :capabilities do
+    @doc """
+    If set, handlers may use temporal.api.failure.v1.Failure instances to return failures to the server.
+
+    This also allows handler and operation errors to have their own messages and stack traces.
+    """
+    @type temporal_failure_responses :: required :: bool()
+  end
+
+  deftype :link do
+    @doc "See https://github.com/nexus-rpc/api/blob/main/SPEC.md#links"
+    @type url :: required :: String.t()
+
+    @type type :: required :: String.t()
+  end
 end
