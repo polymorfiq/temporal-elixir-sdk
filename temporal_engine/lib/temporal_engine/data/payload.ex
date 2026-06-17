@@ -1,21 +1,26 @@
 defmodule TemporalEngine.Data.Payload do
-  require Record
+  use TemporalEngine.Data.TypeSpec
 
-  Record.defrecord(:payload, [
-    :data,
-    metadata: %{},
-    external_payloads: []
-  ])
+  alias TemporalEngine.Data.Payload
 
-  @type payload ::
-          record(:payload,
-            metadata: %{String.t() => binary()},
-            data: binary(),
-            external_payloads: [external()]
-          )
+  deftype :payload do
+    @structdoc "Represents some binary (byte array) data (ex: activity input parameters or workflow result) with metadata which describes this binary data (format, encoding, encryption, etc). Serialization of the data may be user-defined."
 
-  Record.defrecord(:external, [:size_bytes])
-  @type external :: record(:external, size_bytes: pos_integer())
+    @default %{}
+    @type metadata :: required :: %{String.t() => binary()}
+
+    @type data :: required :: binary()
+
+    @default []
+    @type external_payloads :: required :: [Payload.external_payload_details()]
+  end
+
+  deftype :external_payload_details do
+    @structdoc "Describes an externally stored object referenced by this payload."
+
+    @doc "Size in bytes of the externally stored payload"
+    @type size_bytes :: required :: pos_integer()
+  end
 
   defp available_encoders do
     encoders = %{}

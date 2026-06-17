@@ -23,7 +23,7 @@ defmodule TemporalEngineNif.Data.Payload do
     payload(
       metadata: Map.new(payload.metadata, fn {k, v} -> {k, :binary.list_to_bin(v)} end),
       data: :binary.list_to_bin(payload.data),
-      external_payloads: Enum.map(payload.external_payloads, &external(size_bytes: &1.size_bytes))
+      external_payloads: Enum.map(payload.external_payloads, &external_payload_details(size_bytes: &1.size_bytes))
     )
   end
 
