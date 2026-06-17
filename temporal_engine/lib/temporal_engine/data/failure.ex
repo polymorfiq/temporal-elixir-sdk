@@ -5,6 +5,7 @@ defmodule TemporalEngine.Data.Failure do
 
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Data.Failure
 
   deftype :failure do
     @type message :: required :: String.t()
@@ -28,8 +29,8 @@ defmodule TemporalEngine.Data.Failure do
       - If there’s demand, we could allow overriding the default SDK implementation to encode other opaque Failure attributes. (– api-linter: core::0203::optional=disabled –)
     """
     @type encoded_attributes :: Payload.payload()
-    @type cause :: TemporalEngine.Data.Failure.failure()
-    @type failure_info :: TemporalEngine.Data.Failure.info()
+    @type cause :: Failure.failure()
+    @type failure_info :: Failure.info()
   end
 
   @type info ::
@@ -59,14 +60,14 @@ defmodule TemporalEngine.Data.Failure do
     @type next_retry_delay :: Duration.duration()
 
     @default :unspecified
-    @type category :: required :: TemporalEngine.Data.Failure.category()
+    @type category :: required :: Failure.category()
   end
 
   @type category :: :unspecified | :benign
 
   deftype :timeout_reached do
     @default :unspecified
-    @type timeout_type :: required :: TemporalEngine.Data.Failure.timeout_type()
+    @type timeout_type :: required :: Failure.timeout_type()
     @type last_heartbeat_details :: [Payload.payload()]
   end
 
@@ -96,9 +97,9 @@ defmodule TemporalEngine.Data.Failure do
     @type scheduled_event_id :: required :: integer()
     @type started_event_id :: required :: integer()
     @type identity :: required :: String.t()
-    @type activity_id :: required :: TemporalEngine.Data.Failure.activity_type()
-    @type retry_state :: required :: TemporalEngine.Data.Failure.retry_state()
-    @type activity_type :: TemporalEngine.Data.Failure.activity_type()
+    @type activity_id :: required :: Failure.activity_type()
+    @type retry_state :: required :: Failure.retry_state()
+    @type activity_type :: Failure.activity_type()
   end
 
   deftype :activity_type do
@@ -109,10 +110,10 @@ defmodule TemporalEngine.Data.Failure do
     @type namespace :: required :: String.t()
     @type initiated_event_id :: required :: integer()
     @type started_event_id :: required :: integer()
-    @type retry_state :: required :: TemporalEngine.Data.Failure.retry_state()
+    @type retry_state :: required :: Failure.retry_state()
 
-    @type workflow_execution :: TemporalEngine.Data.Failure.run()
-    @type workflow_type :: TemporalEngine.Data.Failure.workflow_type()
+    @type workflow_execution :: Failure.run()
+    @type workflow_type :: Failure.workflow_type()
   end
 
   deftype :run do
@@ -154,7 +155,7 @@ defmodule TemporalEngine.Data.Failure do
 
     @doc "Retry behavior, defaults to the retry behavior of the error type as defined in the spec."
     @default :unspecified
-    @type retry_behavior :: required :: TemporalEngine.Data.Failure.retry_behavior()
+    @type retry_behavior :: required :: Failure.retry_behavior()
   end
 
   @type retry_behavior :: :unspecified | :retryable | :non_retryable
@@ -170,7 +171,7 @@ defmodule TemporalEngine.Data.Failure do
           | :cancel_requested
 
   deftype :workflow_failed do
-    @type failure :: required :: TemporalEngine.Data.Failure.failure()
+    @type failure :: required :: Failure.failure()
   end
 
   deftype :workflow_cancelled do

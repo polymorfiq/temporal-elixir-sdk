@@ -17,10 +17,12 @@ defmodule TemporalEngine.Data.Commands do
           | schedule_local_activity()
           | request_cancel_local_activity()
 
-  Record.defrecord(:start_timer, [:seq, :start_to_fire_timeout])
+  deftype :start_timer do
+    @doc "Lang’s incremental sequence number, used as the operation identifier"
+    @type seq :: required :: pos_integer()
 
-  @type start_timer ::
-          record(:start_timer, seq: pos_integer(), start_to_fire_timeout: Duration.t())
+    @type start_to_fire_timeout :: Duration.t()
+  end
 
   deftype :schedule_activity do
     @structdoc """
