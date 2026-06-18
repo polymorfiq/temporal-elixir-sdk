@@ -11,6 +11,11 @@ defmodule TemporalEngine.Data.Jobs do
   alias TemporalEngine.Data.Jobs
 
   @type job :: initialize_workflow() | fire_timer() | resolve_activity() | remove_from_cache()
+  @type job_opts ::
+          initialize_workflow_opts()
+          | fire_timer_opts()
+          | resolve_activity_opts()
+          | remove_from_cache_opts()
 
   deftype :initialize_workflow do
     @structdoc "Initialize a new workflow"
@@ -151,6 +156,7 @@ defmodule TemporalEngine.Data.Jobs do
   end
 
   @type continued_as_new_initiator :: :unspecified | :workflow | :retry | :cron_schedule
+  @type continued_as_new_initiator_opts :: continued_as_new_initiator()
 
   deftype :memo do
     @structdoc "A user-defined set of unindexed fields that are exposed when listing/searching workflows"
@@ -172,6 +178,7 @@ defmodule TemporalEngine.Data.Jobs do
 
   @type activity_status ::
           activity_completed() | activity_failed() | activity_cancelled() | activity_backoff()
+  @type activity_status_opts :: activity_status()
 
   deftype :activity_completed do
     @structdoc "Used to report successful completion either when executing or resolving"
@@ -231,4 +238,6 @@ defmodule TemporalEngine.Data.Jobs do
           | :fatal
           | :pagination_or_history_fetch
           | :workflow_execution_ending
+
+  @type cache_eviction_reason_opts :: cache_eviction_reason()
 end

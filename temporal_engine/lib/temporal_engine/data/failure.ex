@@ -46,6 +46,18 @@ defmodule TemporalEngine.Data.Failure do
           | nexus_operation()
           | nexus_handler()
 
+  @type info_opts ::
+          application_opts()
+          | timeout_reached_opts()
+          | cancelled_opts()
+          | terminated_opts()
+          | server_opts()
+          | reset_workflow_opts()
+          | activity_opts()
+          | child_execution_opts()
+          | nexus_operation_opts()
+          | nexus_handler_opts()
+
   deftype :application do
     @type failure_type :: required :: String.t()
 
@@ -65,6 +77,7 @@ defmodule TemporalEngine.Data.Failure do
   end
 
   @type category :: :unspecified | :benign
+  @type category_opts :: category()
 
   deftype :timeout_reached do
     @default :unspecified
@@ -74,6 +87,8 @@ defmodule TemporalEngine.Data.Failure do
 
   @type timeout_type ::
           :unspecified | :start_to_close | :schedule_to_start | :schedule_to_close | :heartbeat
+
+  @type timeout_type_opts :: timeout_type()
 
   deftype :cancelled do
     @doc "The identity of the worker or client that requested the cancellation."
@@ -155,6 +170,7 @@ defmodule TemporalEngine.Data.Failure do
   end
 
   @type retry_behavior :: :unspecified | :retryable | :non_retryable
+  @type retry_behavior_opts :: retry_behavior()
 
   @type retry_state ::
           :unspecified
@@ -165,6 +181,8 @@ defmodule TemporalEngine.Data.Failure do
           | :retry_policy_not_set
           | :internal_server_error
           | :cancel_requested
+
+  @type retry_state_opts :: retry_state()
 
   deftype :workflow_failed do
     @type failure :: required :: Failure.failure()

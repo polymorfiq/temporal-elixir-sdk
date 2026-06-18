@@ -64,4 +64,6 @@ defmodule TemporalEngine.Data.Activation do
 
   @type continue_as_new_reason ::
           :unspecified | :history_size_too_large | :too_many_history_events | :too_many_updates
+
+  @type continue_as_new_reason_opts :: continue_as_new_reason()
 end

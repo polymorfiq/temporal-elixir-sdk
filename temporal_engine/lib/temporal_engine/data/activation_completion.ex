@@ -40,7 +40,9 @@ defmodule TemporalEngine.Data.ActivationCompletion do
   end
 
   @type versioning_behavior :: :unspecified | :pinned | :auto_upgrade
+  @type versioning_behavior_opts :: versioning_behavior()
 
+  @type cause_opts :: cause()
   @type cause ::
           :unspecified
           | :unhandled_command

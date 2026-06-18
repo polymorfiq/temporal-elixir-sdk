@@ -57,6 +57,7 @@ defmodule TemporalEngine.Data.NexusTask do
   end
 
   @type cancel_reason :: :timed_out | :worker_shutdown
+  @type cancel_reason_opts :: cancel_reason()
 
   deftype :request do
     @doc """

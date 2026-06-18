@@ -221,7 +221,9 @@ defmodule TemporalEngine.Config do
   end
 
   @type workflow_error_type :: :nondeterminism
+  @type workflow_error_type_opts :: workflow_error_type()
   @type poller_behavior :: simple_maximum_poller() | autoscaling_poller()
+  @type poller_behavior_opts :: simple_maximum_poller_opts() | autoscaling_poller_opts()
 
   deftype :simple_maximum_poller do
     @type simple_maximum :: required :: pos_integer()

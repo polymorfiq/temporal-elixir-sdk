@@ -70,22 +70,24 @@ defmodule TemporalEngine.Data.OptsValidationTest do
   end
 
   test "succeeds making a non-required field nil" do
-    assert {:ok, validated} = validate_optional_opts([default_one: nil])
+    assert {:ok, validated} = validate_optional_opts(default_one: nil)
     assert %{default_one: nil} = Enum.into(validated, %{})
   end
 
   test "rejects making a required field nil" do
-    assert {:error, errors} = validate_optional_opts([always_number: nil])
+    assert {:error, errors} = validate_optional_opts(always_number: nil)
     assert Keyword.has_key?(errors, :always_number)
   end
 
-  test "succeeds with default on recursive opts" do
+  test "succeeds with defaults on recursive opts" do
     assert {:ok, validated} = validate_recursive_opts(name: "No payloads")
     assert %{name: "No payloads", payloads: [], optionals: nil} == Enum.into(validated, %{})
   end
 
   test "fails when failing recursive opts" do
-    assert {:error, errors} = validate_recursive_opts(name: "No payloads", optionals: [always_number: nil])
+    assert {:error, errors} =
+             validate_recursive_opts(name: "No payloads", optionals: [always_number: nil])
+
     assert Keyword.has_key?(errors, :optionals)
   end
 

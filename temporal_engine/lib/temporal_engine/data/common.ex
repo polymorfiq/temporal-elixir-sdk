@@ -2,6 +2,7 @@ defmodule TemporalEngine.Data.Common do
   use TemporalEngine.Data.TypeSpec
 
   @type versioning_behavior :: :unspecified | :pinned | :auto_upgrade
+  @type versioning_behavior_opts :: versioning_behavior()
 
   deftype :worker_deployment_version do
     @structdoc "Identifies a specific version of a worker deployment."

@@ -17,6 +17,15 @@ defmodule TemporalEngine.Data.Commands do
           | schedule_local_activity()
           | request_cancel_local_activity()
 
+  @type command_opts ::
+          start_timer_opts()
+          | schedule_activity_opts()
+          | request_cancel_activity_opts()
+          | complete_workflow_execution_opts()
+          | fail_workflow_execution_opts()
+          | schedule_local_activity_opts()
+          | request_cancel_local_activity_opts()
+
   deftype :start_timer do
     @doc "Lang’s incremental sequence number, used as the operation identifier"
     @type seq :: required :: pos_integer()
@@ -81,7 +90,7 @@ defmodule TemporalEngine.Data.Commands do
 
     @doc "Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed"
     @default :try_cancel
-    @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
+    @type cancellation_type :: TemporalEngine.Data.Commands.cancellation_type()
 
     @doc """
     If set, the worker will not tell the service that it can immediately start executing this activity.
@@ -99,6 +108,7 @@ defmodule TemporalEngine.Data.Commands do
   end
 
   @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
+  @type cancellation_type_opts :: cancellation_type()
   @type versioning_intent :: :unspecified | :compatible | :default
 
   deftype :schedule_local_activity do

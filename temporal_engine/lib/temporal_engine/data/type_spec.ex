@@ -109,8 +109,22 @@ defmodule TemporalEngine.Data.TypeSpec do
       {:%, [],
        [{:__MODULE__, [], Elixir}, {:%{}, [], Enum.map(fields_to_types, fn {k, v} -> {k, v} end)}]}
 
+    to_or = fn
+      [a], _ -> a
+      [a, b], _ -> {:|, [], [a, b]}
+      [a | rest], continue -> {:|, [], [a, continue.(rest, continue)]}
+      [], _ -> {:none, [], []}
+    end
+
+    opts_type_ast =
+      fields_to_types
+      |> Enum.map(fn {name, type} -> {name, type_to_opts_type(type, __CALLER__)} end)
+      |> to_or.(to_or)
+
     validate_opts_name = :"validate_#{name}_opts"
     field_types_name = :"get_#{name}_field_types"
+    from_opts_name = :"#{name}_from_opts"
+    opts_name = :"#{name}_opts"
 
     quote do
       @typedoc unquote(~s|#{structdoc}\n\n---\n\n#{Enum.join(fields_to_docs, "\n\n")}|)
@@ -120,9 +134,12 @@ defmodule TemporalEngine.Data.TypeSpec do
       @doc "#{unquote(structdoc)}\n\nSee `t:#{unquote(name)}/0` for more details."
       Record.defrecord(unquote(name), unquote(field_names))
 
+      @typedoc "See `t:#{unquote(name)}/0` for more details."
+      @type unquote({opts_name, [], nil}) :: unquote([opts_type_ast])
+
       @doc false
       @spec unquote(validate_opts_name)(opts :: keyword(), base_name :: String.t() | nil) ::
-              {:ok, validated :: keyword()} | {:error, term()}
+              {:ok, validated :: keyword()} | {:error, keyword()}
       def unquote(validate_opts_name)(opts, base_name \\ nil),
         do:
           TemporalEngine.Data.TypeSpec.validate(
@@ -130,6 +147,18 @@ defmodule TemporalEngine.Data.TypeSpec do
             __MODULE__,
             unquote(name),
             base_name,
+            unquote(field_names)
+          )
+
+      @doc "Produces #{unquote(name)} from a keyword list of options"
+      @spec unquote(from_opts_name)(opts :: unquote(opts_name)()) ::
+              {:ok, unquote(name)()} | {:error, keyword()}
+      def unquote(from_opts_name)(opts),
+        do:
+          TemporalEngine.Data.TypeSpec.from_opts(
+            opts,
+            __MODULE__,
+            unquote(name),
             unquote(field_names)
           )
 
@@ -150,11 +179,33 @@ defmodule TemporalEngine.Data.TypeSpec do
   end
 
   @type field_names :: [atom() | {atom(), default :: term()}]
+  @spec from_opts(
+          opts :: keyword(),
+          caller :: module(),
+          name :: atom(),
+          field_names :: field_names()
+        ) :: {:ok, term()} | {:error, keyword()}
+  def from_opts(opts, caller, name, field_names) do
+    with {:ok, validated} <- validate(opts, caller, name, name, field_names) do
+      record_data =
+        field_names
+        |> Enum.reverse()
+        |> Enum.reduce([name], fn
+          {field_name, _}, acc -> [validated[field_name] | acc]
+          field_name, acc -> [validated[field_name] | acc]
+        end)
+        |> Enum.reverse()
+        |> List.to_tuple()
+
+      {:ok, record_data}
+    end
+  end
+
   @spec validate(
           opts :: keyword(),
           caller :: module(),
           name :: atom(),
-          base_name :: String.t() | nil,
+          base_name :: String.t() | atom() | nil,
           field_names :: field_names()
         ) :: {:ok, validated :: keyword()} | {:error, term()}
   def validate(opts, caller, name, base_name, field_names) do
@@ -237,7 +288,7 @@ defmodule TemporalEngine.Data.TypeSpec do
     cond do
       !validation_fn_name ->
         {:error,
-         [{name, "#{inspect(full_name)}: Could not find referenced type name #{mod}.#{name}/0"}]}
+         [{name, "#{inspect(full_name)}: Could not find referenced type #{mod}.#{name}/0"}]}
 
       !Code.ensure_loaded?(mod) ->
         {:error,
@@ -716,14 +767,26 @@ defmodule TemporalEngine.Data.TypeSpec do
 
   defp expand_aliases({:__aliases__, meta, ast_aliases}, env) do
     new_aliases =
-      Enum.map(ast_aliases, fn curr ->
-        with {:ok, expanded} <- Macro.Env.fetch_alias(env, curr) do
-          expanded
-        else
-          :error ->
-            curr
-        end
-      end)
+      case ast_aliases do
+        [name] ->
+          with {:ok, expanded} <- Macro.Env.fetch_alias(env, name) do
+            [expanded]
+          else
+            :error ->
+              [name]
+          end
+
+        [name | rest] ->
+          expanded =
+            with {:ok, expanded} <- Macro.Env.fetch_alias(env, name) do
+              expanded
+            else
+              :error ->
+                name
+            end
+
+          [Module.concat([expanded | rest])]
+      end
 
     {:__aliases__, meta, new_aliases}
   end
@@ -767,6 +830,39 @@ defmodule TemporalEngine.Data.TypeSpec do
   end
 
   def normalize_ast_type(name) when is_atom(name), do: name
+
+  def type_to_opts_type(types, env) when is_list(types),
+    do: Enum.map(types, fn type -> type_to_opts_type(type, env) end)
+
+  def type_to_opts_type(type, env) do
+    case type do
+      {:|, meta, args} ->
+        {:|, meta, Enum.map(args, fn arg -> type_to_opts_type(arg, env) end)}
+
+      {{:., meta, [{:__aliases__, _, _} = alias, type_name]}, _, []} = orig
+      when is_atom(type_name) ->
+        case expand_aliases(alias, env) do
+          {_, _, [:String]} ->
+            orig
+
+          {_, _, [expanded]} ->
+            {{:., meta,
+              [
+                {:__aliases__, [], [expanded]},
+                :"#{type_name}_opts"
+              ]}, [], []}
+
+          _ ->
+            orig
+        end
+
+      {:%{}, meta, [{key_type, value_type}]} ->
+        {:%{}, meta, [{type_to_opts_type(key_type, env), type_to_opts_type(value_type, env)}]}
+
+      other ->
+        other
+    end
+  end
 
   defp pretty_type_name({:list, val_type}), do: "[#{pretty_type_name(val_type)}]"
 

@@ -90,6 +90,8 @@ defmodule TemporalEngine.Data.ActivityTask do
   @type cancel_reason() ::
           :not_found | :cancelled | :timed_out | :worker_shutdown | :paused | :reset
 
+  @type cancel_reason_opts() :: cancel_reason()
+
   deftype :cancel_details do
     @type is_not_found :: bool()
     @type is_cancelled :: bool()
