@@ -174,6 +174,56 @@ defmodule TemporalEngine.Data.TypeSpec do
         @type t() :: unquote(Macro.expand(map_ast, __CALLER__))
 
         defstruct unquote(field_names)
+
+        @spec from_record(tuple()) :: {:ok, t()} | {:error, term()}
+        def from_record(record) do
+          expanded_types = unquote(Macro.escape(expanded_field_types))
+          expanded_types |> IO.inspect(label: "expanded_types")
+
+          if unquote(name) == elem(record, 0) do
+            struct_fields =
+              unquote(field_names)
+              |> Enum.with_index()
+              |> Enum.map(fn
+                {{field_name, _}, idx} -> {field_name, elem(record, idx + 1)}
+                {field_name, idx} -> {field_name, elem(record, idx + 1)}
+              end)
+
+            parsed_nested =
+              struct_fields
+              |> Enum.map(fn {name, val} ->
+                case expanded_types[name] do
+                  [{{:., _, [{:__aliases__, _, [mod]}, field]}, _, []}] ->
+                    vals = val
+                    full_mod = Module.concat([mod, Macro.camelize("#{field}")])
+
+                    if Code.ensure_loaded?(full_mod) &&
+                         Kernel.function_exported?(full_mod, :from_record, 1) do
+                      {name, Enum.map(vals, &full_mod.from_record(&1))}
+                    else
+                      {name, vals}
+                    end
+
+                  {{:., _, [{:__aliases__, _, [mod]}, field]}, _, []} ->
+                    full_mod = Module.concat([mod, Macro.camelize("#{field}")])
+
+                    if Code.ensure_loaded?(full_mod) &&
+                         Kernel.function_exported?(full_mod, :from_record, 1) do
+                      {name, full_mod.from_record(val)}
+                    else
+                      {name, val}
+                    end
+
+                  _ ->
+                    {name, val}
+                end
+              end)
+
+            struct(__MODULE__, parsed_nested)
+          else
+            {:error, "Not a #{unquote(name)} record..."}
+          end
+        end
       end
     end
   end
@@ -187,12 +237,111 @@ defmodule TemporalEngine.Data.TypeSpec do
         ) :: {:ok, term()} | {:error, keyword()}
   def from_opts(opts, caller, name, field_names) do
     with {:ok, validated} <- validate(opts, caller, name, name, field_names) do
+      field_types = apply(caller, :"get_#{name}_field_types", [])
+
+      normalized =
+        Enum.map(field_types, fn {name, type} ->
+          {name, normalize_ast_type(type)}
+        end)
+
       record_data =
-        field_names
-        |> Enum.reverse()
+        normalized
         |> Enum.reduce([name], fn
-          {field_name, _}, acc -> [validated[field_name] | acc]
-          field_name, acc -> [validated[field_name] | acc]
+          {field_name, {:one_of, [{{:module, nested_mod}, nested_field, 0}, nil]}}, acc ->
+            from_opts_fn_name =
+              try do
+                String.to_existing_atom("#{nested_field}_from_opts")
+              rescue
+                ArgumentError -> nil
+              end
+
+            cond do
+              validated[field_name] == nil ->
+                [validated[field_name] | acc]
+
+              from_opts_fn_name && Code.ensure_loaded?(nested_mod) &&
+                  Kernel.function_exported?(nested_mod, from_opts_fn_name, 1) ->
+                [apply(nested_mod, from_opts_fn_name, [validated[field_name]]) | acc]
+
+              true ->
+                [validated[field_name] | acc]
+            end
+
+          {field_name, {{:module, nested_mod}, nested_field, 0}}, acc ->
+            from_opts_fn_name =
+              try do
+                String.to_existing_atom("#{nested_field}_from_opts")
+              rescue
+                ArgumentError -> nil
+              end
+
+            cond do
+              validated[field_name] == nil ->
+                [validated[field_name] | acc]
+
+              from_opts_fn_name && Code.ensure_loaded?(nested_mod) &&
+                  Kernel.function_exported?(nested_mod, from_opts_fn_name, 1) ->
+                [apply(nested_mod, from_opts_fn_name, [validated[field_name]]) | acc]
+
+              true ->
+                [validated[field_name] | acc]
+            end
+
+          {field_name, {:one_of, [{:list, {{:module, nested_mod}, nested_field, 0}}, nil]}},
+          acc ->
+            from_opts_fn_name =
+              try do
+                String.to_existing_atom("#{nested_field}_from_opts")
+              rescue
+                ArgumentError -> nil
+              end
+
+            cond do
+              validated[field_name] == nil ->
+                [validated[field_name] | acc]
+
+              from_opts_fn_name && Code.ensure_loaded?(nested_mod) &&
+                  Kernel.function_exported?(nested_mod, from_opts_fn_name, 1) ->
+                [
+                  Enum.map(validated[field_name], fn curr ->
+                    {:ok, nested} = apply(nested_mod, from_opts_fn_name, [curr])
+                    nested
+                  end)
+                  | acc
+                ]
+
+              true ->
+                [validated[field_name] | acc]
+            end
+
+          {field_name, {:list, {{:module, nested_mod}, nested_field, 0}}}, acc ->
+            from_opts_fn_name =
+              try do
+                String.to_existing_atom("#{nested_field}_from_opts")
+              rescue
+                ArgumentError -> nil
+              end
+
+            cond do
+              validated[field_name] == nil ->
+                [validated[field_name] | acc]
+
+              from_opts_fn_name && Code.ensure_loaded?(nested_mod) &&
+                  Kernel.function_exported?(nested_mod, from_opts_fn_name, 1) ->
+                [
+                  Enum.map(validated[field_name], fn curr ->
+                    {:ok, nested} = apply(nested_mod, from_opts_fn_name, [curr])
+                    nested
+                  end)
+                  | acc
+                ]
+
+              true ->
+                [validated[field_name] | acc]
+            end
+
+          {field_name, _}, acc ->
+            [validated[field_name] | acc]
         end)
         |> Enum.reverse()
         |> List.to_tuple()

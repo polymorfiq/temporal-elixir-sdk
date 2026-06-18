@@ -105,14 +105,48 @@ defmodule TemporalEngine.Data.OptsValidationTest do
                ]
              )
 
-    assert %{name: "Payloads", payloads: [a, b, c]} = Enum.into(validated, %{})
-    assert %{data: ~s|"Data1"|, metadata: %{"encoding" => "json/plain"}} == Enum.into(a, %{})
+    assert {:ok, created} = recursive_from_opts(validated)
+    assert recursive(name: "Payloads", payloads: [a, b, c]) = created
+    assert example(data: ~s|"Data1"|, metadata: %{"encoding" => "json/plain"}) = a
 
-    assert %{
-             data: :erlang.term_to_binary(:atom),
+    erl_term = :erlang.term_to_binary(:atom)
+    assert example(data: ^erl_term, metadata: %{"encoding" => "application/x-erlang-term"}) = b
+
+    assert example(data: <<123>>, metadata: %{}) = c
+  end
+
+  test "converts to module version" do
+    {:ok, validated} =
+      validate_recursive_opts(
+        name: "Payloads",
+        payloads: [
+          [data: ~s|"Data1"|, metadata: %{"encoding" => "json/plain"}],
+          [
+            data: :erlang.term_to_binary(:atom),
+            metadata: %{"encoding" => "application/x-erlang-term"}
+          ],
+          [data: <<123>>]
+        ]
+      )
+
+    {:ok, created} = recursive_from_opts(validated)
+
+    assert %OptsValidationTest.Recursive{
+             name: "Payloads",
+             optionals: nil,
+             payloads: [a, b, c]
+           } = OptsValidationTest.Recursive.from_record(created)
+
+    assert %OptsValidationTest.Example{data: ~s|"Data1"|, metadata: %{"encoding" => "json/plain"}} =
+             a
+
+    erl_term = :erlang.term_to_binary(:atom)
+
+    assert %OptsValidationTest.Example{
+             data: ^erl_term,
              metadata: %{"encoding" => "application/x-erlang-term"}
-           } == Enum.into(b, %{})
+           } = b
 
-    assert %{data: <<123>>, metadata: %{}} == Enum.into(c, %{})
+    assert %OptsValidationTest.Example{data: <<123>>} = c
   end
 end
