@@ -89,7 +89,6 @@ defmodule TemporalEngine.Config do
     @default false
     @type ignore_evicts_on_shutdown :: required :: bool()
 
-
     @doc "If set, core will issue cancels for all outstanding activities and nexus operations after shutdown has been initiated and this amount of time has elapsed."
     @type graceful_shutdown_period :: Duration.duration()
 
@@ -101,7 +100,8 @@ defmodule TemporalEngine.Config do
     @type workflow_failure_errors :: required :: [Config.workflow_error_type()]
 
     @doc "Like `workflow_failure_errors`, but specific to certain workflow types (the map key)."
-    @type workflow_types_to_failure_errors :: required :: %{String.t() => Config.workflow_error_type()}
+    @type workflow_types_to_failure_errors ::
+            required :: %{String.t() => Config.workflow_error_type()}
 
     @doc """
     The maximum allowed number of workflow tasks that will ever be given to this worker at one time.
@@ -181,9 +181,12 @@ defmodule TemporalEngine.Config do
   end
 
   deftype :worker_tuner do
-    @type workflow_slot_supplier :: required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
-    @type activity_slot_supplier :: required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
-    @type local_activity_slot_supplier :: required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
+    @type workflow_slot_supplier ::
+            required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
+    @type activity_slot_supplier ::
+            required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
+    @type local_activity_slot_supplier ::
+            required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
   end
 
   deftype :fixed_slot_supplier do

@@ -60,26 +60,29 @@ defmodule TemporalEngine.Data.TypeSpec do
     fields_to_types =
       fields
       |> Enum.map(fn field ->
-        typespec = if field[:required] do
-          field.field[:typespec]
-        else
-          {:|, [], [field.field[:typespec], nil]}
-        end
+        typespec =
+          if field[:required] do
+            field.field[:typespec]
+          else
+            {:|, [], [field.field[:typespec], nil]}
+          end
 
-        {field[:field][:type_name], typespec}
+        {elem(field[:field][:type_name], 0), typespec}
       end)
 
     expanded_field_types =
       fields
       |> Enum.map(fn field ->
         typespec = expand_aliases(field.field[:typespec], __CALLER__)
-        typespec = if field[:required] do
-          typespec
-        else
-          {:|, [], [typespec, nil]}
-        end
 
-        {field[:field][:type_name], typespec}
+        typespec =
+          if field[:required] do
+            typespec
+          else
+            {:|, [], [typespec, nil]}
+          end
+
+        {elem(field[:field][:type_name], 0), typespec}
       end)
 
     structdoc = Enum.find_value(extracted, & &1[:structdoc])
@@ -108,6 +111,7 @@ defmodule TemporalEngine.Data.TypeSpec do
 
     validate_opts_name = :"validate_#{name}_opts"
     field_types_name = :"get_#{name}_field_types"
+
     quote do
       @typedoc unquote(~s|#{structdoc}\n\n---\n\n#{Enum.join(fields_to_docs, "\n\n")}|)
       @type unquote({name, [], nil}) ::
@@ -117,14 +121,21 @@ defmodule TemporalEngine.Data.TypeSpec do
       Record.defrecord(unquote(name), unquote(field_names))
 
       @doc false
-      @spec unquote(validate_opts_name)(opts :: keyword()) :: {:ok, validated :: keyword()} | {:error, term()}
+      @spec unquote(validate_opts_name)(opts :: keyword()) ::
+              {:ok, validated :: keyword()} | {:error, term()}
       def unquote(validate_opts_name)(opts),
-          do: TemporalEngine.Data.TypeSpec.validate(opts, __MODULE__, unquote(name), unquote(field_names))
+        do:
+          TemporalEngine.Data.TypeSpec.validate(
+            opts,
+            __MODULE__,
+            unquote(name),
+            unquote(field_names)
+          )
 
       @doc false
       @spec unquote(field_types_name)() :: term()
       def unquote(field_types_name)(),
-          do: unquote(Macro.escape(expanded_field_types))
+        do: unquote(Macro.escape(expanded_field_types))
 
       defmodule unquote(Module.concat([__CALLER__.module, Macro.camelize("#{name}")])) do
         @moduledoc unquote(~s|#{structdoc}\n\n|)
@@ -138,24 +149,119 @@ defmodule TemporalEngine.Data.TypeSpec do
   end
 
   @type field_names :: [atom() | {atom(), default :: term()}]
-  @spec validate(opts :: keyword(), caller :: module(), name :: atom(), field_names :: field_names()) :: {:ok, validated :: keyword()} | {:error, term()}
+  @spec validate(
+          opts :: keyword(),
+          caller :: module(),
+          name :: atom(),
+          field_names :: field_names()
+        ) :: {:ok, validated :: keyword()} | {:error, term()}
   def validate(opts, caller, name, field_names) do
-    valid_fields = Enum.map(field_names, fn
-      name when is_atom(name) -> name
-      {name, _default} when is_atom(name) -> name
-    end)
+    opts_with_defaults =
+      Enum.flat_map(field_names, fn
+        name when is_atom(name) ->
+          if Keyword.has_key?(opts, name) do
+            [{name, opts[name]}]
+          else
+            []
+          end
+
+        {name, default} when is_atom(name) ->
+          if Keyword.has_key?(opts, name) do
+            [{name, opts[name]}]
+          else
+            [{name, default}]
+          end
+      end)
 
     field_types = apply(caller, :"get_#{name}_field_types", [])
-    field_types |> IO.inspect(label: "HMMm")
 
-    unknown_options = Keyword.drop(opts, valid_fields)
+    normalized =
+      Enum.map(field_types, fn {name, type} ->
+        {name, normalize_ast_type(type)}
+      end)
+
+    all_validations =
+      Enum.map(normalized, fn {name, type} ->
+        opt = opts_with_defaults[name]
+        {name, validate_type(type, name, name, opt)}
+      end)
+
+    validation_errors =
+      all_validations
+      |> Enum.filter(fn {_name, val} -> val != :ok end)
+      |> Enum.flat_map(fn {_name, {:error, errors}} -> errors end)
+
+    unknown_options = Keyword.drop(opts, Keyword.keys(opts_with_defaults))
 
     cond do
       Enum.any?(unknown_options) ->
-        {:error, "Unexpected fields given for #{name} - #{inspect(unknown_options)}"}
-    end
+        {:error, ["Unexpected fields given for #{name} - #{inspect(unknown_options)}"]}
 
-    {:ok, opts}
+      Enum.any?(validation_errors) ->
+        {:error, validation_errors}
+
+      true ->
+        {:ok, opts_with_defaults}
+    end
+  end
+
+  defp validate_type({:%{}, k_type, v_type}, name, full_name, val) when is_map(val) do
+    errors =
+      Enum.reduce(val, [], fn {k, v}, acc ->
+        k_errors =
+          with :ok <- validate_type(k_type, name, "#{full_name}(Key: #{inspect(k)})", k) do
+            []
+          else
+            {:error, errors} -> errors
+          end
+
+        v_errors =
+          with :ok <- validate_type(v_type, name, "#{full_name}[#{inspect(k)}]", v) do
+            []
+          else
+            {:error, errors} -> errors
+          end
+
+        acc ++ k_errors ++ v_errors
+      end)
+
+    if Enum.any?(errors), do: {:error, errors}, else: :ok
+  end
+
+  defp validate_type({:%{}, _k_type, _v_type}, name, full_name, val),
+    do: {:error, [{name, "Expected '#{inspect(full_name)}' to be 'map()' but received '#{inspect(val)}'"}]}
+
+  defp validate_type({:binary, 0}, _name, _full_name, val) when is_binary(val), do: :ok
+
+  defp validate_type({:binary, 0}, name, full_name, val),
+    do: {:error, [{name, "Expected '#{inspect(full_name)}' to be 'binary()' but received '#{inspect(val)}'"}]}
+
+  defp validate_type({{:module, :String}, :t, 0}, _name, _full_name, val) when is_binary(val), do: :ok
+
+  defp validate_type({{:module, :String}, :t, 0}, name, full_name, val),
+    do: {:error, [{name, "Expected '#{inspect(full_name)}' to be 'String.t()' but received '#{inspect(val)}'"}]}
+
+  defp validate_type({:list, val_type}, name, full_name, vals) when is_list(vals) do
+    errors =
+      vals
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {val, idx} ->
+        with :ok <- validate_type(val_type, name, "#{full_name}[#{idx}]", val) do
+          []
+        else
+          {:error, errors} -> errors
+        end
+      end)
+
+    if Enum.any?(errors), do: {:error, errors}, else: :ok
+  end
+
+  defp validate_type({:list, _val_type}, name, full_name, val),
+    do: {:error, [{name, "Expected '#{inspect(full_name)}' to be 'list()' but received '#{inspect(val)}'"}]}
+
+  defp validate_type(type, _name, full_name, val) do
+    {type, full_name, val} |> IO.inspect(label: "validate_type")
+    :ok
   end
 
   defp expand_aliases(asts, env) when is_list(asts) do
@@ -167,14 +273,15 @@ defmodule TemporalEngine.Data.TypeSpec do
   end
 
   defp expand_aliases({:__aliases__, meta, ast_aliases}, env) do
-    new_aliases = Enum.map(ast_aliases, fn curr ->
-      with {:ok, expanded} <- Macro.Env.fetch_alias(env, curr) do
+    new_aliases =
+      Enum.map(ast_aliases, fn curr ->
+        with {:ok, expanded} <- Macro.Env.fetch_alias(env, curr) do
           expanded
-      else
-        :error ->
-          curr
-      end
-    end)
+        else
+          :error ->
+            curr
+        end
+      end)
 
     {:__aliases__, meta, new_aliases}
   end
@@ -198,11 +305,11 @@ defmodule TemporalEngine.Data.TypeSpec do
   end
 
   def normalize_ast_type({name, _, args}) do
-    {nil, name, Enum.count(args)}
+    {name, Enum.count(args)}
   end
 
   def normalize_ast_type([type]) do
-    {:list, [normalize_ast_type(type)]}
+    {:list, normalize_ast_type(type)}
   end
 
   def normalize_ast_type(name) when is_atom(name), do: name
