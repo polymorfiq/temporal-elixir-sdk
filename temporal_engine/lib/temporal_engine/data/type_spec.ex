@@ -59,12 +59,28 @@ defmodule TemporalEngine.Data.TypeSpec do
 
     fields_to_types =
       fields
-      |> Enum.map(
-        &{
-          elem(&1[:field][:type_name], 0),
-          if(&1[:required], do: &1.field[:typespec], else: {:|, [], [&1.field[:typespec], nil]})
-        }
-      )
+      |> Enum.map(fn field ->
+        typespec = if field[:required] do
+          field.field[:typespec]
+        else
+          {:|, [], [field.field[:typespec], nil]}
+        end
+
+        {field[:field][:type_name], typespec}
+      end)
+
+    expanded_field_types =
+      fields
+      |> Enum.map(fn field ->
+        typespec = expand_aliases(field.field[:typespec], __CALLER__)
+        typespec = if field[:required] do
+          typespec
+        else
+          {:|, [], [typespec, nil]}
+        end
+
+        {field[:field][:type_name], typespec}
+      end)
 
     structdoc = Enum.find_value(extracted, & &1[:structdoc])
 
@@ -90,6 +106,8 @@ defmodule TemporalEngine.Data.TypeSpec do
       {:%, [],
        [{:__MODULE__, [], Elixir}, {:%{}, [], Enum.map(fields_to_types, fn {k, v} -> {k, v} end)}]}
 
+    validate_opts_name = :"validate_#{name}_opts"
+    field_types_name = :"get_#{name}_field_types"
     quote do
       @typedoc unquote(~s|#{structdoc}\n\n---\n\n#{Enum.join(fields_to_docs, "\n\n")}|)
       @type unquote({name, [], nil}) ::
@@ -97,6 +115,16 @@ defmodule TemporalEngine.Data.TypeSpec do
 
       @doc "#{unquote(structdoc)}\n\nSee `t:#{unquote(name)}/0` for more details."
       Record.defrecord(unquote(name), unquote(field_names))
+
+      @doc false
+      @spec unquote(validate_opts_name)(opts :: keyword()) :: {:ok, validated :: keyword()} | {:error, term()}
+      def unquote(validate_opts_name)(opts),
+          do: TemporalEngine.Data.TypeSpec.validate(opts, __MODULE__, unquote(name), unquote(field_names))
+
+      @doc false
+      @spec unquote(field_types_name)() :: term()
+      def unquote(field_types_name)(),
+          do: unquote(Macro.escape(expanded_field_types))
 
       defmodule unquote(Module.concat([__CALLER__.module, Macro.camelize("#{name}")])) do
         @moduledoc unquote(~s|#{structdoc}\n\n|)
@@ -108,4 +136,74 @@ defmodule TemporalEngine.Data.TypeSpec do
       end
     end
   end
+
+  @type field_names :: [atom() | {atom(), default :: term()}]
+  @spec validate(opts :: keyword(), caller :: module(), name :: atom(), field_names :: field_names()) :: {:ok, validated :: keyword()} | {:error, term()}
+  def validate(opts, caller, name, field_names) do
+    valid_fields = Enum.map(field_names, fn
+      name when is_atom(name) -> name
+      {name, _default} when is_atom(name) -> name
+    end)
+
+    field_types = apply(caller, :"get_#{name}_field_types", [])
+    field_types |> IO.inspect(label: "HMMm")
+
+    unknown_options = Keyword.drop(opts, valid_fields)
+
+    cond do
+      Enum.any?(unknown_options) ->
+        {:error, "Unexpected fields given for #{name} - #{inspect(unknown_options)}"}
+    end
+
+    {:ok, opts}
+  end
+
+  defp expand_aliases(asts, env) when is_list(asts) do
+    Enum.map(asts, &expand_aliases(&1, env))
+  end
+
+  defp expand_aliases({:%{}, meta, [{key, value}]}, env) do
+    {:%{}, meta, [{expand_aliases(key, env), expand_aliases(value, env)}]}
+  end
+
+  defp expand_aliases({:__aliases__, meta, ast_aliases}, env) do
+    new_aliases = Enum.map(ast_aliases, fn curr ->
+      with {:ok, expanded} <- Macro.Env.fetch_alias(env, curr) do
+          expanded
+      else
+        :error ->
+          curr
+      end
+    end)
+
+    {:__aliases__, meta, new_aliases}
+  end
+
+  defp expand_aliases({name, meta, args}, env) do
+    {expand_aliases(name, env), meta, expand_aliases(args, env)}
+  end
+
+  defp expand_aliases(name, _env) when is_atom(name), do: name
+
+  def normalize_ast_type({:%{}, _, [{key, value}]}) do
+    {:%{}, normalize_ast_type(key), normalize_ast_type(value)}
+  end
+
+  def normalize_ast_type({{:., _, [caller, called]}, _, args}) do
+    {normalize_ast_type(caller), normalize_ast_type(called), Enum.count(args)}
+  end
+
+  def normalize_ast_type({:__aliases__, _, [name]}) do
+    {:module, name}
+  end
+
+  def normalize_ast_type({name, _, args}) do
+    {nil, name, Enum.count(args)}
+  end
+
+  def normalize_ast_type([type]) do
+    {:list, [normalize_ast_type(type)]}
+  end
+
+  def normalize_ast_type(name) when is_atom(name), do: name
 end

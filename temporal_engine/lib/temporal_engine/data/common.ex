@@ -1,6 +1,18 @@
 defmodule TemporalEngine.Data.Common do
   use TemporalEngine.Data.TypeSpec
 
+  @type versioning_behavior :: :unspecified | :pinned | :auto_upgrade
+
+  deftype :worker_deployment_version do
+    @structdoc "Identifies a specific version of a worker deployment."
+
+    @doc "Name of the deployment"
+    @type deployment_name :: required :: String.t()
+
+    @doc "Build ID for the worker."
+    @type build_id :: required :: String.t()
+  end
+
   deftype :workflow_execution do
     @structdoc """
     Identifies a specific workflow within a namespace. Practically speaking, because run_id is a uuid, a workflow execution is globally unique.
