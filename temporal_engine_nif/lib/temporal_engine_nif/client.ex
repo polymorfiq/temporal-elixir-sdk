@@ -8,16 +8,14 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
   import TemporalEngine.Client
   import TemporalEngine.Data.Priority
 
+  alias TemporalEngine.Config.WorkerConfig
   alias TemporalEngineNif.Core
   alias TemporalEngineNif.Data.Duration
   alias TemporalEngineNif.Data.Payload
   alias TemporalEngineNif.Data.Priority
   alias TemporalEngineNif.Data.RetryPolicy
-  alias TemporalEngineNif.Data.WorkerOpts
   alias TemporalEngineNif.Data.WorkerDeploymentOpts
   alias TemporalEngineNif.Data.WorkerDeploymentVersion
-  alias TemporalEngineNif.Data.WorkerPollerAutoscalingOpts
-  alias TemporalEngineNif.Data.WorkerPollerSimpleMaximumOpts
   alias TemporalEngineNif.Data.WorkerTunerOpts
   alias TemporalEngineNif.Data.WorkerTunerResourceOpts
   alias TemporalEngineNif.Data.WorkflowArguments
@@ -31,43 +29,10 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
   def id(client), do: client.id
 
   @impl true
-  def create_worker(client, opts) do
+  def create_worker(client, config) do
     parent = self()
 
-    types = worker_opts(opts, :task_types)
-
-    worker_opts = %WorkerOpts{
-      namespace: worker_opts(opts, :namespace),
-      task_queue: worker_opts(opts, :task_queue),
-      deployment_options: worker_opts(opts, :deployment_options) |> maybe_opts(),
-      max_cached_workflows: worker_opts(opts, :max_cached_workflows),
-      nonsticky_to_sticky_poll_ratio: worker_opts(opts, :nonsticky_to_sticky_poll_ratio),
-      enable_workflows: task_types(types, :enable_workflows),
-      enable_local_activities: task_types(types, :enable_local_activities),
-      enable_remote_activities: task_types(types, :enable_remote_activities),
-      enable_nexus: task_types(types, :enable_nexus),
-      sticky_queue_schedule_to_start_timeout:
-        Duration.from_record(worker_opts(opts, :sticky_queue_schedule_to_start_timeout)),
-      max_heartbeat_throttle_interval:
-        Duration.from_record(worker_opts(opts, :max_heartbeat_throttle_interval)),
-      default_heartbeat_throttle_interval:
-        Duration.from_record(worker_opts(opts, :default_heartbeat_throttle_interval)),
-      graceful_shutdown_period:
-        Duration.from_record(worker_opts(opts, :graceful_shutdown_period)),
-      nondeterminism_as_workflow_fail: worker_opts(opts, :nondeterminism_as_workflow_fail),
-      tuner: worker_opts(opts, :tuner) |> maybe_opts(),
-      nondeterminism_as_workflow_fail_for_types:
-        worker_opts(opts, :nondeterminism_as_workflow_fail_for_types),
-      plugins: worker_opts(opts, :plugins),
-      max_worker_activities_per_second: worker_opts(opts, :max_worker_activities_per_second),
-      max_task_queue_activities_per_second:
-        worker_opts(opts, :max_task_queue_activities_per_second),
-      identity_override: worker_opts(opts, :identity_override),
-      workflow_task_poller_behavior:
-        worker_opts(opts, :workflow_task_poller_behavior) |> maybe_opts(),
-      activity_task_poller_behavior:
-        worker_opts(opts, :activity_task_poller_behavior) |> maybe_opts()
-    }
+    worker_opts = WorkerConfig.from_record!(config)
 
     {pid, ref} =
       spawn_monitor(fn ->
@@ -85,7 +50,7 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
                 {self(),
                  {:ok,
                   %Worker{
-                    id: worker_opts(opts, :id),
+                    id: worker_opts.id,
                     core: worker,
                     client: client,
                     runtime: client.runtime
@@ -266,22 +231,6 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
        min_slots: resource(supplier, :min_slots),
        max_slots: resource(supplier, :max_slots),
        ramp_throttle: resource(supplier, :ramp_throttle)
-     }}
-  end
-
-  defp maybe_opts(autoscaling_poller() = poller) do
-    {:autoscaling_poller,
-     %WorkerPollerAutoscalingOpts{
-       minimum: autoscaling_poller(poller, :minimum),
-       maximum: autoscaling_poller(poller, :maximum),
-       initial: autoscaling_poller(poller, :initial)
-     }}
-  end
-
-  defp maybe_opts(simple_maximum_poller() = poller) do
-    {:simple_maximum,
-     %WorkerPollerSimpleMaximumOpts{
-       simple_maximum: simple_maximum_poller(poller, :simple_maximum)
      }}
   end
 end

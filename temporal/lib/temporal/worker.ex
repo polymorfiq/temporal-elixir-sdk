@@ -1,9 +1,8 @@
 defmodule Temporal.Worker do
   defstruct [:id, :task_queue]
 
-  import TemporalEngine.Client
+  import TemporalEngine.Config
 
-  alias TemporalEngine.Data.Duration
   alias Temporal.Activity
   alias Temporal.Client
   alias Temporal.CoreSdk.CoreClient
@@ -267,82 +266,7 @@ defmodule Temporal.Worker do
             {WorkerSupervisor,
              {
                exec_ctx,
-               [
-                 config:
-                   worker_opts(
-                     id: worker_id,
-                     namespace: opts[:namespace],
-                     task_queue: opts[:task_queue],
-                     deployment_options:
-                       if(deploy = opts[:deployment_options],
-                         do:
-                           deployment(
-                             version:
-                               if(vers = deploy[:version],
-                                 do:
-                                   version(
-                                     build_id: vers[:build_id],
-                                     deployment_name: vers[:deployment_name]
-                                   )
-                               ),
-                             use_worker_versioning: deploy[:use_worker_versioning],
-                             default_versioning_behavior: deploy[:default_versioning_behavior]
-                           )
-                       ),
-                     max_cached_workflows: opts[:max_cached_workflows],
-                     nonsticky_to_sticky_poll_ratio: opts[:nonsticky_to_sticky_poll_ratio],
-                     task_types:
-                       if(types = opts[:task_types],
-                         do:
-                           task_types(
-                             enable_workflows: types[:enable_workflows],
-                             enable_local_activities: types[:enable_local_activities],
-                             enable_remote_activities: types[:enable_remote_activities],
-                             enable_nexus: types[:enable_nexus]
-                           )
-                       ),
-                     sticky_queue_schedule_to_start_timeout:
-                       if(timeout = opts[:sticky_queue_schedule_to_start_timeout],
-                         do: Duration.from_tuple(timeout)
-                       ),
-                     max_heartbeat_throttle_interval:
-                       if(interval = opts[:max_heartbeat_throttle_interval],
-                         do: Duration.from_tuple(interval)
-                       ),
-                     default_heartbeat_throttle_interval:
-                       if(interval = opts[:default_heartbeat_throttle_interval],
-                         do: Duration.from_tuple(interval)
-                       ),
-                     graceful_shutdown_period:
-                       if(period = opts[:graceful_shutdown_period],
-                         do: Duration.from_tuple(period)
-                       ),
-                     nondeterminism_as_workflow_fail: opts[:nondeterminism_as_workflow_fail],
-                     tuner:
-                       if(tuner_opts = opts[:tuner],
-                         do:
-                           tuner(
-                             workflow_slot_supplier:
-                               slot_supplier_to_record(tuner_opts[:workflow_slot_supplier]),
-                             activity_slot_supplier:
-                               slot_supplier_to_record(tuner_opts[:activity_slot_supplier]),
-                             local_activity_slot_supplier:
-                               slot_supplier_to_record(tuner_opts[:local_activity_slot_supplier])
-                           )
-                       ),
-                     nondeterminism_as_workflow_fail_for_types:
-                       opts[:nondeterminism_as_workflow_fail_for_types],
-                     plugins: opts[:plugins],
-                     max_worker_activities_per_second: opts[:max_worker_activities_per_second],
-                     max_task_queue_activities_per_second:
-                       opts[:max_task_queue_activities_per_second],
-                     identity_override: opts[:identity_override],
-                     workflow_task_poller_behavior:
-                       poller_to_record(opts[:workflow_task_poller_behavior]),
-                     activity_task_poller_behavior:
-                       poller_to_record(opts[:activity_task_poller_behavior])
-                   )
-               ],
+               worker_config_from_opts!(opts ++ [id: worker_id]),
                [name: reg_name, shutdown: 60_000]
              }},
             restart: :transient
@@ -455,28 +379,6 @@ defmodule Temporal.Worker do
       pid
     else
       nil
-    end
-  end
-
-  defp slot_supplier_to_record(kw) do
-    if kw[:fixed_size] do
-      fixed(size: kw[:fixed_size])
-    else
-      resource(
-        target_mem_usage: kw[:target_mem_usage],
-        target_cpu_usage: kw[:target_cpu_usage],
-        min_slots: kw[:min_slots],
-        max_slots: kw[:max_slots],
-        ramp_throttle: kw[:ramp_throttle]
-      )
-    end
-  end
-
-  defp poller_to_record(kw) do
-    if kw[:simple_maximum] do
-      simple_maximum_poller(simple_maximum: kw[:simple_maximum])
-    else
-      autoscaling_poller(minimum: kw[:minimum], maximum: kw[:maximum], initial: kw[:initial])
     end
   end
 end

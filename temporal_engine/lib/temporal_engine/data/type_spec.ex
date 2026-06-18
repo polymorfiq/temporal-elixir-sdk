@@ -391,7 +391,7 @@ defmodule TemporalEngine.Data.TypeSpec do
 
     cond do
       Enum.any?(unknown_options) ->
-        {:error, ["Unexpected fields given for #{env.name} - #{inspect(unknown_options)}"]}
+        {:error, [{env.name, "Unexpected fields given for #{env.name} - #{inspect(unknown_options)}"}]}
 
       Enum.any?(validation_errors) ->
         {:error, validation_errors}
@@ -673,6 +673,16 @@ defmodule TemporalEngine.Data.TypeSpec do
           "Expected '#{inspect(env.full_name)}' to be 'bitstring()' but received '#{inspect(val)}'"}
        ]}
 
+  defp validate_type({:bool, _, []}, _env, val) when is_boolean(val), do: {:ok, val}
+
+  defp validate_type({:bool, _, []}, env, val),
+       do:
+         {:error,
+         [
+           {env.name,
+             "Expected '#{inspect(env.full_name)}' to be 'boolean()' but received '#{inspect(val)}'"}
+         ]}
+
   defp validate_type({:boolean, _, []}, _env, val) when is_boolean(val), do: {:ok, val}
 
   defp validate_type({:boolean, _, []}, env, val),
@@ -928,7 +938,7 @@ defmodule TemporalEngine.Data.TypeSpec do
   defp validate_type(nil, env, val),
     do:
       {:error,
-       [{env.name, "Expected '#{inspect(env.full_name)}' to be `nil` but got '#{inspect(val)}'"}]}
+       [{env.name, ["Expected '#{inspect(env.full_name)}' to be `nil` but got '#{inspect(val)}'"]}]}
 
   defp validate_type(type, _env, val) do
     Logger.warning("Could not validate type: #{inspect(type)}")

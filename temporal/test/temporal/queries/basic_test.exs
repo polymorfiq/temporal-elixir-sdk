@@ -3,10 +3,7 @@ defmodule Temporal.Queries.BasicTest do
 
   require Logger
 
-  import TemporalEngine.Data.Commands
-
   alias Temporal.{TaskQueue, Workflow}
-  alias TemporalEngine.Mock.Worker, as: WorkerMock
 
   setup_all [
     :configure_task_queue,

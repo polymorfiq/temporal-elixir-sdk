@@ -2,16 +2,17 @@ defmodule Temporal.Workflows.CoreTest do
   use ExUnit.Case
 
   require TemporalEngine.Data.ActivationCompletion
+  require TemporalEngine.Data.Jobs
 
   import TemporalEngine.Data.Activation
   import TemporalEngine.Data.Commands
-  import TemporalEngine.Data.Jobs
   import TemporalEngine.Data.ActivityTask
   import TemporalEngine.Data.ActivityTaskCompletion
 
   alias Temporal.TaskQueue
   alias TestWorkflows.ActivitiesWithAwait
   alias TemporalEngine.Data.Duration
+  alias TemporalEngine.Data.Jobs
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Mock.Worker, as: WorkerMock
 
@@ -44,7 +45,7 @@ defmodule Temporal.Workflows.CoreTest do
         5000 -> {:error, "Did not receive activation"}
       end
 
-    assert_receive {:job, initialize_workflow()}, 1000
+    assert_receive {:job, Jobs.initialize_workflow()}, 1000
 
     WorkerMock.send_commands(worker, run_id, [
       schedule_activity(
@@ -59,8 +60,10 @@ defmodule Temporal.Workflows.CoreTest do
 
     {:ok, task_token} =
       receive do
-        {:activity_task,
-         start_activity(activity_type: "my-activity-type", task_token: task_token)} ->
+        activity_task(
+          task_token: task_token,
+          variant: start_activity(activity_type: "my-activity-type")
+        ) ->
           {:ok, task_token}
       after
         5000 -> {:error, "Did not receive activity start"}
@@ -68,11 +71,12 @@ defmodule Temporal.Workflows.CoreTest do
 
     WorkerMock.send_activity_task_completion(
       worker,
-      task_completed(payload: Payload.record_from_value("My test"), task_token: task_token)
+      task_token,
+      activity_completed(result: Payload.record_from_value("My test"))
     )
 
     assert_receive {:job,
-                    resolve_activity(
+                    Jobs.resolve_activity(
                       seq: 1,
                       result: activity_completed(result: "My test")
                     )},
@@ -82,7 +86,7 @@ defmodule Temporal.Workflows.CoreTest do
       complete_workflow_execution(result: Payload.record_from_value("Workflow output"))
     ])
 
-    assert_receive {:job, remove_from_cache(reason: :workflow_execution_ending)}, 1000
+    assert_receive {:job, Jobs.remove_from_cache(reason: :workflow_execution_ending)}, 1000
     WorkerMock.send_commands(worker, run_id, [])
   end
 

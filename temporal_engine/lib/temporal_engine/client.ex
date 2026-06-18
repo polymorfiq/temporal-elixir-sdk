@@ -1,4 +1,5 @@
 defprotocol TemporalEngine.Client do
+  alias TemporalEngine.Config
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Priority
@@ -8,55 +9,8 @@ defprotocol TemporalEngine.Client do
 
   require Record
 
-  @spec create_worker(t(), worker_opts()) :: {:ok, Worker.t()} | {:error, reason :: term()}
-  def create_worker(client, opts)
-
-  Record.defrecord(:worker_opts, [
-    :id,
-    :namespace,
-    :task_queue,
-    :deployment_options,
-    :max_cached_workflows,
-    :nonsticky_to_sticky_poll_ratio,
-    :task_types,
-    :sticky_queue_schedule_to_start_timeout,
-    :max_heartbeat_throttle_interval,
-    :default_heartbeat_throttle_interval,
-    :graceful_shutdown_period,
-    :nondeterminism_as_workflow_fail,
-    :tuner,
-    :nondeterminism_as_workflow_fail_for_types,
-    :plugins,
-    :workflow_task_poller_behavior,
-    :activity_task_poller_behavior,
-    max_worker_activities_per_second: nil,
-    max_task_queue_activities_per_second: nil,
-    identity_override: nil
-  ])
-
-  @type worker_opts ::
-          record(:worker_opts,
-            id: String.t(),
-            namespace: String.t(),
-            task_queue: String.t(),
-            deployment_options: deployment(),
-            max_cached_workflows: pos_integer(),
-            nonsticky_to_sticky_poll_ratio: float(),
-            task_types: task_types(),
-            sticky_queue_schedule_to_start_timeout: Duration.duration(),
-            max_heartbeat_throttle_interval: Duration.duration(),
-            default_heartbeat_throttle_interval: Duration.duration(),
-            graceful_shutdown_period: Duration.duration(),
-            nondeterminism_as_workflow_fail: bool(),
-            tuner: tuner(),
-            nondeterminism_as_workflow_fail_for_types: [String.t()],
-            plugins: [String.t()],
-            max_worker_activities_per_second: float() | nil,
-            max_task_queue_activities_per_second: float() | nil,
-            identity_override: String.t() | nil,
-            workflow_task_poller_behavior: poller_behavior(),
-            activity_task_poller_behavior: poller_behavior()
-          )
+  @spec create_worker(t(), Config.worker_config()) :: {:ok, Worker.t()} | {:error, reason :: term()}
+  def create_worker(client, config)
 
   Record.defrecord(:deployment, [
     :version,

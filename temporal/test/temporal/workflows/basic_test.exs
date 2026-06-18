@@ -68,7 +68,7 @@ defmodule Temporal.Workflows.BasicTest do
 
     assert_receive {:completion,
                     ActivationCompletion.completion(
-                      result: ActivationCompletion.success(commands: [])
+                      status: ActivationCompletion.success(commands: [])
                     )},
                    1000
   end

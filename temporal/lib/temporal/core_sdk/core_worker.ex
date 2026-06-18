@@ -2,9 +2,10 @@ defmodule Temporal.CoreSdk.CoreWorker do
   defstruct [:core]
   use GenServer
 
-  import TemporalEngine.Client
+  import TemporalEngine.Config
 
   alias Temporal.CoreSdk.CoreRuntime
+  alias TemporalEngine.Config
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.CoreSdk.Data.WorkerOpts
   alias Temporal.Supervisor.ExecutionContext
@@ -30,22 +31,20 @@ defmodule Temporal.CoreSdk.CoreWorker do
           core: term()
         }
 
-  @type worker_opts :: [{:config, WorkerOpts.t()} | {:forward_polled_messages, pid()}]
-
   @worker_store Temporal.Application.worker_store()
 
-  @spec start_link({ExecutionContext.t(), worker_opts(), keyword()}) ::
+  @spec start_link({ExecutionContext.t(), Config.worker_config_opts(), keyword()}) ::
           {:ok, pid()} | {:error, term()}
-  def start_link({exec_ctx, opts, server_opts}) do
-    config = Keyword.fetch!(opts, :config)
+  def start_link({exec_ctx, config_opts, server_opts}) do
+    config = Config.worker_config_from_opts!(config_opts)
 
-    GenServer.start_link(__MODULE__, {exec_ctx, config, opts}, server_opts)
+    GenServer.start_link(__MODULE__, {exec_ctx, config}, server_opts)
   end
 
   @impl true
-  @spec init({ExecutionContext.t(), WorkerOpts.t(), worker_opts()}) ::
+  @spec init({ExecutionContext.t(), WorkerOpts.t(), Config.worker_config_opts()}) ::
           {:ok, t()} | {:error, term()}
-  def init({exec_ctx, config, _opts}) do
+  def init({exec_ctx, config}) do
     Process.set_label({:worker, exec_ctx.worker_id})
 
     try do
@@ -77,9 +76,9 @@ defmodule Temporal.CoreSdk.CoreWorker do
        server_state(
          id: exec_ctx.worker_id,
          core: core,
-         task_queue: worker_opts(config, :task_queue),
+         task_queue: worker_config(config, :task_queue),
          namespace: exec_ctx.namespace,
-         identity_override: worker_opts(config, :identity_override),
+         identity_override: worker_config(config, :client_identity_override),
          runtime: exec_ctx.runtime,
          client: exec_ctx.client
        )}
