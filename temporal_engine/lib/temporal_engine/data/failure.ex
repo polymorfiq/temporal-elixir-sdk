@@ -29,9 +29,9 @@ defmodule TemporalEngine.Data.Failure do
       - - The resulting JSON object is converted to Payload using the default PayloadConverter and should be processed by the user-provided PayloadCodec
       - If there’s demand, we could allow overriding the default SDK implementation to encode other opaque Failure attributes. (– api-linter: core::0203::optional=disabled –)
     """
-    @type encoded_attributes :: Payload.payload()
-    @type cause :: Failure.failure()
-    @type failure_info :: Failure.info()
+    @type encoded_attributes :: nested!(Payload.payload())
+    @type cause :: nested!(Failure.failure())
+    @type failure_info :: nested!(Failure.info())
   end
 
   @type info ::
@@ -65,12 +65,12 @@ defmodule TemporalEngine.Data.Failure do
     @type non_retryable :: required :: bool()
 
     @default []
-    @type details :: required :: [Payload.payload()]
+    @type details :: required :: [nested!(Payload.payload())]
 
     @doc """
     `next_retry_delay` can be used by the client to override the activity retry interval calculated by the retry policy. Retry attempts will still be subject to the maximum retries limit and total time limit defined by the policy.
     """
-    @type next_retry_delay :: Duration.duration()
+    @type next_retry_delay :: nested!(Duration.duration())
 
     @default :unspecified
     @type category :: required :: Failure.category()
@@ -82,7 +82,7 @@ defmodule TemporalEngine.Data.Failure do
   deftype :timeout_reached do
     @default :unspecified
     @type timeout_type :: required :: Failure.timeout_type()
-    @type last_heartbeat_details :: [Payload.payload()]
+    @type last_heartbeat_details :: [nested!(Payload.payload())]
   end
 
   @type timeout_type ::
@@ -93,7 +93,7 @@ defmodule TemporalEngine.Data.Failure do
   deftype :cancelled do
     @doc "The identity of the worker or client that requested the cancellation."
     @type identity :: required :: String.t()
-    @type details :: [Payload.payload()]
+    @type details :: [nested!(Payload.payload())]
   end
 
   deftype :terminated do
@@ -106,16 +106,16 @@ defmodule TemporalEngine.Data.Failure do
   end
 
   deftype :reset_workflow do
-    @type last_heartbeat_details :: required :: [Payload.payload()]
+    @type last_heartbeat_details :: required :: [nested!(Payload.payload())]
   end
 
   deftype :activity do
     @type scheduled_event_id :: required :: integer()
     @type started_event_id :: required :: integer()
     @type identity :: required :: String.t()
-    @type activity_id :: required :: Failure.activity_type()
-    @type retry_state :: required :: Failure.retry_state()
-    @type activity_type :: Failure.activity_type()
+    @type activity_id :: required :: nested!(Failure.activity_type())
+    @type retry_state :: required :: nested!(Failure.retry_state())
+    @type activity_type :: nested!(Failure.activity_type())
   end
 
   deftype :activity_type do
@@ -126,10 +126,10 @@ defmodule TemporalEngine.Data.Failure do
     @type namespace :: required :: String.t()
     @type initiated_event_id :: required :: integer()
     @type started_event_id :: required :: integer()
-    @type retry_state :: required :: Failure.retry_state()
+    @type retry_state :: required :: nested!(Failure.retry_state())
 
-    @type workflow_execution :: Common.workflow_execution()
-    @type workflow_type :: Failure.workflow_type()
+    @type workflow_execution :: nested!(Common.workflow_execution())
+    @type workflow_type :: nested!(Failure.workflow_type())
   end
 
   deftype :workflow_type do
@@ -166,7 +166,7 @@ defmodule TemporalEngine.Data.Failure do
 
     @doc "Retry behavior, defaults to the retry behavior of the error type as defined in the spec."
     @default :unspecified
-    @type retry_behavior :: required :: Failure.retry_behavior()
+    @type retry_behavior :: required :: nested!(Failure.retry_behavior())
   end
 
   @type retry_behavior :: :unspecified | :retryable | :non_retryable
@@ -185,17 +185,17 @@ defmodule TemporalEngine.Data.Failure do
   @type retry_state_opts :: retry_state()
 
   deftype :workflow_failed do
-    @type failure :: required :: Failure.failure()
+    @type failure :: required :: nested!(Failure.failure())
   end
 
   deftype :workflow_cancelled do
     @default []
-    @type details :: required :: [Payload.payload()]
+    @type details :: required :: [nested!(Payload.payload())]
   end
 
   deftype :workflow_terminated do
     @default []
-    @type details :: required :: [Payload.payload()]
+    @type details :: required :: [nested!(Payload.payload())]
   end
 
   deftype :workflow_timed_out do

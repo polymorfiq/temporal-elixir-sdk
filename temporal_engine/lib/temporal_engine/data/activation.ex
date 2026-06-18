@@ -16,7 +16,7 @@ defmodule TemporalEngine.Data.Activation do
     @type run_id :: required :: String.t()
 
     @doc "The current time as understood by the workflow, which is set by workflow task started events"
-    @type timestamp :: Timestamp.timestamp()
+    @type timestamp :: nested!(Timestamp.timestamp())
 
     @doc "Whether or not the activation is replaying past events"
     @type is_replaying :: required :: bool()
@@ -25,7 +25,7 @@ defmodule TemporalEngine.Data.Activation do
     @type history_length :: required :: pos_integer()
 
     @doc "The things to do upon activating the workflow"
-    @type jobs :: required :: [Jobs.job()]
+    @type jobs :: required :: [nested!(Jobs.job())]
 
     @doc "Internal flags which are available for use by lang. If is_replaying is false, all internal flags may be used. This is not a delta - all previously used flags always appear since this representation is cheap."
     @type available_internal_flags :: required :: [pos_integer()]
@@ -45,13 +45,13 @@ defmodule TemporalEngine.Data.Activation do
 
     It will also be empty for evict-only activations. The deployment name may be empty, but not the build id, if this worker was using the deprecated Build ID-only feature(s).
     """
-    @type deployment_version_for_current_task :: Activation.worker_deployment_version()
+    @type deployment_version_for_current_task :: nested!(Activation.worker_deployment_version())
 
     @doc "The last seen SDK version from the most recent WFT completed event"
     @type last_sdk_version :: String.t()
 
     @doc "Experimental. Optionally decide the versioning behavior that the first task of the new run should use. For example, choose to AutoUpgrade on continue-as-new instead of inheriting the pinned version of the previous run."
-    @type suggest_continue_as_new_reasons :: [Activation.continue_as_new_reason()]
+    @type suggest_continue_as_new_reasons :: [nested!(Activation.continue_as_new_reason())]
 
     @doc "Experimental. True if Workflow’s Target Worker Deployment Version is different from its Pinned Version and the workflow is Pinned."
     @type target_worker_deployment_version_changed :: bool()

@@ -1,6 +1,8 @@
 defmodule TemporalEngine.Data.TypeSpec do
   import TemporalEngine.Helpers.CodePatterns
 
+  require Logger
+
   defmacro __using__(_opts) do
     quote do
       require Record
@@ -70,21 +72,6 @@ defmodule TemporalEngine.Data.TypeSpec do
         {elem(field[:field][:type_name], 0), typespec}
       end)
 
-    expanded_field_types =
-      fields
-      |> Enum.map(fn field ->
-        typespec = expand_aliases(field.field[:typespec], __CALLER__)
-
-        typespec =
-          if field[:required] do
-            typespec
-          else
-            {:|, [], [typespec, nil]}
-          end
-
-        {elem(field[:field][:type_name], 0), typespec}
-      end)
-
     structdoc = Enum.find_value(extracted, & &1[:structdoc])
 
     fields_to_docs =
@@ -107,7 +94,11 @@ defmodule TemporalEngine.Data.TypeSpec do
 
     map_ast =
       {:%, [],
-       [{:__MODULE__, [], Elixir}, {:%{}, [], Enum.map(fields_to_types, fn {k, v} -> {k, v} end)}]}
+       [
+         {:__MODULE__, [], Elixir},
+         {:%{}, [],
+          Enum.map(nested_to_type(fields_to_types, __CALLER__), fn {k, v} -> {k, v} end)}
+       ]}
 
     to_or = fn
       [a], _ -> a
@@ -118,18 +109,19 @@ defmodule TemporalEngine.Data.TypeSpec do
 
     opts_type_ast =
       fields_to_types
-      |> Enum.map(fn {name, type} -> {name, type_to_opts_type(type, __CALLER__)} end)
+      |> nested_to_opts_type(__CALLER__)
       |> to_or.(to_or)
 
     validate_opts_name = :"validate_#{name}_opts"
     field_types_name = :"get_#{name}_field_types"
     from_opts_name = :"#{name}_from_opts"
+    from_opts_bang_name = :"#{name}_from_opts!"
     opts_name = :"#{name}_opts"
 
     quote do
       @typedoc unquote(~s|#{structdoc}\n\n---\n\n#{Enum.join(fields_to_docs, "\n\n")}|)
       @type unquote({name, [], nil}) ::
-              record(unquote(name), unquote(fields_to_types))
+              record(unquote(name), unquote(nested_to_type(fields_to_types, __CALLER__)))
 
       @doc "#{unquote(structdoc)}\n\nSee `t:#{unquote(name)}/0` for more details."
       Record.defrecord(unquote(name), unquote(field_names))
@@ -144,11 +136,16 @@ defmodule TemporalEngine.Data.TypeSpec do
         do:
           TemporalEngine.Data.TypeSpec.validate(
             opts,
-            __MODULE__,
-            unquote(name),
-            base_name,
-            unquote(field_names)
+            %{name: unquote(name), full_name: base_name, module: unquote(__CALLER__.module)},
+            unquote(expand_nested_modules(field_names, __CALLER__))
           )
+
+      @doc "Produces #{unquote(name)} from a keyword list of options"
+      @spec unquote(from_opts_bang_name)(opts :: unquote(opts_name)()) :: unquote(name)()
+      def unquote(from_opts_bang_name)(opts) do
+        {:ok, record} = unquote(from_opts_name)(opts)
+        record
+      end
 
       @doc "Produces #{unquote(name)} from a keyword list of options"
       @spec unquote(from_opts_name)(opts :: unquote(opts_name)()) ::
@@ -157,15 +154,14 @@ defmodule TemporalEngine.Data.TypeSpec do
         do:
           TemporalEngine.Data.TypeSpec.from_opts(
             opts,
-            __MODULE__,
-            unquote(name),
-            unquote(field_names)
+            %{name: unquote(name), full_name: nil, module: unquote(__CALLER__.module)},
+            unquote(expand_nested_modules(field_names, __CALLER__))
           )
 
       @doc false
       @spec unquote(field_types_name)() :: term()
       def unquote(field_types_name)(),
-        do: unquote(Macro.escape(expanded_field_types))
+        do: unquote(Macro.escape(expand_nested_modules(fields_to_types, __CALLER__)))
 
       defmodule unquote(Module.concat([__CALLER__.module, Macro.camelize("#{name}")])) do
         @moduledoc unquote(~s|#{structdoc}\n\n|)
@@ -175,51 +171,21 @@ defmodule TemporalEngine.Data.TypeSpec do
 
         defstruct unquote(field_names)
 
+        @spec from_record!(tuple()) :: {:ok, t()} | {:error, term()}
+        def from_record!(record) do
+          {:ok, data} = from_record(record)
+          data
+        end
+
         @spec from_record(tuple()) :: {:ok, t()} | {:error, term()}
         def from_record(record) do
-          expanded_types = unquote(Macro.escape(expanded_field_types))
-          expanded_types |> IO.inspect(label: "expanded_types")
-
           if unquote(name) == elem(record, 0) do
-            struct_fields =
-              unquote(field_names)
-              |> Enum.with_index()
-              |> Enum.map(fn
-                {{field_name, _}, idx} -> {field_name, elem(record, idx + 1)}
-                {field_name, idx} -> {field_name, elem(record, idx + 1)}
-              end)
-
-            parsed_nested =
-              struct_fields
-              |> Enum.map(fn {name, val} ->
-                case expanded_types[name] do
-                  [{{:., _, [{:__aliases__, _, [mod]}, field]}, _, []}] ->
-                    vals = val
-                    full_mod = Module.concat([mod, Macro.camelize("#{field}")])
-
-                    if Code.ensure_loaded?(full_mod) &&
-                         Kernel.function_exported?(full_mod, :from_record, 1) do
-                      {name, Enum.map(vals, &full_mod.from_record(&1))}
-                    else
-                      {name, vals}
-                    end
-
-                  {{:., _, [{:__aliases__, _, [mod]}, field]}, _, []} ->
-                    full_mod = Module.concat([mod, Macro.camelize("#{field}")])
-
-                    if Code.ensure_loaded?(full_mod) &&
-                         Kernel.function_exported?(full_mod, :from_record, 1) do
-                      {name, full_mod.from_record(val)}
-                    else
-                      {name, val}
-                    end
-
-                  _ ->
-                    {name, val}
-                end
-              end)
-
-            struct(__MODULE__, parsed_nested)
+            TemporalEngine.Data.TypeSpec.from_record(
+              record,
+              __MODULE__,
+              unquote(__CALLER__.module),
+              unquote(name)
+            )
           else
             {:error, "Not a #{unquote(name)} record..."}
           end
@@ -228,136 +194,156 @@ defmodule TemporalEngine.Data.TypeSpec do
     end
   end
 
+  @spec from_record(tuple(), module(), module(), atom()) :: {:ok, term()} | {:error, term()}
+  def from_record(record, to_module, from_module, name) do
+    field_types = apply(from_module, :"get_#{name}_field_types", [])
+
+    fields =
+      field_types
+      |> Enum.with_index()
+      |> Enum.map(fn {{name, type}, idx} ->
+        val = elem(record, idx + 1)
+        {:ok, val_from_record} = struct_val_from_type(type, val)
+        {name, val_from_record}
+      end)
+
+    {:ok, struct(to_module, fields)}
+  end
+
+  defp struct_val_from_type(_, nil), do: {:ok, nil}
+
+  defp struct_val_from_type([ast], vals) do
+    Enum.reduce(vals, {:ok, []}, fn curr, acc ->
+      with {:ok, validated} <- acc, {:ok, val} <- struct_val_from_type(ast, curr) do
+        {:ok, validated ++ [val]}
+      end
+    end)
+  end
+
+  defp struct_val_from_type({:|, _, [a, b]}, val) do
+    with {:ok, validated} <- struct_val_from_type(a, val) do
+      {:ok, validated}
+    else
+      {:error, _} -> struct_val_from_type(b, val)
+    end
+  end
+
+  defp struct_val_from_type(
+         {:nested!, _, [{{:., _, [{:__aliases__, _, aliases}, type_name]}, _, []}]},
+         val
+       ) do
+    mod = Module.concat(aliases ++ [String.to_existing_atom(Macro.camelize("#{type_name}"))])
+    apply(mod, :from_record, [val])
+  end
+
+  defp struct_val_from_type({{:., _, [{:__aliases__, _, [:String]}, :t]}, _, []}, val) do
+    {:ok, val}
+  end
+
+  defp struct_val_from_type({:%{}, _, [{k_type, v_type}]}, vals) do
+    {:ok,
+     Map.new(vals, fn {k, v} ->
+       {:ok, parsed_k} = struct_val_from_type(k_type, k)
+       {:ok, parsed_v} = struct_val_from_type(v_type, v)
+       {parsed_k, parsed_v}
+     end)}
+  end
+
+  defp struct_val_from_type({name, _, []}, val) when is_atom(name) do
+    {:ok, val}
+  end
+
+  defp struct_val_from_type(type, val) do
+    Logger.warning("Unknown type when creating struct: #{inspect(type)} for #{inspect(val)}")
+    {:ok, val}
+  end
+
   @type field_names :: [atom() | {atom(), default :: term()}]
   @spec from_opts(
           opts :: keyword(),
-          caller :: module(),
-          name :: atom(),
+          env :: map(),
           field_names :: field_names()
         ) :: {:ok, term()} | {:error, keyword()}
-  def from_opts(opts, caller, name, field_names) do
-    with {:ok, validated} <- validate(opts, caller, name, name, field_names) do
-      field_types = apply(caller, :"get_#{name}_field_types", [])
+  def from_opts(opts, env, field_names) do
+    with {:ok, validated} <- validate(opts, env, field_names) do
+      field_types = apply(env.module, :"get_#{env.name}_field_types", [])
 
-      normalized =
-        Enum.map(field_types, fn {name, type} ->
-          {name, normalize_ast_type(type)}
+      parsed =
+        Enum.reduce(validated, {:ok, []}, fn {field_name, val}, acc ->
+          name_comps = [env.full_name, field_name] |> Enum.filter(& &1)
+
+          with {:ok, fields} <- acc,
+               {:ok, field} <-
+                 from_nested_opts(
+                   field_types[field_name],
+                   %{env | full_name: Enum.join(name_comps, ".")},
+                   val
+                 ) do
+            {:ok, fields ++ [field]}
+          end
         end)
 
-      record_data =
-        normalized
-        |> Enum.reduce([name], fn
-          {field_name, {:one_of, [{{:module, nested_mod}, nested_field, 0}, nil]}}, acc ->
-            from_opts_fn_name =
-              try do
-                String.to_existing_atom("#{nested_field}_from_opts")
-              rescue
-                ArgumentError -> nil
-              end
-
-            cond do
-              validated[field_name] == nil ->
-                [validated[field_name] | acc]
-
-              from_opts_fn_name && Code.ensure_loaded?(nested_mod) &&
-                  Kernel.function_exported?(nested_mod, from_opts_fn_name, 1) ->
-                [apply(nested_mod, from_opts_fn_name, [validated[field_name]]) | acc]
-
-              true ->
-                [validated[field_name] | acc]
-            end
-
-          {field_name, {{:module, nested_mod}, nested_field, 0}}, acc ->
-            from_opts_fn_name =
-              try do
-                String.to_existing_atom("#{nested_field}_from_opts")
-              rescue
-                ArgumentError -> nil
-              end
-
-            cond do
-              validated[field_name] == nil ->
-                [validated[field_name] | acc]
-
-              from_opts_fn_name && Code.ensure_loaded?(nested_mod) &&
-                  Kernel.function_exported?(nested_mod, from_opts_fn_name, 1) ->
-                [apply(nested_mod, from_opts_fn_name, [validated[field_name]]) | acc]
-
-              true ->
-                [validated[field_name] | acc]
-            end
-
-          {field_name, {:one_of, [{:list, {{:module, nested_mod}, nested_field, 0}}, nil]}},
-          acc ->
-            from_opts_fn_name =
-              try do
-                String.to_existing_atom("#{nested_field}_from_opts")
-              rescue
-                ArgumentError -> nil
-              end
-
-            cond do
-              validated[field_name] == nil ->
-                [validated[field_name] | acc]
-
-              from_opts_fn_name && Code.ensure_loaded?(nested_mod) &&
-                  Kernel.function_exported?(nested_mod, from_opts_fn_name, 1) ->
-                [
-                  Enum.map(validated[field_name], fn curr ->
-                    {:ok, nested} = apply(nested_mod, from_opts_fn_name, [curr])
-                    nested
-                  end)
-                  | acc
-                ]
-
-              true ->
-                [validated[field_name] | acc]
-            end
-
-          {field_name, {:list, {{:module, nested_mod}, nested_field, 0}}}, acc ->
-            from_opts_fn_name =
-              try do
-                String.to_existing_atom("#{nested_field}_from_opts")
-              rescue
-                ArgumentError -> nil
-              end
-
-            cond do
-              validated[field_name] == nil ->
-                [validated[field_name] | acc]
-
-              from_opts_fn_name && Code.ensure_loaded?(nested_mod) &&
-                  Kernel.function_exported?(nested_mod, from_opts_fn_name, 1) ->
-                [
-                  Enum.map(validated[field_name], fn curr ->
-                    {:ok, nested} = apply(nested_mod, from_opts_fn_name, [curr])
-                    nested
-                  end)
-                  | acc
-                ]
-
-              true ->
-                [validated[field_name] | acc]
-            end
-
-          {field_name, _}, acc ->
-            [validated[field_name] | acc]
-        end)
-        |> Enum.reverse()
-        |> List.to_tuple()
-
-      {:ok, record_data}
+      with {:ok, fields} <- parsed do
+        {:ok, List.to_tuple([env.name | fields])}
+      end
     end
+  end
+
+  defp from_nested_opts(_, _, nil), do: {:ok, nil}
+
+  defp from_nested_opts([ast], env, vals) do
+    Enum.reduce(vals, {:ok, []}, fn curr, acc ->
+      with {:ok, validated} <- acc, {:ok, val} <- from_nested_opts(ast, env, curr) do
+        {:ok, validated ++ [val]}
+      end
+    end)
+  end
+
+  defp from_nested_opts({:|, _, [a, b]}, env, val) do
+    with {:ok, validated} <- from_nested_opts(a, env, val) do
+      {:ok, validated}
+    else
+      {:error, _} -> from_nested_opts(b, env, val)
+    end
+  end
+
+  defp from_nested_opts(
+         {:nested!, _, [{{:., _, [{:__aliases__, _, aliases}, type_name]}, _, []}]},
+         _env,
+         val
+       ) do
+    mod = Module.concat(aliases)
+    apply(mod, :"#{type_name}_from_opts", [val])
+  end
+
+  defp from_nested_opts({{:., _, [{:__aliases__, _, [:String]}, :t]}, _, []}, _env, val) do
+    {:ok, val}
+  end
+
+  defp from_nested_opts({:%{}, _, [{k_type, v_type}]}, env, vals) do
+    {:ok,
+     Map.new(vals, fn {k, v} ->
+       {:ok, parsed_k} = from_nested_opts(k_type, env, k)
+       {:ok, parsed_v} = from_nested_opts(v_type, env, v)
+       {parsed_k, parsed_v}
+     end)}
+  end
+
+  defp from_nested_opts({name, _, []}, _env, val) when is_atom(name) do
+    {:ok, val}
+  end
+
+  defp from_nested_opts(other, _env, val) do
+    Logger.warning("Unrecognized nested opts: #{inspect(other)} for #{inspect(val)}")
+    {:ok, val}
   end
 
   @spec validate(
           opts :: keyword(),
-          caller :: module(),
-          name :: atom(),
-          base_name :: String.t() | atom() | nil,
+          env :: map(),
           field_names :: field_names()
         ) :: {:ok, validated :: keyword()} | {:error, term()}
-  def validate(opts, caller, name, base_name, field_names) do
+  def validate(opts, env, field_names) do
     opts_with_defaults =
       Enum.flat_map(field_names, fn
         name when is_atom(name) ->
@@ -375,20 +361,20 @@ defmodule TemporalEngine.Data.TypeSpec do
           end
       end)
 
-    field_types = apply(caller, :"get_#{name}_field_types", [])
-
-    normalized =
-      Enum.map(field_types, fn {name, type} ->
-        {name, normalize_ast_type(type)}
-      end)
+    field_types = apply(env.module, :"get_#{env.name}_field_types", [])
 
     all_validations =
-      Enum.map(normalized, fn {name, type} ->
-        name_comps = [base_name, name] |> Enum.filter(& &1)
+      Enum.map(field_types, fn {name, type} ->
+        name_comps = [env.full_name, name] |> Enum.filter(& &1)
 
         opt = opts_with_defaults[name]
 
-        with {:ok, validated} <- validate_type(type, name, Enum.join(name_comps, "."), opt) do
+        with {:ok, validated} <-
+               validate_type(
+                 type,
+                 %{env | name: name, full_name: Enum.join(name_comps, ".")},
+                 opt
+               ) do
           {name, validated}
         else
           {:error, errors} ->
@@ -405,7 +391,7 @@ defmodule TemporalEngine.Data.TypeSpec do
 
     cond do
       Enum.any?(unknown_options) ->
-        {:error, ["Unexpected fields given for #{name} - #{inspect(unknown_options)}"]}
+        {:error, ["Unexpected fields given for #{env.name} - #{inspect(unknown_options)}"]}
 
       Enum.any?(validation_errors) ->
         {:error, validation_errors}
@@ -415,18 +401,44 @@ defmodule TemporalEngine.Data.TypeSpec do
     end
   end
 
-  defp validate_type({{:module, :String}, :t, 0}, _name, _full_name, val) when is_binary(val),
-    do: {:ok, val}
+  defp validate_type({{:., _, [{:__aliases__, _, [:String]}, :t]}, _, []}, _env, val)
+       when is_binary(val),
+       do: {:ok, val}
 
-  defp validate_type({{:module, :String}, :t, 0}, name, full_name, val) when is_binary(val) do
+  defp validate_type({{:., _, [{:__aliases__, _, [:String]}, :t]}, _, []}, env, val) do
     {:error,
      [
-       {name,
-        "Expected '#{inspect(full_name)}' to be 'String.t()' but received '#{inspect(val)}'"}
+       {env.name,
+        "Expected '#{inspect(env.full_name)}' to be 'String.t()' but received '#{inspect(val)}'"}
      ]}
   end
 
-  defp validate_type({{:module, mod}, type_name, 0}, name, full_name, val) do
+  defp validate_type([ast], env, vals) when is_list(vals) do
+    vals
+    |> Enum.with_index()
+    |> Enum.reduce({:ok, []}, fn {val, idx}, acc ->
+      with {:ok, validated} <- acc,
+           {:ok, valid} <- validate_type(ast, %{env | full_name: "#{env.full_name}[#{idx}]"}, val) do
+        {:ok, validated ++ [valid]}
+      end
+    end)
+  end
+
+  defp validate_type([ast], env, val) do
+    {:error,
+     [
+       {env.name,
+        "Expected '#{inspect(env.full_name)}' to be '[#{pretty_type_name(ast)}]' but received '#{inspect(val)}'"}
+     ]}
+  end
+
+  defp validate_type(
+         {:nested!, _, [{{:., _, [{:__aliases__, _, aliases}, type_name]}, _, []}]},
+         env,
+         val
+       ) do
+    mod = Module.concat(aliases)
+
     validation_fn_name =
       try do
         String.to_existing_atom("validate_#{type_name}_opts")
@@ -437,34 +449,40 @@ defmodule TemporalEngine.Data.TypeSpec do
     cond do
       !validation_fn_name ->
         {:error,
-         [{name, "#{inspect(full_name)}: Could not find referenced type #{mod}.#{name}/0"}]}
+         [
+           {env.name,
+            "#{inspect(env.full_name)}: Could not find referenced type #{mod}.#{type_name}/0"}
+         ]}
 
       !Code.ensure_loaded?(mod) ->
         {:error,
          [
-           {name,
-            "#{inspect(full_name)}: Module '#{inspect(mod)}' was not found for '#{mod}.#{name}/0'"}
+           {env.name,
+            "#{inspect(env.full_name)}: Module '#{inspect(mod)}' was not found for '#{mod}.#{type_name}/0'"}
          ]}
 
       !Kernel.function_exported?(mod, validation_fn_name, 2) ->
         {:error,
-         [{name, "#{inspect(full_name)}: Module '#{inspect(mod)}' did not have type '#{name}/0'"}]}
+         [
+           {env.name,
+            "#{inspect(env.full_name)}: Module '#{inspect(mod)}' did not have type '#{type_name}/0'"}
+         ]}
 
       !is_list(val) || !Keyword.keyword?(val) ->
         {:error,
          [
-           {name,
-            "#{inspect(full_name)}: Expected to be opts (keyword list) but received #{inspect(val)}"}
+           {env.name,
+            "#{inspect(env.full_name)}: Expected to be opts (keyword list) but received #{inspect(val)}"}
          ]}
 
       true ->
-        with {:ok, validated} <- apply(mod, validation_fn_name, [val, full_name]) do
+        with {:ok, validated} <- apply(mod, validation_fn_name, [val, env.full_name]) do
           {:ok, validated}
         else
           {:error, errors} ->
             errors =
               Enum.map(errors, fn {_name, error} ->
-                {name, error}
+                {env.name, error}
               end)
 
             {:error, errors}
@@ -472,563 +490,526 @@ defmodule TemporalEngine.Data.TypeSpec do
     end
   end
 
-  defp validate_type({:map, k_type, v_type}, name, full_name, val) when is_map(val) do
-    validated =
-      Enum.reduce(val, {:ok, []}, fn {k, v}, acc ->
-        with {:ok, validated_pairs} <- acc,
-             {:ok, valid_k} <- validate_type(k_type, name, "#{full_name}(Key: #{inspect(k)})", k),
-             {:ok, valid_v} <- validate_type(v_type, name, "#{full_name}[#{inspect(k)}]", v) do
-          {:ok, validated_pairs ++ [{valid_k, valid_v}]}
-        end
-      end)
-
-    with {:ok, validated_pairs} <- validated do
-      {:ok, Map.new(validated_pairs)}
+  defp validate_type({:%{}, _, [{k_type, v_type}]}, env, val) when is_map(val) do
+    with {:ok, validated} <-
+           Enum.reduce(val, {:ok, []}, fn {k, v}, acc ->
+             with {:ok, validated} <- acc,
+                  {:ok, k_validated} <-
+                    validate_type(k_type, %{env | full_name: "#{env.full_name}[]"}, k),
+                  {:ok, v_validated} <-
+                    validate_type(
+                      v_type,
+                      %{env | full_name: "#{env.full_name}[#{inspect(k)}]"},
+                      v
+                    ) do
+               {:ok, validated ++ [{k_validated, v_validated}]}
+             end
+           end) do
+      {:ok, Map.new(validated)}
     end
   end
 
-  defp validate_type({:map, _k_type, _v_type}, name, full_name, val),
-    do:
-      {:error,
-       [{name, "Expected '#{inspect(full_name)}' to be 'map()' but received '#{inspect(val)}'"}]}
-
-  defp validate_type({:any, 0}, _name, _full_name, val), do: {:ok, val}
-  defp validate_type({:term, 0}, _name, _full_name, val), do: {:ok, val}
-
-  defp validate_type({:none, 0}, name, full_name, val),
-    do:
-      {:error,
-       [{name, "Expected '#{inspect(full_name)}' to be 'none()' but received '#{inspect(val)}'"}]}
-
-  defp validate_type({:binary, 0}, _name, _full_name, val) when is_binary(val), do: {:ok, val}
-
-  defp validate_type({:binary, 0}, name, full_name, val),
+  defp validate_type({:%{}, _, _}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'binary()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'map()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:integer, 0}, _name, _full_name, val) when is_number(val), do: {:ok, val}
+  defp validate_type({:any, _, []}, _env, val), do: {:ok, val}
+  defp validate_type({:term, _, []}, _env, val), do: {:ok, val}
 
-  defp validate_type({:integer, 0}, name, full_name, val),
+  defp validate_type({:none, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'integer()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'none()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:non_neg_integer, 0}, _name, _full_name, val)
-       when is_number(val) and val >= 0,
-       do: {:ok, val}
+  defp validate_type({:binary, _, []}, _env, val) when is_binary(val), do: {:ok, val}
 
-  defp validate_type({:non_neg_integer, 0}, name, full_name, val),
+  defp validate_type({:binary, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'non_neg_integer()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'binary()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:pos_integer, 0}, _name, _full_name, val) when is_number(val) and val > 0,
+  defp validate_type({:integer, _, []}, _env, val) when is_number(val), do: {:ok, val}
+
+  defp validate_type({:integer, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'integer()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:non_neg_integer, _, []}, _env, val) when is_number(val) and val >= 0,
     do: {:ok, val}
 
-  defp validate_type({:pos_integer, 0}, name, full_name, val),
+  defp validate_type({:non_neg_integer, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'pos_integer()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'non_neg_integer()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:neg_integer, 0}, _name, _full_name, val) when is_number(val) and val < 0,
+  defp validate_type({:pos_integer, _, []}, _env, val) when is_number(val) and val > 0,
     do: {:ok, val}
 
-  defp validate_type({:neg_integer, 0}, name, full_name, val),
+  defp validate_type({:pos_integer, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'neg_integer()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'pos_integer()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:atom, 0}, _name, _full_name, val) when is_atom(val), do: {:ok, val}
-
-  defp validate_type({:atom, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name, "Expected '#{inspect(full_name)}' to be 'atom()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:map, 0}, _name, _full_name, val) when is_map(val), do: {:ok, val}
-
-  defp validate_type({:map, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name, "Expected '#{inspect(full_name)}' to be 'map()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:pid, 0}, _name, _full_name, val) when is_pid(val), do: {:ok, val}
-
-  defp validate_type({:pid, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name, "Expected '#{inspect(full_name)}' to be 'pid()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:port, 0}, _name, _full_name, val) when is_port(val), do: {:ok, val}
-
-  defp validate_type({:port, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name, "Expected '#{inspect(full_name)}' to be 'port()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:reference, 0}, _name, _full_name, val) when is_reference(val),
+  defp validate_type({:neg_integer, _, []}, _env, val) when is_number(val) and val < 0,
     do: {:ok, val}
 
-  defp validate_type({:reference, 0}, name, full_name, val),
+  defp validate_type({:neg_integer, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'reference()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'neg_integer()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:tuple, 0}, _name, _full_name, val) when is_tuple(val), do: {:ok, val}
+  defp validate_type({:atom, _, []}, _env, val) when is_atom(val), do: {:ok, val}
 
-  defp validate_type({:tuple, 0}, name, full_name, val),
+  defp validate_type({:atom, _, []}, env, val),
     do:
       {:error,
        [
-         {name, "Expected '#{inspect(full_name)}' to be 'tuple()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'atom()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:float, 0}, _name, _full_name, val) when is_float(val), do: {:ok, val}
+  defp validate_type({:map, _, []}, _env, val) when is_map(val), do: {:ok, val}
 
-  defp validate_type({:float, 0}, name, full_name, val),
+  defp validate_type({:map, _, []}, env, val),
     do:
       {:error,
        [
-         {name, "Expected '#{inspect(full_name)}' to be 'float()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'map()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:arity, 0}, _name, _full_name, val)
+  defp validate_type({:pid, _, []}, _env, val) when is_pid(val), do: {:ok, val}
+
+  defp validate_type({:pid, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'pid()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:port, _, []}, _env, val) when is_port(val), do: {:ok, val}
+
+  defp validate_type({:port, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'port()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:reference, _, []}, _env, val) when is_reference(val), do: {:ok, val}
+
+  defp validate_type({:reference, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'reference()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:tuple, _, []}, _env, val) when is_tuple(val), do: {:ok, val}
+
+  defp validate_type({:tuple, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'tuple()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:float, _, []}, _env, val) when is_float(val), do: {:ok, val}
+
+  defp validate_type({:float, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'float()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:arity, _, []}, _env, val)
        when is_number(val) and val >= 0 and val <= 255, do: {:ok, val}
 
-  defp validate_type({:arity, 0}, name, full_name, val),
+  defp validate_type({:arity, _, []}, env, val),
     do:
       {:error,
        [
-         {name, "Expected '#{inspect(full_name)}' to be 'arity()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'arity()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:bitstring, 0}, _name, _full_name, val) when is_bitstring(val),
+  defp validate_type({:bitstring, _, []}, _env, val) when is_bitstring(val),
     do: {:ok, val}
 
-  defp validate_type({:bitstring, 0}, name, full_name, val),
+  defp validate_type({:bitstring, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'bitstring()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'bitstring()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:boolean, 0}, _name, _full_name, val) when is_boolean(val), do: {:ok, val}
+  defp validate_type({:boolean, _, []}, _env, val) when is_boolean(val), do: {:ok, val}
 
-  defp validate_type({:boolean, 0}, name, full_name, val),
+  defp validate_type({:boolean, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'boolean()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'boolean()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:byte, 0}, _name, _full_name, val)
+  defp validate_type({:byte, _, []}, _env, val)
        when is_number(val) and val >= 0 and val <= 255, do: {:ok, val}
 
-  defp validate_type({:byte, 0}, name, full_name, val),
+  defp validate_type({:byte, _, []}, env, val),
     do:
       {:error,
        [
-         {name, "Expected '#{inspect(full_name)}' to be 'byte()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'byte()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:char, 0}, _name, _full_name, val)
+  defp validate_type({:char, _, []}, _env, val)
        when is_number(val) and val >= 0 and val <= 0x10FFFF, do: {:ok, val}
 
-  defp validate_type({:char, 0}, name, full_name, val),
+  defp validate_type({:char, _, []}, env, val),
     do:
       {:error,
        [
-         {name, "Expected '#{inspect(full_name)}' to be 'char()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'char()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:charlist, 0}, name, full_name, val),
-    do: validate_type({:list, {:char, 0}}, name, full_name, val)
+  defp validate_type({:charlist, _, []}, env, val),
+    do: validate_type({:list, {:char, [], []}}, env, val)
 
-  defp validate_type({:nonempty_charlist, 0}, name, full_name, val),
-    do: validate_type({:nonempty_list, {:char, 0}}, name, full_name, val)
+  defp validate_type({:nonempty_charlist, _, []}, env, val),
+    do: validate_type({:nonempty_list, {:char, [], []}}, env, val)
 
-  defp validate_type({:fun, 0}, _name, _full_name, val) when is_function(val),
-    do: {:ok, val}
+  defp validate_type({:fun, _, []}, _env, val) when is_function(val), do: {:ok, val}
 
-  defp validate_type({:fun, 0}, name, full_name, val),
+  defp validate_type({:fun, _, []}, env, val),
     do:
       {:error,
        [
-         {name, "Expected '#{inspect(full_name)}' to be 'fun()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'fun()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:function, 0}, _name, _full_name, val) when is_function(val),
-    do: {:ok, val}
+  defp validate_type({:function, _, []}, _env, val) when is_function(val), do: {:ok, val}
 
-  defp validate_type({:function, 0}, name, full_name, val),
+  defp validate_type({:function, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'function()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'function()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:identifier, 0}, _name, _full_name, val) when is_pid(val),
-    do: {:ok, val}
+  defp validate_type({:identifier, _, []}, _env, val) when is_pid(val), do: {:ok, val}
+  defp validate_type({:identifier, _, []}, _env, val) when is_port(val), do: {:ok, val}
+  defp validate_type({:identifier, _, []}, _env, val) when is_reference(val), do: {:ok, val}
 
-  defp validate_type({:identifier, 0}, _name, _full_name, val) when is_port(val),
-    do: {:ok, val}
-
-  defp validate_type({:identifier, 0}, _name, _full_name, val) when is_reference(val),
-    do: {:ok, val}
-
-  defp validate_type({:identifier, 0}, name, full_name, val),
+  defp validate_type({:identifier, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'identifier()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'identifier()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:keyword, 0}, name, full_name, val) when is_list(val) do
+  defp validate_type({:keyword, _, []}, env, val) when is_list(val) do
     if Keyword.keyword?(val) do
       {:ok, val}
     else
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'keyword()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'keyword()' but received '#{inspect(val)}'"}
        ]}
     end
   end
 
-  defp validate_type({:keyword, 0}, name, full_name, val),
+  defp validate_type({:keyword, _, []}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'keyword()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'keyword()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:list, 0}, _name, _full_name, val) when is_list(val),
+  defp validate_type({:list, _, []}, _env, val) when is_list(val), do: {:ok, val}
+
+  defp validate_type({:list, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'list()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:nonempty_list, _, []}, env, []),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'nonempty_list()' but received '[]'"}
+       ]}
+
+  defp validate_type({:nonempty_list, _, []}, _env, val) when is_list(val), do: {:ok, val}
+
+  defp validate_type({:nonempty_list, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'nonempty_list()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:mfa, _, []}, _env, {m, a1, a2} = val)
+       when is_atom(m) and is_atom(a1) and is_atom(a2), do: {:ok, val}
+
+  defp validate_type({:mfa, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'mfa()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:module, _, []}, _env, val) when is_atom(val), do: {:ok, val}
+
+  defp validate_type({:module, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'module()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:node, _, []}, _env, val) when is_atom(val), do: {:ok, val}
+
+  defp validate_type({:node, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'node()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:number, _, []}, _env, val) when is_number(val), do: {:ok, val}
+
+  defp validate_type({:number, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'number()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:struct, _, []}, _env, val) when is_struct(val), do: {:ok, val}
+
+  defp validate_type({:struct, _, []}, env, val),
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'struct()' but received '#{inspect(val)}'"}
+       ]}
+
+  defp validate_type({:timeout, _, []}, _env, :infinity), do: {:ok, :infinity}
+
+  defp validate_type({:timeout, _, []}, _env, val) when is_number(val) and val >= 0,
     do: {:ok, val}
 
-  defp validate_type({:list, 0}, name, full_name, val),
+  defp validate_type({:timeout, _, []}, env, val),
     do:
       {:error,
        [
-         {name, "Expected '#{inspect(full_name)}' to be 'list()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'timeout()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:nonempty_list, 0}, name, full_name, []),
-    do:
-      {:error,
-       [
-         {name, "Expected '#{inspect(full_name)}' to be 'nonempty_list()' but received '[]'"}
-       ]}
-
-  defp validate_type({:nonempty_list, 0}, _name, _full_name, val) when is_list(val),
-    do: {:ok, val}
-
-  defp validate_type({:nonempty_list, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'nonempty_list()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:mfa, 0}, _name, _full_name, {m, a1, a2} = val)
-       when is_atom(m) and is_atom(a1) and is_atom(a2),
-       do: {:ok, val}
-
-  defp validate_type({:mfa, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name, "Expected '#{inspect(full_name)}' to be 'mfa()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:module, 0}, _name, _full_name, val) when is_atom(val),
-    do: {:ok, val}
-
-  defp validate_type({:module, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'module()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:node, 0}, _name, _full_name, val) when is_atom(val),
-    do: {:ok, val}
-
-  defp validate_type({:node, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name, "Expected '#{inspect(full_name)}' to be 'node()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:number, 0}, _name, _full_name, val) when is_number(val),
-    do: {:ok, val}
-
-  defp validate_type({:number, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'number()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:struct, 0}, _name, _full_name, val) when is_struct(val),
-    do: {:ok, val}
-
-  defp validate_type({:struct, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'struct()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:timeout, 0}, _name, _full_name, :infinity), do: {:ok, :infinity}
-
-  defp validate_type({:timeout, 0}, _name, _full_name, val) when is_number(val) and val >= 0,
-    do: {:ok, val}
-
-  defp validate_type({:timeout, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'timeout()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({{:module, :String}, :t, 0}, _name, _full_name, val) when is_binary(val),
-    do: {:ok, val}
-
-  defp validate_type({{:module, :String}, :t, 0}, name, full_name, val),
-    do:
-      {:error,
-       [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'String.t()' but received '#{inspect(val)}'"}
-       ]}
-
-  defp validate_type({:list, val_type}, name, full_name, vals) when is_list(vals) do
+  defp validate_type({:list, _, [val_type]}, env, vals) when is_list(vals) do
     vals
     |> Enum.with_index()
     |> Enum.reduce({:ok, []}, fn {val, idx}, acc ->
       with {:ok, validated} <- acc,
-           {:ok, valid_v} <- validate_type(val_type, name, "#{full_name}[#{idx}]", val) do
+           {:ok, valid_v} <-
+             validate_type(val_type, %{env | full_name: "#{env.full_name}[#{idx}]"}, val) do
         {:ok, validated ++ [valid_v]}
       end
     end)
   end
 
-  defp validate_type({:list, _val_type}, name, full_name, val),
+  defp validate_type({:list, _, [_val_type]}, env, val),
     do:
       {:error,
-       [{name, "Expected '#{inspect(full_name)}' to be 'list()' but received '#{inspect(val)}'"}]}
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'list()' but received '#{inspect(val)}'"}
+       ]}
 
-  defp validate_type({:nonempty_list, _val_type}, name, full_name, []),
+  defp validate_type({:nonempty_list, _, [_val_type]}, env, []),
     do:
       {:error,
-       [{name, "Expected '#{inspect(full_name)}' to be 'nonempty_list()' but received '[]'"}]}
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'nonempty_list()' but received '[]'"}
+       ]}
 
-  defp validate_type({:nonempty_list, val_type}, name, full_name, vals) when is_list(vals) do
+  defp validate_type({:nonempty_list, _, [val_type]}, env, vals) when is_list(vals) do
     vals
     |> Enum.with_index()
     |> Enum.reduce({:ok, []}, fn {val, idx}, acc ->
       with {:ok, validated} <- acc,
-           {:ok, valid_v} <- validate_type(val_type, name, "#{full_name}[#{idx}]", val) do
+           {:ok, valid_v} <-
+             validate_type(val_type, %{env | full_name: "#{env.full_name}[#{idx}]"}, val) do
         {:ok, validated ++ [valid_v]}
       end
     end)
   end
 
-  defp validate_type({:nonempty_list, _val_type}, name, full_name, val),
+  defp validate_type({:nonempty_list, _, [_val_type]}, env, val),
     do:
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be 'nonempty_list()' but received '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'nonempty_list()' but received '#{inspect(val)}'"}
        ]}
 
-  defp validate_type({:one_of, types} = type, name, full_name, val) do
+  defp validate_type({:|, _, [a, b]} = type, env, val) do
     valid_type =
-      Enum.find_value(types, fn type ->
-        validated = validate_type(type, name, full_name, val)
-        if match?({:ok, _}, validated), do: validated, else: nil
-      end)
+      with {:ok, val} <- validate_type(a, env, val) do
+        {:ok, val}
+      else
+        {:error, _} ->
+          validate_type(b, env, val)
+      end
 
     if match?({:ok, _}, valid_type) do
       valid_type
     else
       {:error,
        [
-         {name,
-          "Expected '#{inspect(full_name)}' to be one of (#{pretty_type_name(type)}) but got '#{inspect(val)}'"}
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be one of (#{pretty_type_name(type)}) but got '#{inspect(val)}'"}
        ]}
     end
   end
 
-  defp validate_type(nil, _name, _full_name, val) when is_nil(val), do: {:ok, nil}
+  defp validate_type(nil, _env, val) when is_nil(val), do: {:ok, nil}
 
-  defp validate_type(nil, name, full_name, val),
+  defp validate_type(nil, env, val),
     do:
-      {:error, [{name, "Expected '#{inspect(full_name)}' to be `nil` but got '#{inspect(val)}'"}]}
+      {:error,
+       [{env.name, "Expected '#{inspect(env.full_name)}' to be `nil` but got '#{inspect(val)}'"}]}
 
-  defp validate_type(_type, _name, _full_name, val), do: {:ok, val}
-
-  defp expand_aliases(asts, env) when is_list(asts) do
-    Enum.map(asts, &expand_aliases(&1, env))
+  defp validate_type(type, _env, val) do
+    Logger.warning("Could not validate type: #{inspect(type)}")
+    {:ok, val}
   end
-
-  defp expand_aliases({:%{}, meta, [{key, value}]}, env) do
-    {:%{}, meta, [{expand_aliases(key, env), expand_aliases(value, env)}]}
-  end
-
-  defp expand_aliases({:__aliases__, meta, ast_aliases}, env) do
-    new_aliases =
-      case ast_aliases do
-        [name] ->
-          with {:ok, expanded} <- Macro.Env.fetch_alias(env, name) do
-            [expanded]
-          else
-            :error ->
-              [name]
-          end
-
-        [name | rest] ->
-          expanded =
-            with {:ok, expanded} <- Macro.Env.fetch_alias(env, name) do
-              expanded
-            else
-              :error ->
-                name
-            end
-
-          [Module.concat([expanded | rest])]
-      end
-
-    {:__aliases__, meta, new_aliases}
-  end
-
-  defp expand_aliases({name, meta, args}, env) do
-    {expand_aliases(name, env), meta, expand_aliases(args, env)}
-  end
-
-  defp expand_aliases(name, _env) when is_atom(name), do: name
-
-  def normalize_ast_type({:%{}, _, [{key, value}]}) do
-    {:map, normalize_ast_type(key), normalize_ast_type(value)}
-  end
-
-  def normalize_ast_type({{:., _, [caller, called]}, _, args}) do
-    {normalize_ast_type(caller), normalize_ast_type(called), Enum.count(args)}
-  end
-
-  def normalize_ast_type({:__aliases__, _, [name]}) do
-    {:module, name}
-  end
-
-  def normalize_ast_type({:|, _, args}) do
-    {:one_of, Enum.map(args, &normalize_ast_type/1)}
-  end
-
-  def normalize_ast_type({:list, _, [type]}) do
-    {:list, normalize_ast_type(type)}
-  end
-
-  def normalize_ast_type({:nonempty_list, _, [type]}) do
-    {:nonempty_list, normalize_ast_type(type)}
-  end
-
-  def normalize_ast_type({name, _, args}) do
-    {name, Enum.count(args)}
-  end
-
-  def normalize_ast_type([type]) do
-    {:list, normalize_ast_type(type)}
-  end
-
-  def normalize_ast_type(name) when is_atom(name), do: name
 
   def type_to_opts_type(types, env) when is_list(types),
     do: Enum.map(types, fn type -> type_to_opts_type(type, env) end)
 
-  def type_to_opts_type(type, env) do
-    case type do
-      {:|, meta, args} ->
-        {:|, meta, Enum.map(args, fn arg -> type_to_opts_type(arg, env) end)}
-
-      {{:., meta, [{:__aliases__, _, _} = alias, type_name]}, _, []} = orig
-      when is_atom(type_name) ->
-        case expand_aliases(alias, env) do
-          {_, _, [:String]} ->
-            orig
-
-          {_, _, [expanded]} ->
-            {{:., meta,
-              [
-                {:__aliases__, [], [expanded]},
-                :"#{type_name}_opts"
-              ]}, [], []}
-
-          _ ->
-            orig
-        end
-
-      {:%{}, meta, [{key_type, value_type}]} ->
-        {:%{}, meta, [{type_to_opts_type(key_type, env), type_to_opts_type(value_type, env)}]}
-
-      other ->
-        other
-    end
+  def type_to_opts_type(type, _env) do
+    type
   end
 
-  defp pretty_type_name({:list, val_type}), do: "[#{pretty_type_name(val_type)}]"
+  defp pretty_type_name({:nested!, _, [type]}), do: "[#{pretty_type_name(type)}]"
 
-  defp pretty_type_name({:nonempty_list, val_type}),
-    do: "nonempty([#{pretty_type_name(val_type)}])"
+  defp pretty_type_name({{:., _, [{:__aliases__, _, aliases}, type_name]}, _, _}) do
+    "#{Module.concat(aliases)}.#{type_name}()"
+  end
 
   defp pretty_type_name({:map, key_type, val_type}),
     do: "%{#{pretty_type_name(key_type)} => #{pretty_type_name(val_type)}}"
 
-  defp pretty_type_name({:one_of, types}),
-    do: Enum.map(types, &pretty_type_name/1) |> Enum.join(" | ")
+  defp pretty_type_name({:|, _, [a, b]}),
+    do: "#{pretty_type_name(a)} | #{pretty_type_name(b)}"
 
-  defp pretty_type_name({:module, name}), do: "#{name}"
-
-  defp pretty_type_name({caller, called, num_args}),
-    do: "#{pretty_type_name(caller)}.#{pretty_type_name(called)}/#{num_args}"
-
-  defp pretty_type_name({name, 0}) when is_atom(name), do: "#{name}()"
+  defp pretty_type_name({name, _, []}) when is_atom(name), do: "#{name}()"
+  defp pretty_type_name({name, _, []}) when is_atom(name), do: "#{name}()"
   defp pretty_type_name(name) when is_atom(name), do: "#{inspect(name)}"
+
+  defp expand_nested_modules(ast, env) do
+    {new_ast, _} =
+      Macro.prewalk(ast, [], fn
+        {:nested!, meta, [{{:., m1, [{:__aliases__, m2, _} = alias, type_name]}, m3, []}]}, acc ->
+          expanded =
+            {:nested!, meta,
+             [
+               {{:., m1,
+                 [
+                   {:__aliases__, m2,
+                    Macro.expand(alias, env) |> Module.split() |> Enum.map(&String.to_atom/1)},
+                   type_name
+                 ]}, m3, []}
+             ]}
+
+          {expanded, acc}
+
+        other, acc ->
+          {other, acc}
+      end)
+
+    new_ast
+  end
+
+  defp nested_to_type(ast, env) do
+    expanded = expand_nested_modules(ast, env)
+
+    {typespec, _} =
+      Macro.prewalk(expanded, [], fn
+        {:nested!, _, [nested]}, acc -> {nested, acc}
+        other, acc -> {other, acc}
+      end)
+
+    typespec
+  end
+
+  defp nested_to_opts_type(ast, env) do
+    expanded = expand_nested_modules(ast, env)
+
+    {typespec, _} =
+      Macro.prewalk(expanded, [], fn
+        {:nested!, _,
+         [
+           {{:., m1, [{:__aliases__, m2, aliases}, type_name]}, m3, []}
+         ]},
+        acc ->
+          {{{:., m1, [{:__aliases__, m2, aliases}, :"#{type_name}_opts"]}, m3, []}, acc}
+
+        other, acc ->
+          {other, acc}
+      end)
+
+    typespec
+  end
 end

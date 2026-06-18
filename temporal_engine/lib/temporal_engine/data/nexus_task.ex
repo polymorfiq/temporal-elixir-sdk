@@ -11,13 +11,13 @@ defmodule TemporalEngine.Data.NexusTask do
 
     Only set when variant is task and the header was present with a valid value. Represented as an absolute timestamp.
     """
-    @type request_deadline :: Timestamp.timestamp()
+    @type request_deadline :: nested!(Timestamp.timestamp())
 
     @doc "The endpoint this request was addressed to. Extracted from the request for convenient access. Only set when variant is task."
     @default ""
     @type endpoint :: required :: String.t()
 
-    @type variant :: NexusTask.task() | NexusTask.cancel_task()
+    @type variant :: nested!(NexusTask.task()) | nested!(NexusTask.cancel_task())
   end
 
   deftype :task do
@@ -25,10 +25,10 @@ defmodule TemporalEngine.Data.NexusTask do
     @type task_token :: required :: String.t()
 
     @doc "Embedded request as translated from the incoming frontend request."
-    @type request :: NexusTask.request()
+    @type request :: nested!(NexusTask.request())
 
     @doc "Server-advised information the SDK may use to adjust its poller count."
-    @type poller_scaling_decision :: NexusTask.poller_scaling_decision()
+    @type poller_scaling_decision :: nested!(NexusTask.poller_scaling_decision())
 
     @doc """
     This poller group ID identifies the owner of the nexus task awaiting for synchronous response.
@@ -45,7 +45,7 @@ defmodule TemporalEngine.Data.NexusTask do
     2. Try to assign the next poll to a group without any pending polls,
     3. If every group has some pending polls, assign the next poll to a group randomly according to the weights.
     """
-    @type poller_group_infos :: required :: [NexusTask.poller_group_info()]
+    @type poller_group_infos :: required :: [nested!(NexusTask.poller_group_info())]
   end
 
   deftype :cancel_task do
@@ -53,7 +53,7 @@ defmodule TemporalEngine.Data.NexusTask do
     @type task_token :: String.t()
 
     @doc "Why Core is asking for this operation to be cancelled"
-    @type reason :: required :: NexusTask.cancel_reason()
+    @type reason :: required :: nested!(NexusTask.cancel_reason())
   end
 
   @type cancel_reason :: :timed_out | :worker_shutdown
@@ -69,14 +69,16 @@ defmodule TemporalEngine.Data.NexusTask do
     @type header :: required :: %{String.t() => String.t()}
 
     @doc "The timestamp when the request was scheduled in the frontend."
-    @type scheduled_time :: Timestamp.timestamp()
+    @type scheduled_time :: nested!(Timestamp.timestamp())
 
-    @type capabilities :: NexusTask.capabilities()
+    @type capabilities :: nested!(NexusTask.capabilities())
 
     @doc "The endpoint this request was addressed to before forwarding to the worker. Supported from server version 1.30.0."
     @type endpoint :: required :: String.t()
 
-    @type variant :: NexusTask.start_operation_request() | NexusTask.cancel_operation_request()
+    @type variant ::
+            nested!(NexusTask.start_operation_request())
+            | nested!(NexusTask.cancel_operation_request())
   end
 
   deftype :poller_scaling_decision do
@@ -110,7 +112,7 @@ defmodule TemporalEngine.Data.NexusTask do
     @type callback :: required :: String.t()
 
     @doc "Full request body from the incoming HTTP request."
-    @type payload :: Payload.payload()
+    @type payload :: nested!(Payload.payload())
 
     @doc "Header that is expected to be attached to the callback request when the operation completes."
     @default %{}
@@ -118,7 +120,7 @@ defmodule TemporalEngine.Data.NexusTask do
 
     @doc "Links contain caller information and can be attached to the operations started by the handler."
     @default []
-    @type links :: required :: [NexusTask.link()]
+    @type links :: required :: [nested!(NexusTask.link())]
   end
 
   deftype :cancel_operation_request do

@@ -25,14 +25,14 @@ defmodule TemporalEngine.Config do
     @type max_cached_workflows :: pos_integer()
 
     @doc "Set a tuner for this worker. Either this or at least one of the max_outstanding_* fields must be set."
-    @type tuner :: Config.worker_tuner()
+    @type tuner :: nested!(Config.worker_tuner())
 
     @doc """
     Maximum number of concurrent poll workflow task requests we will perform at a time on this worker’s task queue.
 
     See also `nonsticky_to_sticky_poll_ratio`. If using `simple_maximum`, Must be at least `2` when `max_cached_workflows > 0`, or is an error.
     """
-    @type workflow_task_poller_behavior :: Config.poller_behavior()
+    @type workflow_task_poller_behavior :: nested!(Config.poller_behavior())
 
     @doc """
     Only applies when using `poller_behavior` of type `simple_maximum`
@@ -44,26 +44,26 @@ defmodule TemporalEngine.Config do
     @type nonsticky_to_sticky_poll_ratio :: required :: float()
 
     @doc "Maximum number of concurrent poll activity task requests we will perform at a time on this worker’s task queue"
-    @type activity_task_poller_behavior :: Config.poller_behavior()
+    @type activity_task_poller_behavior :: nested!(Config.poller_behavior())
 
     @doc "Maximum number of concurrent poll nexus task requests we will perform at a time on this worker’s task queue"
-    @type nexus_task_poller_behavior :: Config.poller_behavior()
+    @type nexus_task_poller_behavior :: nested!(Config.poller_behavior())
 
     @doc """
     Specifies which task types this worker will poll for.
 
     Note: At least one task type must be specified or the worker will fail validation.
     """
-    @type task_types :: required :: Config.worker_task_types()
+    @type task_types :: required :: nested!(Config.worker_task_types())
 
     @doc "How long a workflow task is allowed to sit on the sticky queue before it is timed out and moved to the non-sticky queue where it may be picked up by any worker."
-    @type sticky_queue_schedule_to_start_timeout :: required :: Duration.duration()
+    @type sticky_queue_schedule_to_start_timeout :: required :: nested!(Duration.duration())
 
     @doc "Longest interval for throttling activity heartbeats"
-    @type max_heartbeat_throttle_interval :: required :: Duration.duration()
+    @type max_heartbeat_throttle_interval :: required :: nested!(Duration.duration())
 
     @doc "Default interval for throttling activity heartbeats in case `ActivityOptions.heartbeat_timeout` is unset. When the timeout is set in the `ActivityOptions`, throttling is set to heartbeat_timeout * 0.8."
-    @type default_heartbeat_throttle_interval :: required :: Duration.duration()
+    @type default_heartbeat_throttle_interval :: required :: nested!(Duration.duration())
 
     @doc """
     Sets the maximum number of activities per second the task queue will dispatch, controlled server-side.
@@ -90,18 +90,18 @@ defmodule TemporalEngine.Config do
     @type ignore_evicts_on_shutdown :: required :: bool()
 
     @doc "If set, core will issue cancels for all outstanding activities and nexus operations after shutdown has been initiated and this amount of time has elapsed."
-    @type graceful_shutdown_period :: Duration.duration()
+    @type graceful_shutdown_period :: nested!(Duration.duration())
 
     @doc "The amount of time core will wait before timing out activities using its own local timers after one of them elapses. This is to avoid racing with server’s own tracking of the timeout."
-    @type local_timeout_buffer_for_activities :: required :: Duration.duration()
+    @type local_timeout_buffer_for_activities :: required :: nested!(Duration.duration())
 
     @doc "Any error types listed here will cause any workflow being processed by this worker to fail, rather than simply failing the workflow task."
     @default [:nondeterminism]
-    @type workflow_failure_errors :: required :: [Config.workflow_error_type()]
+    @type workflow_failure_errors :: required :: [nested!(Config.workflow_error_type())]
 
     @doc "Like `workflow_failure_errors`, but specific to certain workflow types (the map key)."
     @type workflow_types_to_failure_errors ::
-            required :: %{String.t() => Config.workflow_error_type()}
+            required :: %{String.t() => nested!(Config.workflow_error_type())}
 
     @doc """
     The maximum allowed number of workflow tasks that will ever be given to this worker at one time.
@@ -134,11 +134,11 @@ defmodule TemporalEngine.Config do
     @type max_outstanding_nexus_tasks :: pos_integer()
 
     @doc "A versioning strategy for this worker."
-    @type versioning_strategy :: required :: Config.worker_deployment_options()
+    @type versioning_strategy :: required :: nested!(Config.worker_deployment_options())
 
     @doc "List of plugins used by lang."
     @default []
-    @type plugins :: required :: [Config.plugin_info()]
+    @type plugins :: required :: [nested!(Config.plugin_info())]
 
     @doc "Skips the single worker+client+namespace+task_queue check"
     @default false
@@ -146,7 +146,7 @@ defmodule TemporalEngine.Config do
 
     @doc "List of storage drivers used by lang."
     @default []
-    @type storage_drivers :: required :: [Config.storage_driver_info()]
+    @type storage_drivers :: required :: [nested!(Config.storage_driver_info())]
   end
 
   deftype :worker_task_types do
@@ -167,7 +167,7 @@ defmodule TemporalEngine.Config do
     @structdoc "Configuration for worker deployment versioning."
 
     @doc "The deployment version of this worker."
-    @type version :: required :: Common.worker_deployment_version()
+    @type version :: required :: nested!(Common.worker_deployment_version())
 
     @doc "If set, opts in to the Worker Deployment Versioning feature, meaning this worker will only receive tasks for workflows it claims to be compatible with."
     @type use_worker_versioning :: required :: bool()
@@ -177,16 +177,22 @@ defmodule TemporalEngine.Config do
 
     It is a startup-time error to specify `:unspecified` here.
     """
-    @type default_versioning_behavior :: Common.versioning_behavior()
+    @type default_versioning_behavior :: nested!(Common.versioning_behavior())
   end
 
   deftype :worker_tuner do
     @type workflow_slot_supplier ::
-            required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
+            required ::
+            nested!(Config.fixed_slot_supplier())
+            | nested!(Config.resourced_based_slot_supplier())
     @type activity_slot_supplier ::
-            required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
+            required ::
+            nested!(Config.fixed_slot_supplier())
+            | nested!(Config.resourced_based_slot_supplier())
     @type local_activity_slot_supplier ::
-            required :: Config.fixed_slot_supplier() | Config.resourced_based_slot_supplier()
+            required ::
+            nested!(Config.fixed_slot_supplier())
+            | nested!(Config.resourced_based_slot_supplier())
   end
 
   deftype :fixed_slot_supplier do

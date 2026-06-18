@@ -24,10 +24,10 @@ defmodule TemporalEngine.Data.OptsValidationTest do
   deftype :recursive do
     @type name :: required :: String.t()
 
-    @type optionals :: OptsValidationTest.optional()
+    @type optionals :: nested!(OptsValidationTest.optional())
 
     @default []
-    @type payloads :: [OptsValidationTest.example()]
+    @type payloads :: [nested!(OptsValidationTest.example())]
   end
 
   test "allows for correct opts" do
@@ -135,7 +135,7 @@ defmodule TemporalEngine.Data.OptsValidationTest do
              name: "Payloads",
              optionals: nil,
              payloads: [a, b, c]
-           } = OptsValidationTest.Recursive.from_record(created)
+           } = OptsValidationTest.Recursive.from_record!(created)
 
     assert %OptsValidationTest.Example{data: ~s|"Data1"|, metadata: %{"encoding" => "json/plain"}} =
              a

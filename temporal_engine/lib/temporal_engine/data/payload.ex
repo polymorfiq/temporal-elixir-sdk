@@ -12,7 +12,7 @@ defmodule TemporalEngine.Data.Payload do
     @type data :: required :: binary()
 
     @default []
-    @type external_payloads :: required :: [Payload.external_payload_details()]
+    @type external_payloads :: required :: [nested!(Payload.external_payload_details())]
   end
 
   deftype :external_payload_details do
