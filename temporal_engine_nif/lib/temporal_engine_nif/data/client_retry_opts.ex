@@ -8,7 +8,7 @@ defmodule TemporalEngineNif.Data.ClientRetryOpts do
     :max_retries
   ]
 
-  alias TemporalEngineNif.Data.Duration
+  alias TemporalEngine.Data.Duration
 
   @type t :: %__MODULE__{
           initial_interval: Duration.t(),

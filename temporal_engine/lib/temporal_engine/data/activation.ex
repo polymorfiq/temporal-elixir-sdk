@@ -1,7 +1,7 @@
 defmodule TemporalEngine.Data.Activation do
   use TemporalEngine.Data.TypeSpec
 
-  alias TemporalEngine.Data.Activation
+  alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Timestamp
   alias TemporalEngine.Data.Jobs
 
@@ -45,25 +45,17 @@ defmodule TemporalEngine.Data.Activation do
 
     It will also be empty for evict-only activations. The deployment name may be empty, but not the build id, if this worker was using the deprecated Build ID-only feature(s).
     """
-    @type deployment_version_for_current_task :: nested!(Activation.worker_deployment_version())
+    @type deployment_version_for_current_task :: nested!(Common.worker_deployment_version())
 
     @doc "The last seen SDK version from the most recent WFT completed event"
     @type last_sdk_version :: String.t()
 
     @doc "Experimental. Optionally decide the versioning behavior that the first task of the new run should use. For example, choose to AutoUpgrade on continue-as-new instead of inheriting the pinned version of the previous run."
-    @type suggest_continue_as_new_reasons :: [nested!(Activation.continue_as_new_reason())]
+    @type suggest_continue_as_new_reasons :: [
+            :unspecified | :history_size_too_large | :too_many_history_events | :too_many_updates
+          ]
 
     @doc "Experimental. True if Workflow’s Target Worker Deployment Version is different from its Pinned Version and the workflow is Pinned."
     @type target_worker_deployment_version_changed :: bool()
   end
-
-  deftype :worker_deployment_version do
-    @type build_id :: required :: String.t()
-    @type deployment_name :: required :: String.t()
-  end
-
-  @type continue_as_new_reason ::
-          :unspecified | :history_size_too_large | :too_many_history_events | :too_many_updates
-
-  @type continue_as_new_reason_opts :: continue_as_new_reason()
 end

@@ -72,6 +72,10 @@ defmodule TemporalEngine.Data.TypeSpec do
         {elem(field[:field][:type_name], 0), typespec}
       end)
 
+    fields_to_opt_types =
+      fields_to_types
+      |> Enum.map(fn {name, ast} -> {name, nested_to_opts_type(ast)} end)
+
     structdoc = Enum.find_value(extracted, & &1[:structdoc])
 
     fields_to_docs =
@@ -108,11 +112,12 @@ defmodule TemporalEngine.Data.TypeSpec do
     end
 
     opts_type_ast =
-      fields_to_types
-      |> nested_to_opts_type(__CALLER__)
+      fields_to_opt_types
+      |> Enum.map(fn {name, ast} -> {name, nested_to_type(ast, __CALLER__)} end)
       |> to_or.(to_or)
 
     validate_opts_name = :"validate_#{name}_opts"
+    field_opts_types_name = :"get_#{name}_field_opts_types"
     field_types_name = :"get_#{name}_field_types"
     from_opts_name = :"#{name}_from_opts"
     from_opts_bang_name = :"#{name}_from_opts!"
@@ -147,21 +152,30 @@ defmodule TemporalEngine.Data.TypeSpec do
         record
       end
 
-      @doc "Produces #{unquote(name)} from a keyword list of options"
-      @spec unquote(from_opts_name)(opts :: unquote(opts_name)()) ::
-              {:ok, unquote(name)()} | {:error, keyword()}
-      def unquote(from_opts_name)(opts),
-        do:
-          TemporalEngine.Data.TypeSpec.from_opts(
-            opts,
-            %{name: unquote(name), full_name: nil, module: unquote(__CALLER__.module)},
-            unquote(expand_nested_modules(field_names, __CALLER__))
-          )
+      if !unquote(fields[:_opts_type]) do
+        @doc "Produces #{unquote(name)} from a keyword list of options"
+        @spec unquote(from_opts_name)(opts :: unquote(opts_name)()) ::
+                {:ok, unquote(name)()} | {:error, keyword()}
+        def unquote(from_opts_name)(opts),
+          do:
+            TemporalEngine.Data.TypeSpec.from_opts(
+              opts,
+              %{name: unquote(name), full_name: nil, module: unquote(__CALLER__.module)},
+              unquote(expand_nested_modules(field_names, __CALLER__))
+            )
+      end
 
       @doc false
       @spec unquote(field_types_name)() :: term()
       def unquote(field_types_name)(),
         do: unquote(Macro.escape(expand_nested_modules(fields_to_types, __CALLER__)))
+
+      if !unquote(fields[:_opts_type]) do
+        @doc false
+        @spec unquote(field_opts_types_name)() :: term()
+        def unquote(field_opts_types_name)(),
+          do: unquote(Macro.escape(expand_nested_modules(fields_to_opt_types, __CALLER__)))
+      end
 
       defmodule unquote(Module.concat([__CALLER__.module, Macro.camelize("#{name}")])) do
         @moduledoc unquote(~s|#{structdoc}\n\n|)
@@ -171,7 +185,7 @@ defmodule TemporalEngine.Data.TypeSpec do
 
         defstruct unquote(field_names)
 
-        @spec from_record!(tuple()) :: {:ok, t()} | {:error, term()}
+        @spec from_record!(tuple()) :: t()
         def from_record!(record) do
           {:ok, data} = from_record(record)
           data
@@ -187,7 +201,27 @@ defmodule TemporalEngine.Data.TypeSpec do
               unquote(name)
             )
           else
-            {:error, "Not a #{unquote(name)} record..."}
+            {:error, "Not a #{unquote(name)} record... Got '#{inspect(record)}'"}
+          end
+        end
+
+        @spec to_record!(t()) :: tuple()
+        def to_record!(data) do
+          {:ok, record} = to_record(data)
+          record
+        end
+
+        @spec to_record(t()) :: {:ok, tuple()} | {:error, term()}
+        def to_record(data) do
+          if match?(%__MODULE__{}, data) do
+            TemporalEngine.Data.TypeSpec.to_record(
+              data,
+              __MODULE__,
+              unquote(__CALLER__.module),
+              unquote(name)
+            )
+          else
+            {:error, "Not a #{__MODULE__} struct..."}
           end
         end
       end
@@ -212,6 +246,10 @@ defmodule TemporalEngine.Data.TypeSpec do
 
   defp struct_val_from_type(_, nil), do: {:ok, nil}
 
+  defp struct_val_from_type([{:byte, _, []}], val) when is_binary(val) do
+    {:ok, :erlang.binary_to_list(val)}
+  end
+
   defp struct_val_from_type([ast], vals) do
     Enum.reduce(vals, {:ok, []}, fn curr, acc ->
       with {:ok, validated} <- acc, {:ok, val} <- struct_val_from_type(ast, curr) do
@@ -220,11 +258,20 @@ defmodule TemporalEngine.Data.TypeSpec do
     end)
   end
 
-  defp struct_val_from_type({:|, _, [a, b]}, val) do
-    with {:ok, validated} <- struct_val_from_type(a, val) do
-      {:ok, validated}
+  defp struct_val_from_type({:|, _, [a, b]} = type, val) do
+    resp =
+      with {:ok, validated} <- struct_val_from_type(a, val) do
+        {:ok, validated}
+      else
+        {:error, _} -> struct_val_from_type(b, val)
+      end
+
+    with {:ok, val} <- resp do
+      {:ok, val}
     else
-      {:error, _} -> struct_val_from_type(b, val)
+      {:error, _} ->
+        {:error,
+         "Expected `#{pretty_type_name(type)}` but got `#{inspect(val)}` when creating struct"}
     end
   end
 
@@ -232,7 +279,7 @@ defmodule TemporalEngine.Data.TypeSpec do
          {:nested!, _, [{{:., _, [{:__aliases__, _, aliases}, type_name]}, _, []}]},
          val
        ) do
-    mod = Module.concat(aliases ++ [String.to_existing_atom(Macro.camelize("#{type_name}"))])
+    mod = Module.concat(aliases ++ [Macro.camelize("#{type_name}")])
     apply(mod, :from_record, [val])
   end
 
@@ -253,8 +300,112 @@ defmodule TemporalEngine.Data.TypeSpec do
     {:ok, val}
   end
 
+  defp struct_val_from_type(nil, val) when is_nil(val) do
+    {:ok, val}
+  end
+
+  defp struct_val_from_type(nil, val) do
+    {:error, "Expected `nil` but got `#{inspect(val)}` when creating struct"}
+  end
+
+  defp struct_val_from_type(type, val) when is_atom(type) and type == val do
+    {:ok, val}
+  end
+
+  defp struct_val_from_type(type, val) when is_atom(type) do
+    {:error, "Expected `#{inspect(type)}` but got `#{inspect(val)}` when creating struct"}
+  end
+
   defp struct_val_from_type(type, val) do
     Logger.warning("Unknown type when creating struct: #{inspect(type)} for #{inspect(val)}")
+    {:ok, val}
+  end
+
+  @spec to_record(term(), module(), module(), atom()) :: {:ok, tuple()} | {:error, term()}
+  def to_record(data, _to_module, from_module, name) do
+    field_types = apply(from_module, :"get_#{name}_field_types", [])
+
+    fields =
+      field_types
+      |> Enum.map(fn {name, type} ->
+        val = get_in(data, [Access.key(name)])
+        {:ok, val_from_record} = record_val_from_type(type, val)
+        val_from_record
+      end)
+
+    {:ok, Enum.concat([name], fields) |> List.to_tuple()}
+  end
+
+  defp record_val_from_type(_, nil), do: {:ok, nil}
+
+  defp record_val_from_type([ast], vals) do
+    Enum.reduce(vals, {:ok, []}, fn curr, acc ->
+      with {:ok, validated} <- acc, {:ok, val} <- record_val_from_type(ast, curr) do
+        {:ok, validated ++ [val]}
+      end
+    end)
+  end
+
+  defp record_val_from_type({:|, _, [a, b]} = type, val) do
+    resp =
+      with {:ok, validated} <- record_val_from_type(a, val) do
+        {:ok, validated}
+      else
+        {:error, _} -> record_val_from_type(b, val)
+      end
+
+    with {:ok, val} <- resp do
+      {:ok, val}
+    else
+      {:error, _} ->
+        {:error,
+         "Expected `#{pretty_type_name(type)}` but got `#{inspect(val)}` when creating record"}
+    end
+  end
+
+  defp record_val_from_type(
+         {:nested!, _, [{{:., _, [{:__aliases__, _, _aliases}, _type_name]}, _, []}]},
+         val
+       ) do
+    %data_mod{} = val
+    data_mod.to_record(val)
+  end
+
+  defp record_val_from_type({{:., _, [{:__aliases__, _, [:String]}, :t]}, _, []}, val) do
+    {:ok, val}
+  end
+
+  defp record_val_from_type({:%{}, _, [{k_type, v_type}]}, vals) do
+    {:ok,
+     Map.new(vals, fn {k, v} ->
+       {:ok, parsed_k} = record_val_from_type(k_type, k)
+       {:ok, parsed_v} = record_val_from_type(v_type, v)
+       {parsed_k, parsed_v}
+     end)}
+  end
+
+  defp record_val_from_type({name, _, []}, val) when is_atom(name) do
+    {:ok, val}
+  end
+
+  defp record_val_from_type(type, val) when is_atom(type) and type == val do
+    {:ok, val}
+  end
+
+  defp record_val_from_type(type, val) when is_atom(type) do
+    {:error, "Expected `#{inspect(type)}` but got `#{inspect(val)}` when creating record"}
+  end
+
+  defp record_val_from_type(nil, val) when is_nil(val) do
+    {:ok, val}
+  end
+
+  defp record_val_from_type(nil, val) do
+    {:error, "Expected `nil` but got `#{inspect(val)}` when creating record"}
+  end
+
+  defp record_val_from_type(type, val) do
+    Logger.warning("Unknown type when creating record: #{inspect(type)} for #{inspect(val)}")
     {:ok, val}
   end
 
@@ -268,8 +419,15 @@ defmodule TemporalEngine.Data.TypeSpec do
     with {:ok, validated} <- validate(opts, env, field_names) do
       field_types = apply(env.module, :"get_#{env.name}_field_types", [])
 
+      fields =
+        Enum.map(field_names, fn
+          {field_name, _} -> field_name
+          field_name -> field_name
+        end)
+
       parsed =
-        Enum.reduce(validated, {:ok, []}, fn {field_name, val}, acc ->
+        Enum.reduce(fields, {:ok, []}, fn field_name, acc ->
+          val = Keyword.get(validated, field_name)
           name_comps = [env.full_name, field_name] |> Enum.filter(& &1)
 
           with {:ok, fields} <- acc,
@@ -279,12 +437,12 @@ defmodule TemporalEngine.Data.TypeSpec do
                    %{env | full_name: Enum.join(name_comps, ".")},
                    val
                  ) do
-            {:ok, fields ++ [field]}
+            {:ok, [field | fields]}
           end
         end)
 
       with {:ok, fields} <- parsed do
-        {:ok, List.to_tuple([env.name | fields])}
+        {:ok, List.to_tuple([env.name | Enum.reverse(fields)])}
       end
     end
   end
@@ -299,11 +457,20 @@ defmodule TemporalEngine.Data.TypeSpec do
     end)
   end
 
-  defp from_nested_opts({:|, _, [a, b]}, env, val) do
-    with {:ok, validated} <- from_nested_opts(a, env, val) do
-      {:ok, validated}
+  defp from_nested_opts({:|, _, [a, b]} = type, env, val) do
+    resp =
+      with {:ok, validated} <- from_nested_opts(a, env, val) do
+        {:ok, validated}
+      else
+        {:error, _} -> from_nested_opts(b, env, val)
+      end
+
+    with {:ok, val} <- resp do
+      {:ok, val}
     else
-      {:error, _} -> from_nested_opts(b, env, val)
+      {:error, _} ->
+        {:error,
+         "Expected `#{pretty_type_name(type)}` but got `#{inspect(val)}` when creating nested opts"}
     end
   end
 
@@ -330,6 +497,10 @@ defmodule TemporalEngine.Data.TypeSpec do
   end
 
   defp from_nested_opts({name, _, []}, _env, val) when is_atom(name) do
+    {:ok, val}
+  end
+
+  defp from_nested_opts(other, _env, val) when other == val do
     {:ok, val}
   end
 
@@ -361,7 +532,7 @@ defmodule TemporalEngine.Data.TypeSpec do
           end
       end)
 
-    field_types = apply(env.module, :"get_#{env.name}_field_types", [])
+    field_types = apply(env.module, :"get_#{env.name}_field_opts_types", [])
 
     all_validations =
       Enum.map(field_types, fn {name, type} ->
@@ -391,7 +562,8 @@ defmodule TemporalEngine.Data.TypeSpec do
 
     cond do
       Enum.any?(unknown_options) ->
-        {:error, [{env.name, "Unexpected fields given for #{env.name} - #{inspect(unknown_options)}"}]}
+        {:error,
+         [{env.name, "Unexpected fields given for #{env.name} - #{inspect(unknown_options)}"}]}
 
       Enum.any?(validation_errors) ->
         {:error, validation_errors}
@@ -438,27 +610,28 @@ defmodule TemporalEngine.Data.TypeSpec do
          val
        ) do
     mod = Module.concat(aliases)
+    Code.ensure_loaded?(mod)
 
     validation_fn_name =
       try do
-        String.to_existing_atom("validate_#{type_name}_opts")
+        String.to_existing_atom("validate_#{type_name}")
       rescue
         ArgumentError -> nil
       end
 
     cond do
-      !validation_fn_name ->
-        {:error,
-         [
-           {env.name,
-            "#{inspect(env.full_name)}: Could not find referenced type #{mod}.#{type_name}/0"}
-         ]}
-
       !Code.ensure_loaded?(mod) ->
         {:error,
          [
            {env.name,
             "#{inspect(env.full_name)}: Module '#{inspect(mod)}' was not found for '#{mod}.#{type_name}/0'"}
+         ]}
+
+      !validation_fn_name ->
+        {:error,
+         [
+           {env.name,
+            "#{inspect(env.full_name)}: Could not find referenced type #{mod}.#{type_name}/0"}
          ]}
 
       !Kernel.function_exported?(mod, validation_fn_name, 2) ->
@@ -468,12 +641,8 @@ defmodule TemporalEngine.Data.TypeSpec do
             "#{inspect(env.full_name)}: Module '#{inspect(mod)}' did not have type '#{type_name}/0'"}
          ]}
 
-      !is_list(val) || !Keyword.keyword?(val) ->
-        {:error,
-         [
-           {env.name,
-            "#{inspect(env.full_name)}: Expected to be opts (keyword list) but received #{inspect(val)}"}
-         ]}
+      val == nil ->
+        {:ok, nil}
 
       true ->
         with {:ok, validated} <- apply(mod, validation_fn_name, [val, env.full_name]) do
@@ -676,12 +845,12 @@ defmodule TemporalEngine.Data.TypeSpec do
   defp validate_type({:bool, _, []}, _env, val) when is_boolean(val), do: {:ok, val}
 
   defp validate_type({:bool, _, []}, env, val),
-       do:
-         {:error,
-         [
-           {env.name,
-             "Expected '#{inspect(env.full_name)}' to be 'boolean()' but received '#{inspect(val)}'"}
-         ]}
+    do:
+      {:error,
+       [
+         {env.name,
+          "Expected '#{inspect(env.full_name)}' to be 'boolean()' but received '#{inspect(val)}'"}
+       ]}
 
   defp validate_type({:boolean, _, []}, _env, val) when is_boolean(val), do: {:ok, val}
 
@@ -938,7 +1107,18 @@ defmodule TemporalEngine.Data.TypeSpec do
   defp validate_type(nil, env, val),
     do:
       {:error,
-       [{env.name, ["Expected '#{inspect(env.full_name)}' to be `nil` but got '#{inspect(val)}'"]}]}
+       [
+         {env.name,
+          ["Expected '#{inspect(env.full_name)}' to be `nil` but got '#{inspect(val)}'"]}
+       ]}
+
+  defp validate_type(type, _env, val) when is_atom(type) and type == val do
+    {:ok, val}
+  end
+
+  defp validate_type(type, env, val) when is_atom(type) do
+    {:error, [{env.name, "Expected `#{inspect(type)}` bot got `#{inspect(val)}`"}]}
+  end
 
   defp validate_type(type, _env, val) do
     Logger.warning("Could not validate type: #{inspect(type)}")
@@ -952,7 +1132,8 @@ defmodule TemporalEngine.Data.TypeSpec do
     type
   end
 
-  defp pretty_type_name({:nested!, _, [type]}), do: "[#{pretty_type_name(type)}]"
+  defp pretty_type_name([ast]), do: "[#{pretty_type_name(ast)}]"
+  defp pretty_type_name({:nested!, _, [type]}), do: "#{pretty_type_name(type)}"
 
   defp pretty_type_name({{:., _, [{:__aliases__, _, aliases}, type_name]}, _, _}) do
     "#{Module.concat(aliases)}.#{type_name}()"
@@ -1004,22 +1185,23 @@ defmodule TemporalEngine.Data.TypeSpec do
     typespec
   end
 
-  defp nested_to_opts_type(ast, env) do
-    expanded = expand_nested_modules(ast, env)
-
-    {typespec, _} =
-      Macro.prewalk(expanded, [], fn
-        {:nested!, _,
-         [
-           {{:., m1, [{:__aliases__, m2, aliases}, type_name]}, m3, []}
-         ]},
-        acc ->
-          {{{:., m1, [{:__aliases__, m2, aliases}, :"#{type_name}_opts"]}, m3, []}, acc}
-
-        other, acc ->
-          {other, acc}
-      end)
-
-    typespec
+  defp nested_to_opts_type(
+         {:nested!, meta, [{{:., m1, [{:__aliases__, m2, aliases}, type_name]}, m3, []}]}
+       ) do
+    {:nested!, meta, [{{:., m1, [{:__aliases__, m2, aliases}, :"#{type_name}_opts"]}, m3, []}]}
   end
+
+  defp nested_to_opts_type(asts) when is_list(asts) do
+    Enum.map(asts, &nested_to_opts_type/1)
+  end
+
+  defp nested_to_opts_type({:|, meta, [a, b]}) do
+    {:|, meta, [nested_to_opts_type(a), nested_to_opts_type(b)]}
+  end
+
+  defp nested_to_opts_type({:%{}, meta, [{k_type, val_type}]}) do
+    {:%{}, meta, [{nested_to_opts_type(k_type), nested_to_opts_type(val_type)}]}
+  end
+
+  defp nested_to_opts_type(other), do: other
 end

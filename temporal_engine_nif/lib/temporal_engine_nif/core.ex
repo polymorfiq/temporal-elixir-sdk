@@ -8,6 +8,8 @@ defmodule TemporalEngineNif.Core do
   alias TemporalEngineNif.Data.RuntimeOpts
   alias TemporalEngineNif.Data.WorkerOpts
   alias TemporalEngineNif.Data.ActivityTaskCompletion
+  alias TemporalEngine.Opts.WorkflowOpts.WorkflowDefinition
+  alias TemporalEngine.Opts.WorkflowOpts.WorkflowStartOpts
 
   @doc false
   @spec _create_runtime(opts :: RuntimeOpts.t()) :: {:ok, term()} | {:error, term()}
@@ -77,9 +79,9 @@ defmodule TemporalEngineNif.Core do
   @spec _client_start_workflow(
           runtime :: term(),
           client :: term(),
-          workflow :: Data.WorkflowDefinition.t(),
+          workflow :: WorkflowDefinition.t(),
           input :: [Data.WorkflowInput.t()],
-          opts :: Data.WorkflowStartOptions.t(),
+          opts :: WorkflowStartOpts.t(),
           resp_pid :: pid()
         ) ::
           {:ok, bool()} | {:error, term()}

@@ -60,10 +60,11 @@ defmodule Temporal.Workflows.CoreTest do
 
     {:ok, task_token} =
       receive do
-        activity_task(
-          task_token: task_token,
-          variant: start_activity(activity_type: "my-activity-type")
-        ) ->
+        {:activity_task,
+         activity_task(
+           task_token: task_token,
+           variant: start_activity(activity_type: "my-activity-type")
+         )} ->
           {:ok, task_token}
       after
         5000 -> {:error, "Did not receive activity start"}
@@ -78,7 +79,8 @@ defmodule Temporal.Workflows.CoreTest do
     assert_receive {:job,
                     Jobs.resolve_activity(
                       seq: 1,
-                      result: activity_completed(result: "My test")
+                      result:
+                        Jobs.activity_resolution(status: activity_completed(result: "My test"))
                     )},
                    1000
 

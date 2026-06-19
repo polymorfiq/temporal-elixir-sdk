@@ -10,12 +10,12 @@ defmodule TestWorkflows.ActivitiesWithAwait do
   def execute(ctx, msg) do
     {:ok, act1} =
       Workflow.execute_activity(ctx, "activity_a", ["#{msg}1"],
-        start_to_close_timeout: {1, :seconds}
+        start_to_close_timeout: [seconds: 1]
       )
 
     {:ok, act2} =
       Workflow.execute_activity(ctx, "activity_b", ["#{msg}2"],
-        start_to_close_timeout: {1, :seconds}
+        start_to_close_timeout: [seconds: 1]
       )
 
     Workflow.get(ctx, act1)

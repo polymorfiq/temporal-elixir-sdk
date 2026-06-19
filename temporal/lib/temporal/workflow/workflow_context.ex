@@ -1,5 +1,5 @@
 defmodule Temporal.Workflow.WorkflowContext do
-  defstruct [:run_id, :workflow_id, :pid, :reporter_pid, :flow_control_pid]
+  defstruct [:run_id, :workflow_id, :task_queue, :pid, :reporter_pid, :flow_control_pid]
   use GenServer
 
   @type t :: %__MODULE__{}
@@ -22,6 +22,7 @@ defmodule Temporal.Workflow.WorkflowContext do
        %__MODULE__{
          run_id: exec_ctx.run_id,
          workflow_id: exec_ctx.workflow_id,
+         task_queue: exec_ctx.task_queue,
          pid: context_pid,
          reporter_pid: reporter_pid,
          flow_control_pid: flow_control_pid

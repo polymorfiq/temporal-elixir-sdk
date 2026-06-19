@@ -1,7 +1,7 @@
 defmodule TemporalEngineNif.Data.ClientKeepAliveOpts do
   defstruct [:interval, :timeout]
 
-  alias TemporalEngineNif.Data.Duration
+  alias TemporalEngine.Data.Duration
 
   @type t :: %__MODULE__{
           interval: Duration.t(),

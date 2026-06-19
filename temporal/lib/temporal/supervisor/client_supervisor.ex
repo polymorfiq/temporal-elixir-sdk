@@ -1,22 +1,22 @@
 defmodule Temporal.Supervisor.ClientSupervisor do
   use Supervisor
 
-  import TemporalEngine.Runtime
+  import TemporalEngine.Opts.ClientOpts, only: [connection_opts: 2]
 
   alias Temporal.ClientRegistry
   alias Temporal.Supervisor.WorkerList
   alias Temporal.CoreSdk.CoreClient
 
-  def start_link({runtime_core, opts, server_opts}),
-    do: Supervisor.start_link(__MODULE__, {runtime_core, opts}, server_opts)
+  def start_link({runtime_core, conn_opts, server_opts}),
+    do: Supervisor.start_link(__MODULE__, {runtime_core, conn_opts}, server_opts)
 
   @impl true
-  def init({runtime_core, opts}) do
-    identity = client_opts(opts, :identity)
+  def init({runtime_core, conn_opts}) do
+    identity = connection_opts(conn_opts, :identity)
     Process.set_label({:client_supervisor, identity})
 
     children = [
-      {CoreClient, {runtime_core, opts, [name: via_registry({:core, identity})]}},
+      {CoreClient, {runtime_core, conn_opts, [name: via_registry({:core, identity})]}},
       {WorkerList, [name: via_registry({:workers, identity})]}
     ]
 

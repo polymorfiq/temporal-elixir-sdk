@@ -17,7 +17,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
   require TemporalEngine.Data.Failure
 
   alias TemporalEngineNif.Data.WorkflowGetResultOptions
-  alias TemporalEngineNif.Data.Payload
+  alias TemporalEngine.Data.Payload.Payload
   alias TemporalEngine.Data.Duration
   alias TemporalEngineNif.Core
   alias TemporalEngineNif.Data.WorkflowFailure

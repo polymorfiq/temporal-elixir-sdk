@@ -10,7 +10,7 @@ defmodule TemporalEngineNif.Data.WorkflowFailure do
 
   import TemporalEngine.Data.Failure
 
-  alias TemporalEngineNif.Data.Payload
+  alias TemporalEngine.Data.Payload.Payload
   alias TemporalEngineNif.Data.WorkflowFailureInfo
   alias TemporalEngine.Data.Failure, as: EngineFailure
 

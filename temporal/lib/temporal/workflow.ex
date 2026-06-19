@@ -313,7 +313,7 @@ defmodule Temporal.Workflow do
                reporter,
                activity_type,
                args,
-               Map.new(opts)
+               opts ++ [task_queue: ctx.task_queue.queue_name]
              ) do
         {:ok,
          %ActivityExecHandle{
@@ -367,7 +367,7 @@ defmodule Temporal.Workflow do
                reporter,
                activity_type,
                args,
-               Map.new(opts)
+               opts
              ) do
         {:ok,
          %ActivityExecHandle{

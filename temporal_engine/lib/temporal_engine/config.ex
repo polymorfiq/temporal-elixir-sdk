@@ -8,6 +8,9 @@ defmodule TemporalEngine.Config do
   deftype :worker_config do
     @structdoc "Defines per-worker configuration options"
 
+    @doc "Fort the lang SDK - helps track and interact with a unique worker."
+    @type id :: required :: String.t()
+
     @doc "The Temporal service namespace this worker is bound to"
     @type namespace :: required :: String.t()
 
@@ -32,7 +35,8 @@ defmodule TemporalEngine.Config do
 
     See also `nonsticky_to_sticky_poll_ratio`. If using `simple_maximum`, Must be at least `2` when `max_cached_workflows > 0`, or is an error.
     """
-    @type workflow_task_poller_behavior :: nested!(Config.poller_behavior())
+    @default [simple_maximum: 100]
+    @type workflow_task_poller_behavior :: nested!(Config.simple_maximum_poller())
 
     @doc """
     Only applies when using `poller_behavior` of type `simple_maximum`
@@ -41,13 +45,16 @@ defmodule TemporalEngine.Config do
 
     If both defaults are used, the sticky queue will allow `4` max pollers while the nonsticky queue will allow `1`. The minimum for either poller is `1`, so if the maximum allowed is `1` and sticky queues are enabled, there will be `2` concurrent polls.
     """
+    @default 0.2
     @type nonsticky_to_sticky_poll_ratio :: required :: float()
 
     @doc "Maximum number of concurrent poll activity task requests we will perform at a time on this worker’s task queue"
-    @type activity_task_poller_behavior :: nested!(Config.poller_behavior())
+    @default [simple_maximum: 100]
+    @type activity_task_poller_behavior :: nested!(Config.simple_maximum_poller())
 
     @doc "Maximum number of concurrent poll nexus task requests we will perform at a time on this worker’s task queue"
-    @type nexus_task_poller_behavior :: nested!(Config.poller_behavior())
+    @default [simple_maximum: 100]
+    @type nexus_task_poller_behavior :: nested!(Config.simple_maximum_poller())
 
     @doc """
     Specifies which task types this worker will poll for.
@@ -57,12 +64,15 @@ defmodule TemporalEngine.Config do
     @type task_types :: required :: nested!(Config.worker_task_types())
 
     @doc "How long a workflow task is allowed to sit on the sticky queue before it is timed out and moved to the non-sticky queue where it may be picked up by any worker."
+    @default [seconds: 60]
     @type sticky_queue_schedule_to_start_timeout :: required :: nested!(Duration.duration())
 
     @doc "Longest interval for throttling activity heartbeats"
+    @default [seconds: 60]
     @type max_heartbeat_throttle_interval :: required :: nested!(Duration.duration())
 
     @doc "Default interval for throttling activity heartbeats in case `ActivityOptions.heartbeat_timeout` is unset. When the timeout is set in the `ActivityOptions`, throttling is set to heartbeat_timeout * 0.8."
+    @default [seconds: 300]
     @type default_heartbeat_throttle_interval :: required :: nested!(Duration.duration())
 
     @doc """
@@ -93,15 +103,17 @@ defmodule TemporalEngine.Config do
     @type graceful_shutdown_period :: nested!(Duration.duration())
 
     @doc "The amount of time core will wait before timing out activities using its own local timers after one of them elapses. This is to avoid racing with server’s own tracking of the timeout."
+    @default [seconds: 5, nanos: 0]
     @type local_timeout_buffer_for_activities :: required :: nested!(Duration.duration())
 
     @doc "Any error types listed here will cause any workflow being processed by this worker to fail, rather than simply failing the workflow task."
     @default [:nondeterminism]
-    @type workflow_failure_errors :: required :: [nested!(Config.workflow_error_type())]
+    @type workflow_failure_errors :: required :: [:nondeterminism]
 
     @doc "Like `workflow_failure_errors`, but specific to certain workflow types (the map key)."
+    @default %{}
     @type workflow_types_to_failure_errors ::
-            required :: %{String.t() => nested!(Config.workflow_error_type())}
+            required :: %{String.t() => :nondeterminism}
 
     @doc """
     The maximum allowed number of workflow tasks that will ever be given to this worker at one time.
@@ -147,19 +159,29 @@ defmodule TemporalEngine.Config do
     @doc "List of storage drivers used by lang."
     @default []
     @type storage_drivers :: required :: [nested!(Config.storage_driver_info())]
+
+    @default true
+    @type nondeterminism_as_workflow_fail :: required :: boolean()
+
+    @default []
+    @type nondeterminism_as_workflow_fail_for_types :: required :: [String.t()]
   end
 
   deftype :worker_task_types do
     @doc "Whether workflow tasks are enabled."
+    @default false
     @type enable_workflows :: required :: bool()
 
     @doc "Whether local activity tasks are enabled."
+    @default false
     @type enable_local_activities :: required :: bool()
 
     @doc "Whether remote activity tasks are enabled."
+    @default false
     @type enable_remote_activities :: required :: bool()
 
     @doc "Whether nexus tasks are enabled."
+    @default false
     @type enable_nexus :: required :: bool()
   end
 
@@ -177,7 +199,7 @@ defmodule TemporalEngine.Config do
 
     It is a startup-time error to specify `:unspecified` here.
     """
-    @type default_versioning_behavior :: nested!(Common.versioning_behavior())
+    @type default_versioning_behavior :: :unspecified | :pinned | :auto_upgrade
   end
 
   deftype :worker_tuner do
@@ -228,6 +250,7 @@ defmodule TemporalEngine.Config do
 
   @type workflow_error_type :: :nondeterminism
   @type workflow_error_type_opts :: workflow_error_type()
+
   @type poller_behavior :: simple_maximum_poller() | autoscaling_poller()
   @type poller_behavior_opts :: simple_maximum_poller_opts() | autoscaling_poller_opts()
 

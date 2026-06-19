@@ -3,16 +3,17 @@ use crate::core_client::ElixirClient;
 use crate::core_nexus::SdkNexusTask;
 use crate::core_runtime::{ElixirRuntime, SdkRuntimeOpts};
 use crate::core_worker::ElixirWorker;
-use crate::core_workflows::{ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion, SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowGetResultError, SdkWorkflowGetResultOptions, SdkWorkflowStartOptions};
+use crate::core_workflows::{
+    ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion,
+    SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowGetResultError,
+    SdkWorkflowGetResultOptions, SdkWorkflowStartOptions,
+};
 use rustler::{Atom, LocalPid, NifResult, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use temporalio_sdk_client::{
-    Client, ClientKeepAliveOptions, ClientOptions, ClientTlsOptions, Connection, ConnectionOptions,
-    DnsLoadBalancingOptions, HttpConnectProxyOptions, RetryOptions, TlsOptions,
-};
+use temporalio_sdk_client::{Client, ClientOptions, Connection, ConnectionOptions};
 use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::worker::{
@@ -73,18 +74,18 @@ fn _create_runtime(opts: Option<SdkRuntimeOpts>) -> Result<ResourceArc<ElixirRun
 #[rustler::nif(schedule = "DirtyIo")]
 fn _create_client(
     runtime: ResourceArc<ElixirRuntime>,
-    options: crate::core_client::SdkClientOpts,
+    options: crate::core_client::SdkConnectionOpts,
     resp_pid: LocalPid,
 ) -> Result<bool, String> {
     let parsed_host = Url::parse(
         format!(
             "{}://{}",
-            if options.tls.is_some() {
+            if options.tls_options.is_some() {
                 "https"
             } else {
                 "http"
             },
-            options.target_host
+            options.target
         )
         .as_str(),
     );
@@ -96,74 +97,22 @@ fn _create_client(
 
     let has_http_connect_settings = options.http_connect_proxy.is_some();
     let opts = ConnectionOptions::new(host_url)
+        .maybe_override_origin(options.override_origin.try_into_or_none())
         .client_name(options.client_name)
         .client_version(options.client_version)
         .headers(options.headers.unwrap_or_default())
         .binary_headers(options.binary_headers.unwrap_or_default())
         .maybe_api_key(options.api_key)
         .identity(options.identity)
-        .maybe_tls_options(if let Some(tls) = options.tls {
-            Some(TlsOptions {
-                client_tls_options: match (tls.client_cert, tls.client_private_key) {
-                    (None, None) => None,
-                    (Some(client_cert), Some(client_private_key)) => Some(ClientTlsOptions {
-                        // These are unsafe because of lifetime issues, but we copy right away
-                        client_cert: client_cert.into_bytes(),
-                        client_private_key: client_private_key.into_bytes(),
-                    }),
-                    _ => {
-                        return Err(String::from(
-                            "Must have both client cert and private key or neither",
-                        ));
-                    }
-                },
-                server_root_ca_cert: tls.server_root_ca_cert.map(|rstr| rstr.into_bytes()),
-                domain: tls.domain,
-            })
-        } else {
-            None
-        })
-        .retry_options(RetryOptions {
-            initial_interval: options.rpc_retry.initial_interval.into(),
-            randomization_factor: options.rpc_retry.randomization_factor,
-            multiplier: options.rpc_retry.multiplier,
-            max_interval: options.rpc_retry.max_interval.into(),
-            max_elapsed_time: options.rpc_retry.max_elapsed_time.try_into_or_none(),
-            max_retries: options.rpc_retry.max_retries as usize,
-        })
-        .keep_alive(if let Some(keep_alive) = options.keep_alive {
-            Some(ClientKeepAliveOptions {
-                interval: keep_alive.interval.into(),
-                timeout: keep_alive.timeout.into(),
-            })
-        } else {
-            None
-        })
-        .maybe_http_connect_proxy(if let Some(proxy) = options.http_connect_proxy {
-            Some(HttpConnectProxyOptions {
-                target_addr: proxy.target_host,
-                basic_auth: match (proxy.basic_auth_user, proxy.basic_auth_pass) {
-                    (None, None) => None,
-                    (Some(user), Some(pass)) => Some((user, pass)),
-                    _ => {
-                        return Err(String::from(
-                            "Must have both basic auth and pass or neither",
-                        ));
-                    }
-                },
-            })
-        } else {
-            None
-        })
+        .maybe_tls_options(options.tls_options.try_into_or_none())
+        .maybe_retry_options(options.retry_options.try_into_or_none())
+        .keep_alive(options.keep_alive.try_into_or_none())
+        .maybe_http_connect_proxy(options.http_connect_proxy.try_into_or_none())
         .dns_load_balancing(if has_http_connect_settings {
             warn!("Disabling DNS load balancing because http_connect_proxy is set");
             None
-        } else if let Some(dns) = options.dns_load_balancing {
-            let mut opts = DnsLoadBalancingOptions::default();
-            opts.resolution_interval = dns.resolution_interval.into();
-            Some(opts)
         } else {
-            None
+            options.dns_load_balancing.try_into_or_none()
         })
         .build();
 
@@ -208,14 +157,14 @@ fn _create_client(
 fn _create_worker(
     runtime: ResourceArc<ElixirRuntime>,
     client: ResourceArc<ElixirClient>,
-    options: crate::core_worker::SdkWorkerOpts,
+    options: core_worker::SdkWorkerConfig,
     resp_pid: LocalPid,
 ) -> Result<bool, String> {
     let config = WorkerConfig::builder()
         .namespace(options.namespace)
         .task_queue(options.task_queue)
         .versioning_strategy({
-            let dopts = options.deployment_options;
+            let dopts = options.versioning_strategy;
             WorkerVersioningStrategy::WorkerDeploymentBased(WorkerDeploymentOptions {
                 version: WorkerDeploymentVersion {
                     deployment_name: dopts.version.deployment_name,
@@ -230,7 +179,7 @@ fn _create_worker(
                 },
             })
         })
-        .maybe_client_identity_override(options.identity_override)
+        .maybe_client_identity_override(options.client_identity_override)
         .max_cached_workflows(options.max_cached_workflows as usize)
         .workflow_task_poller_behavior({
             match options.workflow_task_poller_behavior {
@@ -264,10 +213,10 @@ fn _create_worker(
             }
         })
         .task_types(WorkerTaskTypes {
-            enable_workflows: options.enable_workflows,
-            enable_local_activities: options.enable_local_activities,
-            enable_remote_activities: options.enable_remote_activities,
-            enable_nexus: options.enable_nexus,
+            enable_workflows: options.task_types.enable_workflows,
+            enable_local_activities: options.task_types.enable_local_activities,
+            enable_remote_activities: options.task_types.enable_remote_activities,
+            enable_nexus: options.task_types.enable_nexus,
         })
         .sticky_queue_schedule_to_start_timeout(
             options.sticky_queue_schedule_to_start_timeout.into(),
@@ -294,8 +243,8 @@ fn _create_worker(
             options
                 .plugins
                 .into_iter()
-                .map(|name| PluginInfo {
-                    name,
+                .map(|info| PluginInfo {
+                    name: info.name,
                     version: String::new(),
                 })
                 .collect::<HashSet<_>>(),
@@ -381,7 +330,7 @@ fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
     match options {
         crate::core_worker::SdkWorkerSlotSupplierOpts::FixedSize(slots) => Ok((
             SlotSupplierOptions::FixedSize {
-                slots: slots as usize,
+                slots: slots.size as usize,
             },
             prev_slots_options,
         )),
@@ -735,7 +684,7 @@ fn _workflow_handle_get_result(
 
         let msg: Result<SdkWorkflowArguments, SdkWorkflowGetResultError> = match result {
             Ok(outputs) => Ok(outputs),
-            Err(error) => Err(error.into())
+            Err(error) => Err(error.into()),
         };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);

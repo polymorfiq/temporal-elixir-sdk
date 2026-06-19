@@ -3,11 +3,11 @@ defmodule TemporalEngineNif.Data.WorkflowActivationJob do
 
   import TemporalEngine.Data.Jobs
 
-  alias TemporalEngineNif.Data.Duration
-  alias TemporalEngineNif.Data.Payload
-  alias TemporalEngineNif.Data.Priority
+  alias TemporalEngine.Data.Duration
+  alias TemporalEngine.Data.Payload.Payload
+  alias TemporalEngine.Data.Priority.Priority
   alias TemporalEngineNif.Data.RetryPolicy
-  alias TemporalEngineNif.Data.Timestamp
+  alias TemporalEngine.Data.Timestamp.Timestamp
   alias TemporalEngineNif.Data.WorkflowActivationJobVariant
   alias TemporalEngineNif.Data.WorkflowNamespacedExecution
   alias TemporalEngineNif.Data.WorkflowExecution

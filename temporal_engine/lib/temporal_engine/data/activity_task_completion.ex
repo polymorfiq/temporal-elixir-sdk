@@ -8,7 +8,7 @@ defmodule TemporalEngine.Data.ActivityTaskCompletion do
   deftype :task_completion do
     @structdoc "A request as given to `complete_activity_task`"
 
-    @type task_token :: required :: String.t()
+    @type task_token :: required :: [byte()]
     @type result :: nested!(ActivityTaskCompletion.activity_execution_result())
   end
 

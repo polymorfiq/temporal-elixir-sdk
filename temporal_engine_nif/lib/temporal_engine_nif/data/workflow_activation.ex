@@ -16,9 +16,9 @@ defmodule TemporalEngineNif.Data.WorkflowActivation do
 
   import TemporalEngine.Data.Activation
 
-  alias TemporalEngineNif.Data.Timestamp
+  alias TemporalEngine.Data.Timestamp.Timestamp
   alias TemporalEngineNif.Data.WorkflowActivationJob
-  alias TemporalEngineNif.Data.WorkerDeploymentVersion
+  alias TemporalEngine.Data.Common.WorkerDeploymentVersion
 
   @type t :: %__MODULE__{
           run_id: String.t(),

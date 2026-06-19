@@ -8,7 +8,7 @@ defmodule WorkflowHelpers do
 
     # Connect to Temporal Server
     {:ok, runtime} = Runtime.with_id(System.unique_integer())
-    {:ok, client} = Client.new("localhost:7233", runtime: runtime, identity: ctx.task_queue)
+    {:ok, client} = Client.new("localhost:7233", [identity: ctx.task_queue], [runtime: runtime])
     on_exit(fn -> Client.stop(client) end)
     on_exit(fn -> Runtime.stop(runtime) end)
 
@@ -26,7 +26,7 @@ defmodule WorkflowHelpers do
         queue,
         [
           max_cached_workflows: 100,
-          deployment_options: [
+          versioning_strategy: [
             version: [build_id: "0.1.0", deployment_name: "elixir-sdk"],
             use_worker_versioning: false,
             default_versioning_behavior: nil
@@ -37,9 +37,9 @@ defmodule WorkflowHelpers do
             enable_remote_activities: true
           ],
           tuner: [
-            workflow_slot_supplier: [fixed_size: 10],
-            activity_slot_supplier: [fixed_size: 10],
-            local_activity_slot_supplier: [fixed_size: 10]
+            workflow_slot_supplier: [size: 10],
+            activity_slot_supplier: [size: 10],
+            local_activity_slot_supplier: [size: 10]
           ]
         ] ++ worker_opts
       )

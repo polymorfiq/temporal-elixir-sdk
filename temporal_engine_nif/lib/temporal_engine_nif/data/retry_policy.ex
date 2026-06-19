@@ -9,7 +9,7 @@ defmodule TemporalEngineNif.Data.RetryPolicy do
 
   import TemporalEngine.Data.RetryPolicy
 
-  alias TemporalEngineNif.Data.Duration
+  alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.RetryPolicy, as: EnginePolicy
 
   @type t :: %__MODULE__{

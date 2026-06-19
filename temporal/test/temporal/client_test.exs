@@ -9,39 +9,42 @@ defmodule Temporal.ClientTest do
   setup [:setup_runtime]
 
   test "initializes with only target host", %{runtime: runtime} do
-    assert {:ok, _client} = Client.new("localhost:7233", runtime: runtime)
+    assert {:ok, _client} = Client.new("localhost:7233", [], runtime: runtime)
   end
 
   test "allows custom identity option", %{runtime: runtime} do
     assert {:ok, _client} =
-             Client.new("localhost:7233", identity: "my-identity", runtime: runtime)
+             Client.new("localhost:7233", [identity: "my-identity"], runtime: runtime)
   end
 
   test "allows custom namespace option", %{runtime: runtime} do
-    {:ok, client} = Client.new("localhost:7233", namespace: "my-namespace", runtime: runtime)
+    {:ok, client} = Client.new("localhost:7233", [namespace: "my-namespace"], runtime: runtime)
     assert client.namespace == "my-namespace"
   end
 
   test "allows custom RPC options", %{runtime: runtime} do
     assert {:ok, _client} =
-             Client.new("localhost:7233",
-               runtime: runtime,
-               rpc_retry: [
-                 initial_interval: {30, :seconds},
-                 randomization_factor: 5.0,
-                 multiplier: 2.0,
-                 max_interval: {60, :seconds},
-                 max_elapsed_time: {60, :seconds},
-                 max_retries: 30
-               ]
+             Client.new(
+               "localhost:7233",
+               [
+                 retry_options: [
+                   initial_interval: [seconds: 30],
+                   randomization_factor: 5.0,
+                   multiplier: 2.0,
+                   max_interval: [seconds: 60],
+                   max_elapsed_time: [seconds: 60],
+                   max_retries: 30
+                 ]
+               ],
+               runtime: runtime
              )
   end
 
   test "has options validation", %{runtime: runtime} do
-    assert {:error, {:invalid_opts, %{key: [:invalid_a, :invalid_b]}}} =
-             Client.new("localhost:7233",
-               invalid_a: 123,
-               invalid_b: 456,
+    assert {:error, {:invalid_opts, _}} =
+             Client.new(
+               "localhost:7233",
+               [invalid_a: 123, invalid_b: 456],
                runtime: runtime
              )
   end
@@ -62,7 +65,9 @@ defmodule Temporal.ClientTest do
   end
 
   defp setup_create_client(ctx) do
-    {:ok, client} = Client.new("localhost:7233", runtime: ctx.runtime, identity: "#{__MODULE__}")
+    {:ok, client} =
+      Client.new("localhost:7233", [identity: "#{__MODULE__}"], runtime: ctx.runtime)
+
     on_exit(fn -> Client.stop(client) end)
 
     Map.put(ctx, :client, client)

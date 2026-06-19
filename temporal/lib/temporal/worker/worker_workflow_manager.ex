@@ -20,16 +20,15 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     :task_queue,
     :exec_ctx,
     :core_worker,
-    registered: %{},
-    forward_polled_pid: nil
+    registered: %{}
   ])
 
-  def start_link({exec_ctx, opts, server_opts}) do
-    GenServer.start_link(__MODULE__, {exec_ctx, opts}, server_opts)
+  def start_link({exec_ctx, config, server_opts}) do
+    GenServer.start_link(__MODULE__, {exec_ctx, config}, server_opts)
   end
 
   @spec init({String.t(), TaskQueue.t(), Worker.worker_opts()}) :: {:ok, pid()} | {:error, term()}
-  def init({exec_ctx, opts}) do
+  def init({exec_ctx, _config}) do
     Process.set_label({:workflow_manager, exec_ctx.worker_id})
 
     with {:ok, core_worker} <- CoreWorker.existing_for_id(exec_ctx.worker_id) do
@@ -38,8 +37,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
          exec_ctx: exec_ctx,
          id: exec_ctx.worker_id,
          task_queue: exec_ctx.task_queue,
-         core_worker: core_worker,
-         forward_polled_pid: opts[:forward_polled_messages]
+         core_worker: core_worker
        )}
     end
   end
@@ -80,10 +78,13 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   end
 
   def handle_activation_job(
-        initialize_workflow(
-          workflow_id: workflow_id,
-          workflow_type: workflow_type,
-          arguments: args
+        job(
+          variant:
+            initialize_workflow(
+              workflow_id: workflow_id,
+              workflow_type: workflow_type,
+              arguments: args
+            )
         ),
         activation(run_id: run_id),
         state
@@ -92,7 +93,8 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
     registered = manager_state(state, :registered)
 
     resp =
-      if {workflow_module, execute_fn} = registered[workflow_type] do
+      if registered[workflow_type] do
+        {workflow_module, execute_fn} = registered[workflow_type]
         Logger.debug("Job: initialize_workflow (#{inspect(workflow_module)} - #{run_id})")
 
         exec_ctx = %{
@@ -121,7 +123,7 @@ defmodule Temporal.Worker.WorkerWorkflowManager do
   end
 
   def handle_activation_job(
-        remove_from_cache(reason: reason, message: message),
+        job(variant: remove_from_cache(reason: reason, message: message)),
         activation(run_id: run_id),
         state
       ) do

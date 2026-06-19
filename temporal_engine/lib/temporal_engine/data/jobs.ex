@@ -6,16 +6,16 @@ defmodule TemporalEngine.Data.Jobs do
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Priority
-  alias TemporalEngine.Data.RetryPolicy
   alias TemporalEngine.Data.Timestamp
   alias TemporalEngine.Data.Jobs
 
-  @type job :: initialize_workflow() | fire_timer() | resolve_activity() | remove_from_cache()
-  @type job_opts ::
-          initialize_workflow_opts()
-          | fire_timer_opts()
-          | resolve_activity_opts()
-          | remove_from_cache_opts()
+  deftype :job do
+    @type variant ::
+            nested!(Jobs.initialize_workflow())
+            | nested!(Jobs.fire_timer())
+            | nested!(Jobs.resolve_activity())
+            | nested!(Jobs.remove_from_cache())
+  end
 
   deftype :initialize_workflow do
     @structdoc "Initialize a new workflow"
@@ -56,7 +56,9 @@ defmodule TemporalEngine.Data.Jobs do
 
     @doc "If this workflow was a continuation, indicates the type of continuation."
     @default :unspecified
-    @type continued_initiator :: required :: nested!(Jobs.continued_as_new_initiator())
+    @type continued_initiator ::
+            required ::
+            :unspecified | :history_size_too_large | :too_many_history_events | :too_many_updates
 
     @doc "If this workflow was a continuation and that continuation failed, the details of that."
     @type continued_failure :: nested!(Failure.failure())
@@ -68,7 +70,7 @@ defmodule TemporalEngine.Data.Jobs do
     @type first_execution_run_id :: required :: String.t()
 
     @doc "This workflow’s retry policy"
-    @type retry_policy :: nested!(RetryPolicy.policy())
+    @type retry_policy :: nested!(Common.retry_opts())
 
     @doc "Starting at 1, the number of times we have tried to execute this workflow"
     @type attempt :: required :: integer()
@@ -140,7 +142,7 @@ defmodule TemporalEngine.Data.Jobs do
 
     @doc "Sequence number as provided by lang in the corresponding ScheduleActivity command"
     @type seq :: required :: pos_integer()
-    @type result :: required :: nested!(Jobs.activity_status())
+    @type result :: required :: nested!(Jobs.activity_resolution())
 
     @doc """
     Set to true if the resolution is for a local activity.
@@ -150,8 +152,31 @@ defmodule TemporalEngine.Data.Jobs do
     @type is_local :: required :: bool()
   end
 
+  deftype :activity_resolution do
+    @structdoc "Used to report activity resolutions to lang. IE: This is what the activities are resolved with in the workflow."
+
+    @type status ::
+            nested!(Jobs.activity_completed())
+            | nested!(Jobs.activity_failed())
+            | nested!(Jobs.activity_cancelled())
+            | nested!(Jobs.activity_backoff())
+  end
+
   deftype :remove_from_cache do
-    @type reason :: required :: nested!(Jobs.cache_eviction_reason())
+    @type reason ::
+            required ::
+            :unspecified
+            | :cache_full
+            | :cache_miss
+            | :non_determinism
+            | :lang_fail
+            | :lang_requested
+            | :task_not_found
+            | :unhandled_command
+            | :fatal
+            | :pagination_or_history_fetch
+            | :workflow_execution_ending
+
     @type message :: required :: String.t()
   end
 
@@ -175,10 +200,6 @@ defmodule TemporalEngine.Data.Jobs do
     @default %{}
     @type indexed_fields :: required :: %{String.t() => nested!(Payload.payload())}
   end
-
-  @type activity_status ::
-          activity_completed() | activity_failed() | activity_cancelled() | activity_backoff()
-  @type activity_status_opts :: activity_status()
 
   deftype :activity_completed do
     @structdoc "Used to report successful completion either when executing or resolving"
@@ -225,19 +246,4 @@ defmodule TemporalEngine.Data.Jobs do
     @doc "The time the first attempt of this local activity was scheduled. Must be passed with attempt to the retry LA."
     @type original_schedule_time :: nested!(Timestamp.timestamp())
   end
-
-  @type cache_eviction_reason ::
-          :unspecified
-          | :cache_full
-          | :cache_miss
-          | :non_determinism
-          | :lang_fail
-          | :lang_requested
-          | :task_not_found
-          | :unhandled_command
-          | :fatal
-          | :pagination_or_history_fetch
-          | :workflow_execution_ending
-
-  @type cache_eviction_reason_opts :: cache_eviction_reason()
 end

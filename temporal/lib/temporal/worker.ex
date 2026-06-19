@@ -20,8 +20,6 @@ defmodule Temporal.Worker do
 
   @type t :: %__MODULE__{id: String.t(), task_queue: TaskQueue.t()}
 
-  @typedoc "Supported options:\n#{NimbleOptions.docs(@opts_schema)}"
-  @type extra_opts :: [{:forward_polled_messages, pid()}]
   @type task_queue :: String.t()
   @type activity_type :: String.t()
   @type register_workflow_opts :: [{:name, WorkflowName.t()}]

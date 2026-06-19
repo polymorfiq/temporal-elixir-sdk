@@ -33,16 +33,14 @@ defmodule Temporal.CoreSdk.CoreWorker do
 
   @worker_store Temporal.Application.worker_store()
 
-  @spec start_link({ExecutionContext.t(), Config.worker_config_opts(), keyword()}) ::
+  @spec start_link({ExecutionContext.t(), Config.worker_config(), keyword()}) ::
           {:ok, pid()} | {:error, term()}
-  def start_link({exec_ctx, config_opts, server_opts}) do
-    config = Config.worker_config_from_opts!(config_opts)
-
+  def start_link({exec_ctx, config, server_opts}) do
     GenServer.start_link(__MODULE__, {exec_ctx, config}, server_opts)
   end
 
   @impl true
-  @spec init({ExecutionContext.t(), WorkerOpts.t(), Config.worker_config_opts()}) ::
+  @spec init({ExecutionContext.t(), WorkerOpts.t(), Config.worker_config()}) ::
           {:ok, t()} | {:error, term()}
   def init({exec_ctx, config}) do
     Process.set_label({:worker, exec_ctx.worker_id})

@@ -31,32 +31,18 @@ defmodule TemporalEngine.Data.Failure do
     """
     @type encoded_attributes :: nested!(Payload.payload())
     @type cause :: nested!(Failure.failure())
-    @type failure_info :: nested!(Failure.info())
+    @type failure_info ::
+            nested!(Failure.application())
+            | nested!(Failure.timeout_reached())
+            | nested!(Failure.cancelled())
+            | nested!(Failure.terminated())
+            | nested!(Failure.server())
+            | nested!(Failure.reset_workflow())
+            | nested!(Failure.activity())
+            | nested!(Failure.child_execution())
+            | nested!(Failure.nexus_operation())
+            | nested!(Failure.nexus_handler())
   end
-
-  @type info ::
-          application()
-          | timeout_reached()
-          | cancelled()
-          | terminated()
-          | server()
-          | reset_workflow()
-          | activity()
-          | child_execution()
-          | nexus_operation()
-          | nexus_handler()
-
-  @type info_opts ::
-          application_opts()
-          | timeout_reached_opts()
-          | cancelled_opts()
-          | terminated_opts()
-          | server_opts()
-          | reset_workflow_opts()
-          | activity_opts()
-          | child_execution_opts()
-          | nexus_operation_opts()
-          | nexus_handler_opts()
 
   deftype :application do
     @type failure_type :: required :: String.t()

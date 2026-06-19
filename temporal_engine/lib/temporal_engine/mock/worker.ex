@@ -31,6 +31,8 @@ defmodule TemporalEngine.Mock.Worker do
   def send_commands(worker, run_id, commands) do
     import TemporalEngine.Data.ActivationCompletion
 
+    commands = Enum.map(commands, &command(variant: &1))
+
     TemporalEngine.Worker.complete_workflow_activation(
       worker,
       completion(
@@ -131,6 +133,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
           import TemporalEngine.Data.Jobs
 
           activation(activation, :jobs)
+          |> Enum.map(fn j -> job(j, :variant) end)
           |> Enum.each(fn
             initialize_workflow(arguments: args) = job ->
               send(
@@ -139,7 +142,8 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
                  initialize_workflow(job, arguments: Enum.map(args, &Payload.value_from_record/1))}
               )
 
-            resolve_activity(result: activity_completed() = result) = job ->
+            resolve_activity(result: activity_resolution(status: activity_completed() = result)) =
+                job ->
               activity_completed(result: payload) = result
 
               result =
@@ -151,7 +155,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
 
               send(
                 forward_to,
-                {:job, resolve_activity(job, result: result)}
+                {:job, resolve_activity(job, result: activity_resolution(status: result))}
               )
 
             job ->
@@ -225,21 +229,22 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
         |> Enum.each(fn {forward_to, _} ->
           commands
           |> Enum.each(fn
-            schedule_activity(arguments: args) = cmd ->
+            command(variant: schedule_activity(arguments: args) = cmd) ->
               send(
                 forward_to,
                 {:command,
                  schedule_activity(cmd, arguments: Enum.map(args, &Payload.value_from_record/1))}
               )
 
-            complete_workflow_execution(result: payload) = cmd when is_tuple(payload) ->
+            command(variant: complete_workflow_execution(result: payload) = cmd)
+            when is_tuple(payload) ->
               send(
                 forward_to,
                 {:command,
                  complete_workflow_execution(cmd, result: Payload.value_from_record(payload))}
               )
 
-            cmd ->
+            command(variant: cmd) ->
               send(forward_to, {:command, cmd})
           end)
         end)

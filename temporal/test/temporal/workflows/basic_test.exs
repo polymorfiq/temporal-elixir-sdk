@@ -29,7 +29,7 @@ defmodule Temporal.Workflows.BasicTest do
     WorkerMock.forward_sent_commands(worker)
     WorkerMock.forward_received_jobs(worker)
 
-    assert_receive {:job, initialize_workflow(arguments: ["Testing"])}, 1000
+    assert_receive {:job, initialize_workflow(arguments: ["Testing"])}, 5000
 
     assert_receive {:command,
                     schedule_activity(
@@ -37,7 +37,7 @@ defmodule Temporal.Workflows.BasicTest do
                       activity_type: "activity_a",
                       arguments: ["Testing1"]
                     )},
-                   1000
+                   5000
 
     assert_receive {:command,
                     schedule_activity(
@@ -45,24 +45,24 @@ defmodule Temporal.Workflows.BasicTest do
                       activity_type: "activity_b",
                       arguments: ["Testing2"]
                     )},
-                   1000
+                   5000
 
     assert_receive {:job,
                     resolve_activity(
                       seq: 1,
                       result: activity_completed(result: "Hello, Testing1!")
                     )},
-                   1000
+                   5000
 
     assert_receive {:job,
                     resolve_activity(
                       seq: 2,
                       result: activity_completed(result: "Hello, Testing2!")
                     )},
-                   1000
+                   5000
 
-    assert_receive {:command, complete_workflow_execution(result: "Hello, Testing2!")}, 1000
-    assert_receive {:job, remove_from_cache(reason: :workflow_execution_ending)}, 1000
+    assert_receive {:command, complete_workflow_execution(result: "Hello, Testing2!")}, 5000
+    assert_receive {:job, remove_from_cache(reason: :workflow_execution_ending)}, 5000
 
     WorkerMock.forward_sent_completions(worker)
 

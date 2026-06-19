@@ -3,13 +3,17 @@ defmodule TemporalEngine.Data.Payload do
 
   alias TemporalEngine.Data.Payload
 
+  deftype :workflow_arguments do
+    @type args :: required :: [nested!(Payload.payload())]
+  end
+
   deftype :payload do
     @structdoc "Represents some binary (byte array) data (ex: activity input parameters or workflow result) with metadata which describes this binary data (format, encoding, encryption, etc). Serialization of the data may be user-defined."
 
     @default %{}
-    @type metadata :: required :: %{String.t() => binary()}
+    @type metadata :: required :: %{String.t() => [byte()]}
 
-    @type data :: required :: binary()
+    @type data :: required :: [byte()]
 
     @default []
     @type external_payloads :: required :: [nested!(Payload.external_payload_details())]
@@ -40,22 +44,22 @@ defmodule TemporalEngine.Data.Payload do
     value_from_record(payload, available_encoders())
   end
 
-  defp value_from_record(payload(metadata: %{"encoding" => "json/plain"}, data: data), %{
+  defp value_from_record(payload(metadata: %{"encoding" => ~c"json/plain"}, data: data), %{
          json: json
        }),
        do: json.decode!(data)
 
-  defp value_from_record(payload(metadata: %{"encoding" => "json/plain"}), _),
+  defp value_from_record(payload(metadata: %{"encoding" => ~c"json/plain"}), _),
     do:
       raise(
         "Received JSON-encoded data when `:json_encoder` is not configured for `:temporal_engine`. Please consult documentation."
       )
 
   defp value_from_record(
-         payload(metadata: %{"encoding" => "application/x-erlang-term"}, data: data),
+         payload(metadata: %{"encoding" => ~c"application/x-erlang-term"}, data: data),
          _
        ),
-       do: :erlang.binary_to_term(data)
+       do: :erlang.binary_to_term(:binary.list_to_bin(data))
 
   defp value_from_record(payload(data: data), _), do: data
 

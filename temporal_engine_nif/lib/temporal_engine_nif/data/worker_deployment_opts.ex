@@ -5,7 +5,7 @@ defmodule TemporalEngineNif.Data.WorkerDeploymentOpts do
     default_versioning_behavior: nil
   ]
 
-  alias TemporalEngineNif.Data.WorkerDeploymentVersion
+  alias TemporalEngine.Data.Common.WorkerDeploymentVersion
 
   @type t :: %__MODULE__{
           version: WorkerDeploymentVersion.t(),

@@ -1,5 +1,6 @@
 use crate::common::SdkDuration;
-use rustler::{NifStruct, NifTaggedEnum, NifUnitEnum, Resource};
+use rustler::{NifStruct, NifUnitEnum, NifUntaggedEnum, Resource};
+use std::collections::HashMap;
 use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::worker::{WorkerDeploymentOptions, WorkerDeploymentVersion};
@@ -14,34 +15,70 @@ pub struct ElixirWorker {
 impl Resource for ElixirWorker {}
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkerOpts"]
-pub struct SdkWorkerOpts {
+#[module = "TemporalEngine.Config.WorkerConfig"]
+pub struct SdkWorkerConfig {
+    pub id: String,
     pub namespace: String,
     pub task_queue: String,
-    pub deployment_options: SdkWorkerDeploymentOpts,
-    pub max_cached_workflows: u32,
+    pub client_identity_override: Option<String>,
+    pub tuner: SdkWorkerTunerOpts,
+    pub workflow_task_poller_behavior: SdkWorkerPollerOpts,
     pub nonsticky_to_sticky_poll_ratio: f32,
+    pub activity_task_poller_behavior: SdkWorkerPollerOpts,
+    pub nexus_task_poller_behavior: SdkWorkerPollerOpts,
+    pub task_types: SdkWorkerTaskTypesOpts,
+    pub sticky_queue_schedule_to_start_timeout: SdkDuration,
+    pub max_heartbeat_throttle_interval: SdkDuration,
+    pub default_heartbeat_throttle_interval: SdkDuration,
+    pub max_task_queue_activities_per_second: Option<f64>,
+    pub max_worker_activities_per_second: Option<f64>,
+    pub ignore_evicts_on_shutdown: bool,
+    pub graceful_shutdown_period: Option<SdkDuration>,
+    pub local_timeout_buffer_for_activities: SdkDuration,
+    pub max_outstanding_workflow_tasks: Option<u32>,
+    pub max_outstanding_activities: Option<u32>,
+    pub max_outstanding_local_activities: Option<u32>,
+    pub max_outstanding_nexus_tasks: Option<u32>,
+    pub workflow_failure_errors: Vec<SdkWorkflowFailureErrors>,
+    pub workflow_types_to_failure_errors: HashMap<String, SdkWorkflowFailureErrors>,
+    pub versioning_strategy: SdkWorkerDeploymentOpts,
+    pub max_cached_workflows: u32,
+    pub nondeterminism_as_workflow_fail: bool,
+    pub nondeterminism_as_workflow_fail_for_types: Vec<String>,
+    pub plugins: Vec<SdkPluginInfo>,
+    pub skip_client_worker_set_check: bool,
+    pub storage_drivers: Vec<SdkStorageDriverInfo>,
+}
+
+#[repr(i32)]
+#[derive(NifUnitEnum, Clone)]
+pub enum SdkWorkflowFailureErrors {
+    Nondeterminism = 0,
+}
+
+#[derive(NifStruct, Clone)]
+#[module = "TemporalEngine.Config.WorkerTaskTypes"]
+pub struct SdkWorkerTaskTypesOpts {
     pub enable_workflows: bool,
     pub enable_local_activities: bool,
     pub enable_remote_activities: bool,
     pub enable_nexus: bool,
-    pub sticky_queue_schedule_to_start_timeout: SdkDuration,
-    pub max_heartbeat_throttle_interval: SdkDuration,
-    pub default_heartbeat_throttle_interval: SdkDuration,
-    pub graceful_shutdown_period: Option<SdkDuration>,
-    pub nondeterminism_as_workflow_fail: bool,
-    pub tuner: SdkWorkerTunerOpts,
-    pub nondeterminism_as_workflow_fail_for_types: Vec<String>,
-    pub plugins: Vec<String>,
-    pub max_worker_activities_per_second: Option<f64>,
-    pub max_task_queue_activities_per_second: Option<f64>,
-    pub identity_override: Option<String>,
-    pub workflow_task_poller_behavior: SdkWorkerPollerOpts,
-    pub activity_task_poller_behavior: SdkWorkerPollerOpts,
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkerDeploymentOpts"]
+#[module = "TemporalEngine.Config.PluginInfo"]
+pub struct SdkPluginInfo {
+    pub name: String,
+}
+
+#[derive(NifStruct, Clone)]
+#[module = "TemporalEngine.Config.StorageDriverInfo"]
+pub struct SdkStorageDriverInfo {
+    pub r#type: String,
+}
+
+#[derive(NifStruct, Clone)]
+#[module = "TemporalEngine.Config.WorkerDeploymentOptions"]
 pub struct SdkWorkerDeploymentOpts {
     pub version: SdkWorkerDeploymentVersion,
     pub use_worker_versioning: bool,
@@ -108,7 +145,7 @@ impl Into<VersioningBehavior> for SdkDeploymentVersioningBehavior {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkerDeploymentVersion"]
+#[module = "TemporalEngine.Data.Common.WorkerDeploymentVersion"]
 pub struct SdkWorkerDeploymentVersion {
     pub build_id: String,
     pub deployment_name: String,
@@ -136,14 +173,14 @@ impl From<WorkerDeploymentVersion> for SdkWorkerDeploymentVersion {
     }
 }
 
-#[derive(NifTaggedEnum, Clone)]
+#[derive(NifUntaggedEnum, Clone)]
 pub enum SdkWorkerPollerOpts {
     Autoscaling(SdkWorkerPollerAutoscalingOpts),
     SimpleMaximum(SdkWorkerPollerSimpleMaximumOpts),
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkerPollerAutoscalingOpts"]
+#[module = "TemporalEngine.Config.AutoscalingPoller"]
 pub struct SdkWorkerPollerAutoscalingOpts {
     pub minimum: u32,
     pub maximum: u32,
@@ -151,27 +188,33 @@ pub struct SdkWorkerPollerAutoscalingOpts {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkerPollerSimpleMaximumOpts"]
+#[module = "TemporalEngine.Config.SimpleMaximumPoller"]
 pub struct SdkWorkerPollerSimpleMaximumOpts {
     pub simple_maximum: u32,
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkerTunerOpts"]
+#[module = "TemporalEngine.Config.WorkerTuner"]
 pub struct SdkWorkerTunerOpts {
     pub workflow_slot_supplier: SdkWorkerSlotSupplierOpts,
     pub activity_slot_supplier: SdkWorkerSlotSupplierOpts,
     pub local_activity_slot_supplier: SdkWorkerSlotSupplierOpts,
 }
 
-#[derive(NifTaggedEnum, Clone)]
+#[derive(NifStruct, Clone)]
+#[module = "TemporalEngine.Config.FixedSlotSupplier"]
+pub struct SdkFixedSlotSupplierOpts {
+    pub size: u32,
+}
+
+#[derive(NifUntaggedEnum, Clone)]
 pub enum SdkWorkerSlotSupplierOpts {
-    FixedSize(u32),
+    FixedSize(SdkFixedSlotSupplierOpts),
     ResourceBased(SdkWorkerTunerResourceOpts),
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkerTunerResourceOpts"]
+#[module = "TemporalEngine.Config.ResourceBasedSlotSupplier"]
 pub struct SdkWorkerTunerResourceOpts {
     pub target_mem_usage: f64,
     pub target_cpu_usage: f64,

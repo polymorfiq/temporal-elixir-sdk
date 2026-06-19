@@ -2,8 +2,8 @@ defmodule TemporalEngineNif.Data.WorkflowFailureInfo do
   import TemporalEngine.Data.Failure
 
   alias TemporalEngineNif.Data
-  alias TemporalEngineNif.Data.Duration
-  alias TemporalEngineNif.Data.Payload
+  alias TemporalEngine.Data.Duration
+  alias TemporalEngine.Data.Payload.Payload
   alias TemporalEngineNif.Data.WorkflowActivityType, as: ActivityType
   alias TemporalEngineNif.Data.WorkflowType
   alias TemporalEngineNif.Data.WorkflowExecution, as: Execution

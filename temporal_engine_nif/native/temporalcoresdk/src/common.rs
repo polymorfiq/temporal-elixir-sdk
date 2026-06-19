@@ -7,7 +7,7 @@ use temporalio_sdk_common::protos::temporal::api::common::v1::Callback;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.Duration"]
+#[module = "TemporalEngine.Data.Duration.Duration"]
 pub struct SdkDuration {
     seconds: i64,
     nanos: i32,
@@ -47,7 +47,7 @@ impl Into<core::time::Duration> for SdkDuration {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.Timestamp"]
+#[module = "TemporalEngine.Data.Timestamp.Timestamp"]
 pub struct SdkTimestamp {
     seconds: i64,
     nanos: i32,
@@ -72,7 +72,7 @@ impl Into<prost_wkt_types::Timestamp> for SdkTimestamp {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.Payload"]
+#[module = "TemporalEngine.Data.Payload.Payload"]
 pub struct SdkPayload {
     pub metadata: HashMap<String, Vec<u8>>,
     pub data: Vec<u8>,
@@ -166,7 +166,7 @@ impl Into<temporal_api::common::v1::Payloads> for &SdkPayloads {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.Priority"]
+#[module = "TemporalEngine.Data.Priority.Priority"]
 pub struct SdkPriority {
     pub priority_key: Option<i32>,
     pub fairness_key: Option<String>,
@@ -220,7 +220,7 @@ impl Into<temporalio_sdk_client::Priority> for SdkPriority {
 }
 
 #[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.RetryPolicy"]
+#[module = "TemporalEngine.Data.Common.RetryOpts"]
 pub struct SdkRetryPolicy {
     pub initial_interval: Option<SdkDuration>,
     pub backoff_coefficient: f64,

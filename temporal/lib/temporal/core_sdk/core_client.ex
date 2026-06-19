@@ -2,8 +2,9 @@ defmodule Temporal.CoreSdk.CoreClient do
   use GenServer
   defstruct [:core]
 
-  import TemporalEngine.Runtime
+  import TemporalEngine.Opts.ClientOpts, only: [connection_opts: 2]
 
+  alias TemporalEngine.Opts.ClientOpts
   alias TemporalEngine.Runtime
   alias Temporal.CoreSdk.CoreRuntime
 
@@ -14,22 +15,29 @@ defmodule Temporal.CoreSdk.CoreClient do
 
   @client_store Temporal.Application.client_store()
 
-  @spec start_link({Runtime.t(), Runtime.client_opts(), keyword()}) ::
+  @spec start_link({Runtime.t(), ClientOpts.connection_opts(), keyword()}) ::
           {:ok, pid()} | {:error, term()}
-  def start_link({runtime, opts, server_opts}) do
-    GenServer.start_link(__MODULE__, {runtime, opts}, server_opts)
+  def start_link({runtime, conn_opts, server_opts}) do
+    GenServer.start_link(__MODULE__, {runtime, conn_opts}, server_opts)
   end
 
   @impl true
-  @spec init({CoreRuntime.t(), Runtime.client_opts()}) :: {:ok, t()} | {:error, term()}
-  def init({runtime, opts}) do
-    Process.set_label({:core_client, client_opts(opts, :identity)})
+  @spec init({CoreRuntime.t(), ClientOpts.connection_opts()}) :: {:ok, t()} | {:error, term()}
+  def init({runtime, conn_opts}) do
+    Process.set_label({:core_client, connection_opts(conn_opts, :identity)})
 
-    with {:ok, core_client} <- TemporalEngine.Runtime.create_client(runtime.core, opts) do
-      :ets.insert(@client_store, {{:core, client_opts(opts, :identity)}, core_client})
+    with {:ok, core_client} <- TemporalEngine.Runtime.create_client(runtime.core, conn_opts) do
+      :ets.insert(
+        @client_store,
+        {{:core, connection_opts(conn_opts, :identity)}, core_client}
+      )
 
       {:ok,
-       server_state(identity: client_opts(opts, :identity), runtime: runtime, core: core_client)}
+       server_state(
+         identity: connection_opts(conn_opts, :identity),
+         runtime: runtime,
+         core: core_client
+       )}
     end
   end
 

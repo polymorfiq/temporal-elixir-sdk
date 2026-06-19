@@ -1,35 +1,17 @@
 defmodule TemporalEngine.Data.Commands do
   use TemporalEngine.Data.TypeSpec
 
-  alias TemporalEngine.Data.Commands
+  alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Priority
-  alias TemporalEngine.Data.RetryPolicy
   alias TemporalEngine.Data.Timestamp
-
-  @type command ::
-          start_timer()
-          | schedule_activity()
-          | request_cancel_activity()
-          | complete_workflow_execution()
-          | fail_workflow_execution()
-          | schedule_local_activity()
-          | request_cancel_local_activity()
-
-  @type command_opts ::
-          start_timer_opts()
-          | schedule_activity_opts()
-          | request_cancel_activity_opts()
-          | complete_workflow_execution_opts()
-          | fail_workflow_execution_opts()
-          | schedule_local_activity_opts()
-          | request_cancel_local_activity_opts()
 
   deftype :start_timer do
     @doc "Lang’s incremental sequence number, used as the operation identifier"
-    @type seq :: required :: pos_integer()
+    @default :not_specified
+    @type seq :: required :: pos_integer() | :not_specified
 
     @type start_to_fire_timeout :: nested!(Duration.duration())
   end
@@ -40,9 +22,11 @@ defmodule TemporalEngine.Data.Commands do
     """
 
     @doc "Lang’s incremental sequence number, used as the operation identifier"
-    @type seq :: required :: pos_integer()
+    @default :not_specified
+    @type seq :: required :: pos_integer() | :not_specified
 
-    @type activity_id :: required :: String.t()
+    @default :not_specified
+    @type activity_id :: required :: String.t() | :not_specified
 
     @type activity_type :: required :: String.t()
 
@@ -87,17 +71,18 @@ defmodule TemporalEngine.Data.Commands do
 
     To disable retries set `retry_policy.maximum_attempts` to 1.
     """
-    @type retry_policy :: nested!(RetryPolicy.policy())
+    @type retry_policy :: nested!(Common.retry_opts())
 
     @doc "Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed"
     @default :try_cancel
-    @type cancellation_type :: nested!(Commands.cancellation_type())
+    @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
 
     @doc """
     If set, the worker will not tell the service that it can immediately start executing this activity.
 
     When unset/default, workers will always attempt to do so if activity execution slots are available.
     """
+    @default false
     @type do_not_eagerly_execute :: bool()
 
     @doc "Whether this activity should run on a worker with a compatible build id or not."
@@ -108,8 +93,6 @@ defmodule TemporalEngine.Data.Commands do
     @type priority :: nested!(Priority.priority())
   end
 
-  @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
-  @type cancellation_type_opts :: cancellation_type()
   @type versioning_intent :: :unspecified | :compatible | :default
 
   deftype :schedule_local_activity do
@@ -159,7 +142,7 @@ defmodule TemporalEngine.Data.Commands do
     @type start_to_close_timeout :: nested!(Duration.duration())
 
     @doc "Specify a retry policy for the local activity. By default local activities will be retried indefinitely."
-    @type retry_policy :: nested!(RetryPolicy.policy())
+    @type retry_policy :: nested!(Common.retry_opts())
 
     @doc "If the activity is retrying and backoff would exceed this value, lang will be told to schedule a timer and retry the activity after. Otherwise, backoff will happen internally in core. Defaults to 1 minute."
     @type local_retry_threshold :: nested!(Duration.duration())
@@ -168,7 +151,7 @@ defmodule TemporalEngine.Data.Commands do
     Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed. Lang should default this to `WAIT_CANCELLATION_COMPLETED`, even though proto will default to `TRY_CANCEL` automatically.
     """
     @default :wait_cancellation_completed
-    @type cancellation_type :: nested!(Commands.cancellation_type())
+    @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
   end
 
   deftype :request_cancel_activity do
