@@ -85,13 +85,4 @@ defmodule TemporalEngine.Data.Duration do
     nanos = Integer.mod(micro, 1_000_000) * 1_000
     duration(seconds: round(seconds), nanos: round(nanos))
   end
-
-  def to_record(nil), do: nil
-
-  def to_record(data) do
-    duration_from_opts!(seconds: data.seconds, nanos: data.nanos)
-  end
-
-  def from_record(nil), do: nil
-  def from_record(record), do: TemporalEngine.Data.Duration.Duration.from_record!(record)
 end

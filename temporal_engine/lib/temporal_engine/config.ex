@@ -36,7 +36,8 @@ defmodule TemporalEngine.Config do
     See also `nonsticky_to_sticky_poll_ratio`. If using `simple_maximum`, Must be at least `2` when `max_cached_workflows > 0`, or is an error.
     """
     @default [simple_maximum: 100]
-    @type workflow_task_poller_behavior :: nested!(Config.simple_maximum_poller())
+    @type workflow_task_poller_behavior ::
+            nested!(Config.simple_maximum_poller()) | nested!(Config.autoscaling_poller())
 
     @doc """
     Only applies when using `poller_behavior` of type `simple_maximum`
@@ -50,7 +51,8 @@ defmodule TemporalEngine.Config do
 
     @doc "Maximum number of concurrent poll activity task requests we will perform at a time on this worker’s task queue"
     @default [simple_maximum: 100]
-    @type activity_task_poller_behavior :: nested!(Config.simple_maximum_poller())
+    @type activity_task_poller_behavior ::
+            nested!(Config.simple_maximum_poller()) | nested!(Config.autoscaling_poller())
 
     @doc "Maximum number of concurrent poll nexus task requests we will perform at a time on this worker’s task queue"
     @default [simple_maximum: 100]
@@ -206,15 +208,15 @@ defmodule TemporalEngine.Config do
     @type workflow_slot_supplier ::
             required ::
             nested!(Config.fixed_slot_supplier())
-            | nested!(Config.resourced_based_slot_supplier())
+            | nested!(Config.resource_based_slot_supplier())
     @type activity_slot_supplier ::
             required ::
             nested!(Config.fixed_slot_supplier())
-            | nested!(Config.resourced_based_slot_supplier())
+            | nested!(Config.resource_based_slot_supplier())
     @type local_activity_slot_supplier ::
             required ::
             nested!(Config.fixed_slot_supplier())
-            | nested!(Config.resourced_based_slot_supplier())
+            | nested!(Config.resource_based_slot_supplier())
   end
 
   deftype :fixed_slot_supplier do
@@ -224,7 +226,7 @@ defmodule TemporalEngine.Config do
     @type size :: required :: pos_integer()
   end
 
-  deftype :resourced_based_slot_supplier do
+  deftype :resource_based_slot_supplier do
     @structdoc "Create an instance attempting to target the provided memory and cpu thresholds as values between 0 and 1."
 
     @type target_mem_usage :: required :: float()

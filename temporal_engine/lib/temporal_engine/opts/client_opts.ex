@@ -5,6 +5,15 @@ defmodule TemporalEngine.Opts.ClientOpts do
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Opts.ClientOpts
 
+  deftype :runtime_opts do
+    @doc "A unique identifier for this Runtime"
+    @type id :: required :: String.t()
+
+    @doc "Optional worker heartbeat interval - This configures the heartbeat setting of all workers created using this runtime."
+    @default [seconds: 30]
+    @type heartbeat_interval :: nested!(Duration.duration())
+  end
+
   deftype :connection_opts do
     @doc "The server to connect to."
     @type target :: required :: String.t()

@@ -1,6 +1,8 @@
 defmodule TemporalEngine.Data.Commands do
   use TemporalEngine.Data.TypeSpec
 
+  require TemporalEngine.Data.Common
+
   alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
@@ -71,7 +73,7 @@ defmodule TemporalEngine.Data.Commands do
 
     To disable retries set `retry_policy.maximum_attempts` to 1.
     """
-    @type retry_policy :: nested!(Common.retry_opts())
+    @type retry_policy :: nested!(Common.retry_policy())
 
     @doc "Defines how the workflow will wait (or not) for cancellation of the activity to be confirmed"
     @default :try_cancel
@@ -97,9 +99,11 @@ defmodule TemporalEngine.Data.Commands do
 
   deftype :schedule_local_activity do
     @doc "Lang’s incremental sequence number, used as the operation identifier"
-    @type seq :: required :: pos_integer()
+    @default :not_specified
+    @type seq :: required :: pos_integer() | :not_specified
 
-    @type activity_id :: required :: String.t()
+    @default :not_specified
+    @type activity_id :: required :: String.t() | :not_specified
     @type activity_type :: required :: String.t()
 
     @doc """
@@ -142,7 +146,7 @@ defmodule TemporalEngine.Data.Commands do
     @type start_to_close_timeout :: nested!(Duration.duration())
 
     @doc "Specify a retry policy for the local activity. By default local activities will be retried indefinitely."
-    @type retry_policy :: nested!(Common.retry_opts())
+    @type retry_policy :: nested!(Common.retry_policy())
 
     @doc "If the activity is retrying and backoff would exceed this value, lang will be told to schedule a timer and retry the activity after. Otherwise, backoff will happen internally in core. Defaults to 1 minute."
     @type local_retry_threshold :: nested!(Duration.duration())

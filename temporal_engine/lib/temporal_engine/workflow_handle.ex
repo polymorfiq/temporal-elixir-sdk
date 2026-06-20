@@ -1,15 +1,12 @@
 defprotocol TemporalEngine.WorkflowHandle do
   require Record
 
-  alias TemporalEngine.Data.Payload
-  alias TemporalEngine.Data.Duration
+  require TemporalEngine.Opts.HandleOpts
 
-  @spec get_result(t(), get_result_opts()) ::
+  alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Opts.HandleOpts
+
+  @spec get_result(t(), HandleOpts.get_workflow_result_opts_opts()) ::
           {:ok, Payload.payload()} | {:error, reason :: term()}
   def get_result(handle, opts)
-
-  Record.defrecord(:get_result_opts, [:follow_runs, timeout: nil])
-
-  @type get_result_opts ::
-          record(:get_result_opts, follow_runs: bool(), timeout: Duration.duration() | nil)
 end

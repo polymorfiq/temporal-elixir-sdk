@@ -1,13 +1,13 @@
-use crate::core_workflows::SdkExternalPayloadDetails;
-use rustler::{NifStruct, NifTaggedEnum};
+use crate::data::common::SdkPayload;
+use rustler::{NifRecord, NifTaggedEnum};
 use std::collections::HashMap;
 use temporalio_sdk_common::protos::temporal::api as temporal_api;
 use temporalio_sdk_common::protos::temporal::api::common as api_common;
 use temporalio_sdk_common::protos::temporal::api::common::v1::Callback;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Data.Duration.Duration"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "duration"]
 pub struct SdkDuration {
     seconds: i64,
     nanos: i32,
@@ -46,8 +46,8 @@ impl Into<core::time::Duration> for SdkDuration {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Data.Timestamp.Timestamp"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "timestamp"]
 pub struct SdkTimestamp {
     seconds: i64,
     nanos: i32,
@@ -71,72 +71,8 @@ impl Into<prost_wkt_types::Timestamp> for SdkTimestamp {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Data.Payload.Payload"]
-pub struct SdkPayload {
-    pub metadata: HashMap<String, Vec<u8>>,
-    pub data: Vec<u8>,
-    pub external_payloads: Vec<SdkExternalPayloadDetails>,
-}
-
-impl From<temporal_api::common::v1::Payload> for SdkPayload {
-    fn from(external: temporal_api::common::v1::Payload) -> Self {
-        Self {
-            metadata: external.metadata,
-            data: external.data,
-            external_payloads: external
-                .external_payloads
-                .iter()
-                .map(|val| (*val).into())
-                .collect(),
-        }
-    }
-}
-
-impl From<&temporal_api::common::v1::Payload> for SdkPayload {
-    fn from(external: &temporal_api::common::v1::Payload) -> Self {
-        Self {
-            metadata: external.metadata.clone(),
-            data: external.data.clone(),
-            external_payloads: external
-                .external_payloads
-                .iter()
-                .map(|val| (*val).into())
-                .collect(),
-        }
-    }
-}
-
-impl Into<temporal_api::common::v1::Payload> for SdkPayload {
-    fn into(self) -> temporal_api::common::v1::Payload {
-        temporal_api::common::v1::Payload {
-            metadata: self.metadata.clone(),
-            data: self.data.clone(),
-            external_payloads: self
-                .external_payloads
-                .iter()
-                .map(|val| val.clone().into())
-                .collect(),
-        }
-    }
-}
-
-impl Into<temporal_api::common::v1::Payload> for &SdkPayload {
-    fn into(self) -> temporal_api::common::v1::Payload {
-        temporal_api::common::v1::Payload {
-            metadata: self.metadata.clone(),
-            data: self.data.clone(),
-            external_payloads: self
-                .external_payloads
-                .iter()
-                .map(|val| val.clone().into())
-                .collect(),
-        }
-    }
-}
-
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.Payloads"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "payloads"]
 pub struct SdkPayloads {
     pub payloads: Vec<SdkPayload>,
 }
@@ -165,8 +101,8 @@ impl Into<temporal_api::common::v1::Payloads> for &SdkPayloads {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Data.Priority.Priority"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "priority"]
 pub struct SdkPriority {
     pub priority_key: Option<i32>,
     pub fairness_key: Option<String>,
@@ -219,8 +155,8 @@ impl Into<temporalio_sdk_client::Priority> for SdkPriority {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Data.Common.RetryOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "retry_policy"]
 pub struct SdkRetryPolicy {
     pub initial_interval: Option<SdkDuration>,
     pub backoff_coefficient: f64,
@@ -253,8 +189,8 @@ impl Into<temporal_api::common::v1::RetryPolicy> for SdkRetryPolicy {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.Header"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "header"]
 pub struct SdkHeader {
     fields: HashMap<String, SdkPayload>,
 }
@@ -283,8 +219,8 @@ impl Into<api_common::v1::Header> for SdkHeader {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.Link"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "link"]
 pub struct SdkLink {
     variant: Option<SdkLinkVariant>,
 }
@@ -305,7 +241,7 @@ impl Into<api_common::v1::Link> for SdkLink {
     }
 }
 
-#[derive(NifTaggedEnum, Clone)]
+#[derive(Debug, NifTaggedEnum, Clone)]
 pub enum SdkLinkVariant {
     WorkflowEvent(SdkLinkWorkflowEvent),
     BatchJob(SdkLinkBatchJob),
@@ -343,8 +279,8 @@ impl Into<api_common::v1::link::Variant> for SdkLinkVariant {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkflowEvent"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "link_workflow_event"]
 pub struct SdkLinkWorkflowEvent {
     namespace: String,
     workflow_id: String,
@@ -374,8 +310,8 @@ impl Into<api_common::v1::link::WorkflowEvent> for SdkLinkWorkflowEvent {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.LinkActivity"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "link_batch_job"]
 pub struct SdkLinkBatchJob {
     job_id: String,
 }
@@ -396,8 +332,8 @@ impl Into<api_common::v1::link::BatchJob> for SdkLinkBatchJob {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.LinkActivity"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "link_activity"]
 pub struct SdkLinkActivity {
     namespace: String,
     activity_id: String,
@@ -424,8 +360,8 @@ impl Into<api_common::v1::link::Activity> for SdkLinkActivity {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.LinkNexusOperation"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "link_nexus_operation"]
 pub struct SdkLinkNexusOperation {
     namespace: String,
     operation_id: String,
@@ -452,7 +388,7 @@ impl Into<api_common::v1::link::NexusOperation> for SdkLinkNexusOperation {
     }
 }
 
-#[derive(NifTaggedEnum, Clone)]
+#[derive(Debug, NifTaggedEnum, Clone)]
 pub enum SdkWorkflowEventReference {
     EventRef(SdkWorkflowEventReferenceEvent),
     RequestIdRef(SdkWorkflowEventReferenceRequest),
@@ -484,8 +420,8 @@ impl Into<api_common::v1::link::workflow_event::Reference> for SdkWorkflowEventR
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkflowEventReferenceEvent"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "reference_event"]
 pub struct SdkWorkflowEventReferenceEvent {
     event_id: i64,
     event_type: i32,
@@ -509,8 +445,8 @@ impl Into<api_common::v1::link::workflow_event::EventReference> for SdkWorkflowE
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkflowEventReferenceRequest"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "reference_request"]
 pub struct SdkWorkflowEventReferenceRequest {
     request_id: String,
     event_type: i32,
@@ -538,8 +474,8 @@ impl Into<api_common::v1::link::workflow_event::RequestIdReference>
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.Callback"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "callback"]
 pub struct SdkCallback {
     pub links: Vec<SdkLink>,
     pub variant: Option<SdkCallbackVariant>,
@@ -567,7 +503,7 @@ impl Into<Callback> for SdkCallback {
     }
 }
 
-#[derive(NifTaggedEnum, Clone)]
+#[derive(Debug, NifTaggedEnum, Clone)]
 pub enum SdkCallbackVariant {
     Nexus(SdkCallbackNexus),
     Internal(SdkCallbackInternal),
@@ -591,8 +527,8 @@ impl Into<api_common::v1::callback::Variant> for SdkCallbackVariant {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.CallbackNexus"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "callback_nexus"]
 pub struct SdkCallbackNexus {
     pub url: String,
     pub header: HashMap<String, String>,
@@ -616,8 +552,8 @@ impl Into<api_common::v1::callback::Nexus> for SdkCallbackNexus {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.CallbackInternal"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "callback_internal"]
 pub struct SdkCallbackInternal {
     pub data: Vec<u8>,
 }

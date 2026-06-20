@@ -12,8 +12,6 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   import TemporalEngine.Data.ActivityTaskCompletion
 
   alias TemporalEngineNif.Core
-  alias TemporalEngine.Data.ActivationCompletion
-  alias TemporalEngine.Data.ActivityTask
   alias TemporalEngine.Data.ActivityTaskCompletion
 
   @impl true
@@ -47,7 +45,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
 
     receive do
       {^child, {:ok, task}} ->
-        {:ok, TemporalEngine.Data.Activation.Activation.to_record!(task)}
+        {:ok, task}
 
       {^child, {:error, err}} ->
         {:error, err}
@@ -82,7 +80,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
 
     receive do
       {^child, {:ok, task}} ->
-        ActivityTask.ActivityTask.to_record(task)
+        {:ok, task}
 
       {^child, {:error, err}} ->
         {:error, err}
@@ -128,14 +126,12 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   def complete_workflow_activation(worker, completion() = complete) do
     parent = self()
 
-    completion = ActivationCompletion.Completion.from_record!(complete)
-
     child =
       spawn_link(fn ->
         Core._worker_complete_workflow_activation(
           worker.runtime.core,
           worker.core,
-          completion,
+          complete,
           self()
         )
         |> case do
@@ -161,16 +157,14 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   end
 
   @impl true
-  def complete_activity_task(worker, task_token, activity_completed() = record) do
+  def complete_activity_task(worker, task_token, activity_completed() = completed) do
     parent = self()
 
     completion =
       ActivityTaskCompletion.task_completion(
         task_token: task_token,
-        result: ActivityTaskCompletion.activity_execution_result(status: record)
+        result: ActivityTaskCompletion.activity_execution_result(status: completed)
       )
-
-    completion = ActivityTaskCompletion.TaskCompletion.from_record!(completion)
 
     child =
       spawn_link(fn ->

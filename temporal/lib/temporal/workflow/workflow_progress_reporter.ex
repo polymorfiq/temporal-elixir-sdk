@@ -61,7 +61,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
     do:
       GenServer.call(
         reporter,
-        {:command, start_timer(start_to_fire_timeout: Duration.from_tuple(duration))},
+        {:command, start_timer_from_opts!(start_to_fire_timeout: duration)},
         :infinity
       )
 

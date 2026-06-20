@@ -10,11 +10,11 @@ defmodule TemporalEngine.Data.Common do
   deftype :worker_deployment_version do
     @structdoc "Identifies a specific version of a worker deployment."
 
-    @doc "Name of the deployment"
-    @type deployment_name :: required :: String.t()
-
     @doc "Build ID for the worker."
     @type build_id :: required :: String.t()
+
+    @doc "Name of the deployment"
+    @type deployment_name :: required :: String.t()
   end
 
   deftype :workflow_execution do
@@ -36,26 +36,26 @@ defmodule TemporalEngine.Data.Common do
     @type run_id :: required :: String.t()
   end
 
-  deftype :retry_opts do
-    @structdoc "Configuration for retrying requests to the server"
+  deftype :retry_policy do
+    @structdoc "How retries ought to be handled, usable by both workflows and activities"
 
-    @doc "initial wait time before the first retry."
-    @type initial_interval :: required :: nested!(Duration.duration())
+    @doc "Interval of the first retry. If retryBackoffCoefficient is 1.0 then it is used for all retries."
+    @type initial_interval :: nested!(Duration.duration())
 
-    @doc "Randomization jitter that is used as a multiplier for the current retry interval and is added or subtracted from the interval length."
-    @type randomization_factor :: required :: float()
+    @doc "Coefficient used to calculate the next retry interval. The next retry interval is previous interval multiplied by the coefficient. Must be 1 or larger."
+    @default 2.0
+    @type backoff_coefficient :: required :: float()
 
-    @doc "Rate at which retry time should be increased, until it reaches max_interval."
-    @type multiplier :: required :: float()
+    @doc "Maximum interval between retries. Exponential backoff leads to interval increase. This value is the cap of the increase. Default is 100x of the initial interval."
+    @type maximum_interval :: nested!(Duration.duration())
 
-    @doc "Maximum amount of time to wait between retries."
-    @type max_interval :: required :: nested!(Duration.duration())
+    @doc "Maximum number of attempts. When exceeded the retries stop even if not expired yet. 1 disables retries. 0 means unlimited (up to the timeouts)"
+    @default 0
+    @type maximum_attempts :: required :: non_neg_integer()
 
-    @doc "Maximum total amount of time requests should be retried for, if None is set then no limit will be used."
-    @type max_elapsed_time :: nested!(Duration.duration())
-
-    @doc "Maximum number of retry attempts."
-    @type max_retries :: non_neg_integer()
+    @doc "Non-Retryable errors types. Will stop retrying if the error type matches this list. Note that this is not a substring match, the error type (not message) must match exactly."
+    @default []
+    @type non_retryable_error_types :: required :: [String.t()]
   end
 
   deftype :header do

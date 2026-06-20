@@ -2,7 +2,6 @@ defmodule Temporal.Workflow do
   require TemporalEngine.Data.Failure
 
   import TemporalEngine.Data.Common
-  import TemporalEngine.WorkflowHandle
 
   alias Temporal.Activity
   alias Temporal.Activity.ActivityExecHandle
@@ -73,12 +72,6 @@ defmodule Temporal.Workflow do
   @spec result(workflow_exec_handle(), get_results_opts()) ::
           {:ok, TemporalEngine.Data.Payload.t()} | {:error, ResultError.t() | term()}
   def result(handle, opts \\ []) do
-    opts =
-      get_result_opts(
-        follow_runs: opts[:follow_runs] || true,
-        timeout: if(tm = opts[:timeout], do: Duration.from_tuple(tm))
-      )
-
     with {:ok, result} <- TemporalEngine.WorkflowHandle.get_result(handle, opts) do
       {:ok, if(result, do: Payload.value_from_record(result))}
     else

@@ -1,4 +1,5 @@
-use crate::common::{SdkPayload, SdkTimestamp};
+use crate::common::SdkTimestamp;
+use crate::data::common::SdkPayload;
 use rustler::{NifStruct, NifUnitEnum};
 use std::collections::HashMap;
 use temporalio_sdk_common::protos::coresdk::nexus;

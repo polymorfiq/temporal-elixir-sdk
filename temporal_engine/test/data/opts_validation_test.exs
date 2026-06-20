@@ -114,39 +114,4 @@ defmodule TemporalEngine.Data.OptsValidationTest do
 
     assert example(data: <<123>>, metadata: %{}) = c
   end
-
-  test "converts to module version" do
-    {:ok, validated} =
-      validate_recursive_opts(
-        name: "Payloads",
-        payloads: [
-          [data: ~s|"Data1"|, metadata: %{"encoding" => "json/plain"}],
-          [
-            data: :erlang.term_to_binary(:atom),
-            metadata: %{"encoding" => "application/x-erlang-term"}
-          ],
-          [data: <<123>>]
-        ]
-      )
-
-    {:ok, created} = recursive_from_opts(validated)
-
-    assert %OptsValidationTest.Recursive{
-             name: "Payloads",
-             optionals: nil,
-             payloads: [a, b, c]
-           } = OptsValidationTest.Recursive.from_record!(created)
-
-    assert %OptsValidationTest.Example{data: ~s|"Data1"|, metadata: %{"encoding" => "json/plain"}} =
-             a
-
-    erl_term = :erlang.term_to_binary(:atom)
-
-    assert %OptsValidationTest.Example{
-             data: ^erl_term,
-             metadata: %{"encoding" => "application/x-erlang-term"}
-           } = b
-
-    assert %OptsValidationTest.Example{data: <<123>>} = c
-  end
 end

@@ -96,14 +96,6 @@ defmodule TemporalEngine.Data.TypeSpec do
           """
       end)
 
-    map_ast =
-      {:%, [],
-       [
-         {:__MODULE__, [], Elixir},
-         {:%{}, [],
-          Enum.map(nested_to_type(fields_to_types, __CALLER__), fn {k, v} -> {k, v} end)}
-       ]}
-
     to_or = fn
       [a], _ -> a
       [a, b], _ -> {:|, [], [a, b]}
@@ -175,55 +167,6 @@ defmodule TemporalEngine.Data.TypeSpec do
         @spec unquote(field_opts_types_name)() :: term()
         def unquote(field_opts_types_name)(),
           do: unquote(Macro.escape(expand_nested_modules(fields_to_opt_types, __CALLER__)))
-      end
-
-      defmodule unquote(Module.concat([__CALLER__.module, Macro.camelize("#{name}")])) do
-        @moduledoc unquote(~s|#{structdoc}\n\n|)
-
-        @typedoc unquote(~s|#{Enum.join(fields_to_docs, "\n\n")}|)
-        @type t() :: unquote(Macro.expand(map_ast, __CALLER__))
-
-        defstruct unquote(field_names)
-
-        @spec from_record!(tuple()) :: t()
-        def from_record!(record) do
-          {:ok, data} = from_record(record)
-          data
-        end
-
-        @spec from_record(tuple()) :: {:ok, t()} | {:error, term()}
-        def from_record(record) do
-          if unquote(name) == elem(record, 0) do
-            TemporalEngine.Data.TypeSpec.from_record(
-              record,
-              __MODULE__,
-              unquote(__CALLER__.module),
-              unquote(name)
-            )
-          else
-            {:error, "Not a #{unquote(name)} record... Got '#{inspect(record)}'"}
-          end
-        end
-
-        @spec to_record!(t()) :: tuple()
-        def to_record!(data) do
-          {:ok, record} = to_record(data)
-          record
-        end
-
-        @spec to_record(t()) :: {:ok, tuple()} | {:error, term()}
-        def to_record(data) do
-          if match?(%__MODULE__{}, data) do
-            TemporalEngine.Data.TypeSpec.to_record(
-              data,
-              __MODULE__,
-              unquote(__CALLER__.module),
-              unquote(name)
-            )
-          else
-            {:error, "Not a #{__MODULE__} struct..."}
-          end
-        end
       end
     end
   end

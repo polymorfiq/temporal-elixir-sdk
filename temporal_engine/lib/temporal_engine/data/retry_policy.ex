@@ -9,6 +9,7 @@ defmodule TemporalEngine.Data.RetryPolicy do
     @type initial_interval :: nested!(Duration.duration())
 
     @doc "Coefficient used to calculate the next retry interval. The next retry interval is previous interval multiplied by the coefficient. Must be 1 or larger."
+    @default 1.7
     @type backoff_coefficient :: required :: float()
 
     @doc "Maximum interval between retries. Exponential backoff leads to interval increase. This value is the cap of the increase. Default is 100x of the initial interval."

@@ -1,6 +1,8 @@
 defmodule TemporalEngine.Data.Jobs do
   use TemporalEngine.Data.TypeSpec
 
+  require TemporalEngine.Data.Common
+
   alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
@@ -70,7 +72,7 @@ defmodule TemporalEngine.Data.Jobs do
     @type first_execution_run_id :: required :: String.t()
 
     @doc "This workflow’s retry policy"
-    @type retry_policy :: nested!(Common.retry_opts())
+    @type retry_policy :: nested!(Common.retry_policy())
 
     @doc "Starting at 1, the number of times we have tried to execute this workflow"
     @type attempt :: required :: integer()

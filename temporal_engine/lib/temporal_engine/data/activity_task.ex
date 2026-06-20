@@ -1,6 +1,8 @@
 defmodule TemporalEngine.Data.ActivityTask do
   use TemporalEngine.Data.TypeSpec
 
+  require TemporalEngine.Data.Common
+
   alias TemporalEngine.Data.ActivityTask
   alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
@@ -64,7 +66,7 @@ defmodule TemporalEngine.Data.ActivityTask do
     @type heartbeat_timeout :: nested!(Duration.duration())
 
     @doc "This is an actual retry policy the service uses. It can be different from the one provided (or not) during activity scheduling as the service can override the provided one in case its values are not specified or exceed configured system limits."
-    @type retry_policy :: nested!(Common.retry_opts())
+    @type retry_policy :: nested!(Common.retry_policy())
 
     @doc "Priority of this activity. Local activities will always have this field set to the default."
     @type priority :: nested!(Priority.priority())

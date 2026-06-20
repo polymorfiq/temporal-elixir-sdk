@@ -1,17 +1,17 @@
 defmodule TemporalEngineNif.Engine do
   use TemporalEngine.Engine
 
-  import TemporalEngine.Engine
-  alias TemporalEngineNif.Data.RuntimeOpts
+  require TemporalEngine.Opts.ClientOpts
+
+  alias TemporalEngine.Opts.ClientOpts
   alias TemporalEngineNif.Core
   alias TemporalEngineNif.Runtime
 
   @impl true
   def create_runtime(opts) do
-    rt_opts = %RuntimeOpts{heartbeat_interval: runtime_opts(opts, :heartbeat_interval)}
-
-    with {:ok, core} <- Core._create_runtime(rt_opts) do
-      {:ok, %Runtime{id: runtime_opts(opts, :id), core: core}}
+    with {:ok, rt_opts} <- ClientOpts.runtime_opts_from_opts(opts),
+         {:ok, core} <- Core._create_runtime(rt_opts) do
+      {:ok, %Runtime{id: ClientOpts.runtime_opts(rt_opts, :id), core: core}}
     end
   end
 end

@@ -1,6 +1,8 @@
 defmodule TemporalEngine.Opts.WorkflowOpts do
   use TemporalEngine.Data.TypeSpec
 
+  require TemporalEngine.Data.Common
+
   alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
@@ -66,7 +68,7 @@ defmodule TemporalEngine.Opts.WorkflowOpts do
     @type enable_eager_workflow_start :: boolean()
 
     @doc "Optionally set a retry policy for the workflow"
-    @type retry_policy :: nested!(Common.retry_opts())
+    @type retry_policy :: nested!(Common.retry_policy())
 
     @doc "If set, send a signal to the workflow atomically with start. The workflow will receive this signal before its first task."
     @type start_signal :: nested!(WorkflowOpts.workflow_start_signal())

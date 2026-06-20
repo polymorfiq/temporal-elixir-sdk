@@ -45,11 +45,13 @@ defmodule Temporal.CoreSdk.CoreRuntime do
         :ok
     end
 
-    rt_opts = runtime_opts(id: "#{runtime_id}", heartbeat_interval: opts[:heartbeat_interval])
-
     engine = opts[:engine] || Application.fetch_env!(:temporal, :engine)
 
-    with {:ok, core} <- engine.create_runtime(rt_opts) do
+    with {:ok, core} <-
+           engine.create_runtime(
+             id: "#{runtime_id}",
+             heartbeat_interval: opts[:heartbeat_interval]
+           ) do
       :ets.insert(@runtime_store, {{:core, runtime_id}, core})
 
       {:ok, server_state(id: runtime_id, core: core)}

@@ -20,7 +20,7 @@ defmodule TemporalSamples.Workflows.TimersTest do
         queue,
         "timers-1-5s",
         TemporalSamples.Workflows.Timers,
-        [{5, :seconds}],
+        [[seconds: 5]],
         id_reuse_policy: :terminate_if_running
       )
 
@@ -38,7 +38,7 @@ defmodule TemporalSamples.Workflows.TimersTest do
         queue,
         "timers-1-250ms",
         TemporalSamples.Workflows.Timers,
-        [{250, :milliseconds}],
+        [[nanos: 250_000_000]],
         id_reuse_policy: :terminate_if_running
       )
 

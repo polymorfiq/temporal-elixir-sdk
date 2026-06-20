@@ -1,5 +1,5 @@
 use crate::common::SdkDuration;
-use rustler::{NifStruct, Resource};
+use rustler::{NifRecord, Resource};
 use std::collections::HashMap;
 use temporalio_sdk_client::{
     Client, ClientKeepAliveOptions, ClientTlsOptions, DnsLoadBalancingOptions,
@@ -14,27 +14,28 @@ pub struct ElixirClient {
 #[rustler::resource_impl]
 impl Resource for ElixirClient {}
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Opts.ClientOpts.ConnectionOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "connection_opts"]
 pub struct SdkConnectionOpts {
     pub target: String,
     pub namespace: String,
     pub identity: String,
+    pub client_name: String,
+    pub client_version: String,
     pub tls_options: Option<SdkTlsOpts>,
     pub override_origin: Option<String>,
     pub api_key: Option<String>,
     pub retry_options: Option<SdkClientRetryOpts>,
-    pub client_name: String,
-    pub client_version: String,
+    pub keep_alive: Option<SdkClientKeepAliveOpts>,
     pub headers: Option<HashMap<String, String>>,
     pub binary_headers: Option<HashMap<String, Vec<u8>>>,
-    pub keep_alive: Option<SdkClientKeepAliveOpts>,
     pub http_connect_proxy: Option<SdkClientHttpConnectProxyOpts>,
     pub dns_load_balancing: Option<SdkClientDnsLoadBalancingOpts>,
+    pub disable_error_code_metric_tags: Option<bool>,
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Opts.ClientOpts.TlsOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "tls_opts"]
 pub struct SdkTlsOpts {
     pub server_root_ca_cert: Option<String>,
     pub domain: Option<String>,
@@ -61,8 +62,8 @@ impl Into<TlsOptions> for SdkTlsOpts {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Opts.ClientOpts.ClientTlsOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "client_tls_opts"]
 pub struct SdkClientTlsOpts {
     pub client_cert: Vec<u8>,
     pub client_private_key: Vec<u8>,
@@ -86,8 +87,8 @@ impl Into<ClientTlsOptions> for SdkClientTlsOpts {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Opts.ClientOpts.RetryOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "retry_opts"]
 pub struct SdkClientRetryOpts {
     pub initial_interval: SdkDuration,
     pub randomization_factor: f64,
@@ -123,8 +124,8 @@ impl Into<RetryOptions> for SdkClientRetryOpts {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Opts.ClientOpts.KeepAliveOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "keep_alive_opts"]
 pub struct SdkClientKeepAliveOpts {
     pub interval: SdkDuration,
     pub timeout: SdkDuration,
@@ -148,8 +149,8 @@ impl Into<ClientKeepAliveOptions> for SdkClientKeepAliveOpts {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Opts.ClientOpts.HttpProxyOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "http_proxy_opts"]
 pub struct SdkClientHttpConnectProxyOpts {
     pub target_addr: String,
     pub basic_auth: Option<(String, String)>,
@@ -173,8 +174,8 @@ impl Into<HttpConnectProxyOptions> for SdkClientHttpConnectProxyOpts {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Opts.ClientOpts.DnsLbOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "dns_lb_opts"]
 pub struct SdkClientDnsLoadBalancingOpts {
     pub resolution_interval: SdkDuration,
 }

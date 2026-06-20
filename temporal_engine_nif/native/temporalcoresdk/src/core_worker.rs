@@ -1,5 +1,5 @@
 use crate::common::SdkDuration;
-use rustler::{NifStruct, NifUnitEnum, NifUntaggedEnum, Resource};
+use rustler::{NifRecord, NifUnitEnum, NifUntaggedEnum, Resource};
 use std::collections::HashMap;
 use temporalio_sdk_common::protos::temporal::api::enums::v1::VersioningBehavior;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
@@ -14,13 +14,14 @@ pub struct ElixirWorker {
 #[rustler::resource_impl]
 impl Resource for ElixirWorker {}
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.WorkerConfig"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "worker_config"]
 pub struct SdkWorkerConfig {
     pub id: String,
     pub namespace: String,
     pub task_queue: String,
     pub client_identity_override: Option<String>,
+    pub max_cached_workflows: u32,
     pub tuner: SdkWorkerTunerOpts,
     pub workflow_task_poller_behavior: SdkWorkerPollerOpts,
     pub nonsticky_to_sticky_poll_ratio: f32,
@@ -35,29 +36,28 @@ pub struct SdkWorkerConfig {
     pub ignore_evicts_on_shutdown: bool,
     pub graceful_shutdown_period: Option<SdkDuration>,
     pub local_timeout_buffer_for_activities: SdkDuration,
+    pub workflow_failure_errors: Vec<SdkWorkflowFailureErrors>,
+    pub workflow_types_to_failure_errors: HashMap<String, SdkWorkflowFailureErrors>,
     pub max_outstanding_workflow_tasks: Option<u32>,
     pub max_outstanding_activities: Option<u32>,
     pub max_outstanding_local_activities: Option<u32>,
     pub max_outstanding_nexus_tasks: Option<u32>,
-    pub workflow_failure_errors: Vec<SdkWorkflowFailureErrors>,
-    pub workflow_types_to_failure_errors: HashMap<String, SdkWorkflowFailureErrors>,
     pub versioning_strategy: SdkWorkerDeploymentOpts,
-    pub max_cached_workflows: u32,
-    pub nondeterminism_as_workflow_fail: bool,
-    pub nondeterminism_as_workflow_fail_for_types: Vec<String>,
     pub plugins: Vec<SdkPluginInfo>,
     pub skip_client_worker_set_check: bool,
     pub storage_drivers: Vec<SdkStorageDriverInfo>,
+    pub nondeterminism_as_workflow_fail: bool,
+    pub nondeterminism_as_workflow_fail_for_types: Vec<String>,
 }
 
 #[repr(i32)]
-#[derive(NifUnitEnum, Clone)]
+#[derive(Debug, NifUnitEnum, Clone)]
 pub enum SdkWorkflowFailureErrors {
     Nondeterminism = 0,
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.WorkerTaskTypes"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "worker_task_types"]
 pub struct SdkWorkerTaskTypesOpts {
     pub enable_workflows: bool,
     pub enable_local_activities: bool,
@@ -65,20 +65,21 @@ pub struct SdkWorkerTaskTypesOpts {
     pub enable_nexus: bool,
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.PluginInfo"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "plugin_info"]
 pub struct SdkPluginInfo {
     pub name: String,
+    pub version: String,
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.StorageDriverInfo"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "storage_driver_info"]
 pub struct SdkStorageDriverInfo {
     pub r#type: String,
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.WorkerDeploymentOptions"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "worker_deployment_options"]
 pub struct SdkWorkerDeploymentOpts {
     pub version: SdkWorkerDeploymentVersion,
     pub use_worker_versioning: bool,
@@ -96,7 +97,7 @@ impl From<WorkerDeploymentOptions> for SdkWorkerDeploymentOpts {
 }
 
 #[repr(i32)]
-#[derive(NifUnitEnum, Clone)]
+#[derive(Debug, NifUnitEnum, Clone)]
 pub enum SdkDeploymentVersioningBehavior {
     Unspecified = 0,
     Pinned = 1,
@@ -144,8 +145,8 @@ impl Into<VersioningBehavior> for SdkDeploymentVersioningBehavior {
     }
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Data.Common.WorkerDeploymentVersion"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "worker_deployment_version"]
 pub struct SdkWorkerDeploymentVersion {
     pub build_id: String,
     pub deployment_name: String,
@@ -173,48 +174,48 @@ impl From<WorkerDeploymentVersion> for SdkWorkerDeploymentVersion {
     }
 }
 
-#[derive(NifUntaggedEnum, Clone)]
+#[derive(Debug, NifUntaggedEnum, Clone)]
 pub enum SdkWorkerPollerOpts {
     Autoscaling(SdkWorkerPollerAutoscalingOpts),
     SimpleMaximum(SdkWorkerPollerSimpleMaximumOpts),
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.AutoscalingPoller"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "autoscaling_poller"]
 pub struct SdkWorkerPollerAutoscalingOpts {
     pub minimum: u32,
     pub maximum: u32,
     pub initial: u32,
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.SimpleMaximumPoller"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "simple_maximum_poller"]
 pub struct SdkWorkerPollerSimpleMaximumOpts {
     pub simple_maximum: u32,
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.WorkerTuner"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "worker_tuner"]
 pub struct SdkWorkerTunerOpts {
     pub workflow_slot_supplier: SdkWorkerSlotSupplierOpts,
     pub activity_slot_supplier: SdkWorkerSlotSupplierOpts,
     pub local_activity_slot_supplier: SdkWorkerSlotSupplierOpts,
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.FixedSlotSupplier"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "fixed_slot_supplier"]
 pub struct SdkFixedSlotSupplierOpts {
     pub size: u32,
 }
 
-#[derive(NifUntaggedEnum, Clone)]
+#[derive(Debug, NifUntaggedEnum, Clone)]
 pub enum SdkWorkerSlotSupplierOpts {
     FixedSize(SdkFixedSlotSupplierOpts),
     ResourceBased(SdkWorkerTunerResourceOpts),
 }
 
-#[derive(NifStruct, Clone)]
-#[module = "TemporalEngine.Config.ResourceBasedSlotSupplier"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "resource_based_slot_supplier"]
 pub struct SdkWorkerTunerResourceOpts {
     pub target_mem_usage: f64,
     pub target_cpu_usage: f64,

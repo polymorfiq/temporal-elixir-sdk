@@ -5,9 +5,10 @@ use crate::core_runtime::{ElixirRuntime, SdkRuntimeOpts};
 use crate::core_worker::ElixirWorker;
 use crate::core_workflows::{
     ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion,
-    SdkWorkflowArguments, SdkWorkflowDefinition, SdkWorkflowGetResultError,
-    SdkWorkflowGetResultOptions, SdkWorkflowStartOptions,
+    SdkWorkflowDefinition, SdkWorkflowGetResultError, SdkWorkflowGetResultOptions,
+    SdkWorkflowStartOptions,
 };
+use crate::data::common::SdkWorkflowArguments;
 use rustler::{Atom, LocalPid, NifResult, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
@@ -35,6 +36,7 @@ mod core_nexus;
 mod core_runtime;
 mod core_worker;
 mod core_workflows;
+mod data;
 
 mod atoms {
     rustler::atoms! {

@@ -59,11 +59,8 @@ defmodule TemporalEngine.Data.Failure do
     @type next_retry_delay :: nested!(Duration.duration())
 
     @default :unspecified
-    @type category :: required :: Failure.category()
+    @type category :: required :: :unspecified | :benign
   end
-
-  @type category :: :unspecified | :benign
-  @type category_opts :: category()
 
   deftype :timeout_reached do
     @default :unspecified

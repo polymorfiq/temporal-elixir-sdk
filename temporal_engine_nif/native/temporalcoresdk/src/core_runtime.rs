@@ -1,5 +1,5 @@
 use crate::common::SdkDuration;
-use rustler::{NifStruct, Resource};
+use rustler::{NifRecord, Resource};
 use std::sync::{Arc, RwLock};
 use temporalio_sdk_core::CoreRuntime;
 
@@ -11,8 +11,9 @@ pub struct ElixirRuntime {
 #[rustler::resource_impl]
 impl Resource for ElixirRuntime {}
 
-#[derive(NifStruct)]
-#[module = "TemporalEngineNif.Data.RuntimeOpts"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "runtime_opts"]
 pub struct SdkRuntimeOpts {
+    pub id: String,
     pub heartbeat_interval: Option<SdkDuration>,
 }

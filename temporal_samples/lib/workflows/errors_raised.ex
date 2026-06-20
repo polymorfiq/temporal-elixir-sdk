@@ -18,11 +18,11 @@ defmodule TemporalSamples.Workflows.ErrorsRaised do
     alias TemporalEngine.Data.Failure
 
     {:error,
-     Failure.application(
+     Failure.application_from_opts!(
        failure_type: "MyExpectedType",
-       details: ["Some Info"],
        non_retryable: true,
-       next_retry_delay: {10, :seconds}
-     )}
+       next_retry_delay: [seconds: 10]
+     )
+     |> Failure.application(details: [TemporalEngine.Data.Payload.record_from_value("Some Info")])}
   end
 end

@@ -13,91 +13,89 @@ defmodule TemporalEngineNif.WorkflowHandle do
 end
 
 defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
-  import TemporalEngine.WorkflowHandle
   require TemporalEngine.Data.Failure
+  import TemporalEngine.Opts.HandleOpts
+  import TemporalEngine.Data.Payload
 
-  alias TemporalEngineNif.Data.WorkflowGetResultOptions
-  alias TemporalEngine.Data.Payload.Payload
   alias TemporalEngine.Data.Duration
   alias TemporalEngineNif.Core
-  alias TemporalEngineNif.Data.WorkflowFailure
   alias TemporalEngine.Data.Failure
+
 
   @impl true
   def get_result(handle, opts) do
-    get_opts = %WorkflowGetResultOptions{follow_runs: get_result_opts(opts, :follow_runs)}
+    with {:ok, opts} <- get_workflow_result_opts_from_opts(opts) do
+      parent = self()
 
-    parent = self()
+      {pid, ref} =
+        spawn_monitor(fn ->
+          Core._workflow_handle_get_result(
+            handle.client.runtime.core,
+            handle.core,
+            opts,
+            self()
+          )
+          |> case do
+            :ok -> :ok
+            {:error, err} -> raise "Could not get workflow result from Core SDK: #{inspect(err)}"
+          end
 
-    {pid, ref} =
-      spawn_monitor(fn ->
-        Core._workflow_handle_get_result(
-          handle.client.runtime.core,
-          handle.core,
-          get_opts,
-          self()
-        )
-        |> case do
-          :ok -> :ok
-          {:error, err} -> raise "Could not get workflow result from Core SDK: #{inspect(err)}"
+          receive do
+            {:ok, result} ->
+              send(parent, {self(), {:ok, result}})
+
+            {:error, err} ->
+              send(parent, {self(), {:error, err}})
+          end
+        end)
+
+      timeout =
+        if timeout = get_workflow_result_opts(opts, :timeout) do
+          timeout |> Duration.to_milliseconds()
+        else
+          :infinity
         end
 
-        receive do
-          {:ok, result} ->
-            send(parent, {self(), {:ok, result}})
+      receive do
+        {^pid, {:ok, args}} ->
+          {:ok, workflow_arguments(args, :args) |> List.first()}
 
-          {:error, err} ->
-            send(parent, {self(), {:error, err}})
-        end
-      end)
+        {^pid, {:error, {:failed, failure}}} ->
+          {:error, Failure.workflow_failed(failure: failure)}
 
-    timeout =
-      if timeout = get_result_opts(opts, :timeout) do
-        timeout |> Duration.to_milliseconds()
-      else
-        :infinity
+        {^pid, {:error, {:cancelled, details}}} ->
+          {:error, Failure.workflow_cancelled(details: details)}
+
+        {^pid, {:error, {:terminated, details}}} ->
+          {:error, Failure.workflow_terminated(details: details)}
+
+        {^pid, {:error, :timed_out}} ->
+          {:error, Failure.workflow_timed_out()}
+
+        {^pid, {:error, :continued_as_new}} ->
+          {:error, Failure.workflow_continued_as_new()}
+
+        {^pid, {:error, :not_found}} ->
+          {:error, Failure.workflow_not_found()}
+
+        {^pid, {:error, {:payload_conversion, message}}} ->
+          {:error, Failure.workflow_payload_conversion(message)}
+
+        {^pid, {:error, {:rpc, message}}} ->
+          {:error, Failure.workflow_rpc_error(message)}
+
+        {^pid, {:error, {:other, message}}} ->
+          {:error, message}
+
+        {^pid, {:error, err}} ->
+          {:error, err}
+
+        {:DOWN, ^ref, :process, ^pid, %RuntimeError{} = rt_err} ->
+          {:error, rt_err}
+      after
+        timeout ->
+          {:error, :timeout}
       end
-
-    receive do
-      {^pid, {:ok, args}} ->
-        result = List.first(args.args)
-        {:ok, if(result, do: Payload.to_record(result))}
-
-      {^pid, {:error, {:failed, failure}}} ->
-        {:error, Failure.workflow_failed(failure: WorkflowFailure.to_record(failure))}
-
-      {^pid, {:error, {:cancelled, details}}} ->
-        {:error, Failure.workflow_cancelled(details: Enum.map(details, &Payload.to_record/1))}
-
-      {^pid, {:error, {:terminated, details}}} ->
-        {:error, Failure.workflow_terminated(details: Enum.map(details, &Payload.to_record/1))}
-
-      {^pid, {:error, :timed_out}} ->
-        {:error, Failure.workflow_timed_out()}
-
-      {^pid, {:error, :continued_as_new}} ->
-        {:error, Failure.workflow_continued_as_new()}
-
-      {^pid, {:error, :not_found}} ->
-        {:error, Failure.workflow_not_found()}
-
-      {^pid, {:error, {:payload_conversion, message}}} ->
-        {:error, Failure.workflow_payload_conversion(message)}
-
-      {^pid, {:error, {:rpc, message}}} ->
-        {:error, Failure.workflow_rpc_error(message)}
-
-      {^pid, {:error, {:other, message}}} ->
-        {:error, message}
-
-      {^pid, {:error, err}} ->
-        {:error, err}
-
-      {:DOWN, ^ref, :process, ^pid, %RuntimeError{} = rt_err} ->
-        {:error, rt_err}
-    after
-      timeout ->
-        {:error, :timeout}
     end
   end
 end

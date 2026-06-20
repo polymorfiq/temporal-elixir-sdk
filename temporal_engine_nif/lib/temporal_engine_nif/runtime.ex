@@ -5,47 +5,50 @@ defmodule TemporalEngineNif.Runtime do
 end
 
 defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
-  alias TemporalEngineNif.Core
-  alias TemporalEngineNif.Data.ClientOpts
-  alias TemporalEngineNif.Client
+  import TemporalEngine.Opts.ClientOpts
 
-  alias TemporalEngine.Opts.ClientOpts
+  alias TemporalEngineNif.Core
+  alias TemporalEngineNif.Client
 
   @impl true
   def id(runtime), do: runtime.id
 
   @impl true
-  def create_client(runtime, opts) do
-    with {:ok, client_opts} <- ClientOpts.ConnectionOpts.from_record(opts) do
-      parent = self()
+  def create_client(runtime, client_opts) do
+    parent = self()
 
-      {pid, ref} =
-        spawn_monitor(fn ->
-          Core._create_client(runtime.core, client_opts, self())
-          |> case do
-            {:ok, _} -> :ok
-            {:error, err} -> raise "Could initialize client from Core SDK: #{inspect(err)}"
-          end
+    {pid, ref} =
+      spawn_monitor(fn ->
+        Core._create_client(runtime.core, client_opts, self())
+        |> case do
+          {:ok, _} -> :ok
+          {:error, err} -> raise "Could initialize client from Core SDK: #{inspect(err)}"
+        end
 
-          receive do
-            {:ok, client} ->
-              send(
-                parent,
-                {self(), {:ok, %Client{id: client_opts.identity, core: client, runtime: runtime}}}
-              )
+        receive do
+          {:ok, client} ->
+            send(
+              parent,
+              {self(),
+               {:ok,
+                %Client{
+                  id: connection_opts(client_opts, :identity),
+                  core: client,
+                  runtime: runtime
+                }}}
+            )
 
-            {:error, err} ->
-              send(parent, {self(), {:error, err}})
-          end
-        end)
+          {:error, err} ->
+            send(parent, {self(), {:error, err}})
+        end
+      end)
 
-      receive do
-        {^pid, response} ->
-          response
+    receive do
+      {^pid, response} ->
+        response
 
-        {:DOWN, ^ref, :process, ^pid, reason} ->
-          {:error, reason}
-      end
+      {:DOWN, ^ref, :process, ^pid, reason} ->
+        {:error, reason}
     end
   end
 end

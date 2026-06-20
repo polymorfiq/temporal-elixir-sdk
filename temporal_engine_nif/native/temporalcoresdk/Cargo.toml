@@ -8,7 +8,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-rustler = "0.38.0"
+rustler = { version = "0.38.0", features = ["serde"]}
 temporalio_sdk_core = { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.4.0", package="temporalio-sdk-core" }
 temporalio_sdk_common =  { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.4.0", package="temporalio-common" }
 temporalio_sdk_client =  { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.4.0", package="temporalio-client" }

@@ -8,7 +8,6 @@ defmodule Temporal.Workflow.WorkflowExecutor do
   alias Temporal.Workflow
   alias Temporal.Workflow.WorkflowProgressReporter, as: Reporter
   alias Temporal.Workflow.WorkflowContext
-  alias TemporalEngine.Data.Duration
 
   require Logger
   require Record
@@ -70,18 +69,11 @@ defmodule Temporal.Workflow.WorkflowExecutor do
 
             :ok = Reporter.report_completed_success(reporter, result)
 
-          {:error, application(details: details) = err} ->
+          {:error, application() = err} ->
             :ok =
               Reporter.report_completed_failure(reporter,
                 message: "Specific Application Error Returned... Check 'info'.",
-                info:
-                  application(err,
-                    details: Enum.map(details, &Payload.record_from_value/1),
-                    next_retry_delay:
-                      if(d = application(err, :next_retry_delay),
-                        do: Duration.from_tuple(d)
-                      )
-                  )
+                info: err
               )
 
           {:error, err} ->

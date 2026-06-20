@@ -1,8 +1,10 @@
 defmodule TemporalEngine.Engine do
   require Record
 
-  alias TemporalEngine.Data.Duration
+  require TemporalEngine.Opts.ClientOpts
+
   alias TemporalEngine.Runtime
+  alias TemporalEngine.Opts.ClientOpts
 
   defmacro __using__(_opts) do
     quote do
@@ -11,10 +13,6 @@ defmodule TemporalEngine.Engine do
     end
   end
 
-  Record.defrecord(:runtime_opts, [:id, heartbeat_interval: nil])
-
-  @type runtime_opts ::
-          record(:runtime_opts, id: String.t(), heartbeat_interval: Duration.duration())
-
-  @callback create_runtime(runtime_opts()) :: {:ok, Runtime.t()} | {:error, reason :: term()}
+  @callback create_runtime(ClientOpts.runtime_opts_opts()) ::
+              {:ok, Runtime.t()} | {:error, reason :: term()}
 end
