@@ -1,4 +1,5 @@
 ExUnit.start()
+TemporalEngine.Mock.Storage.initialize!()
 
 defmodule WorkflowHelpers do
   use ExUnit.Case
@@ -7,7 +8,7 @@ defmodule WorkflowHelpers do
     alias Temporal.{Client, Runtime}
 
     # Connect to Temporal Server
-    {:ok, runtime} = Runtime.with_id(System.unique_integer())
+    {:ok, runtime} = Runtime.with_id(System.unique_integer(), engine: TemporalEngine.Mock.Engine)
     {:ok, client} = Client.new("localhost:7233", [identity: ctx.task_queue], runtime: runtime)
     on_exit(fn -> Client.stop(client) end)
     on_exit(fn -> Runtime.stop(runtime) end)

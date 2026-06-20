@@ -222,7 +222,7 @@ defmodule Temporal.Workflow.WorkflowProgressReporter do
 
     activity_resolve_jobs =
       jobs
-      |> Enum.filter(&match?(job(variant: resolve_activity()), &1))
+      |> Enum.filter(&match?(resolve_activity(), &1))
 
     sequences = progress_state(state, :sequences)
 
