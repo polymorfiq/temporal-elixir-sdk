@@ -13,7 +13,7 @@ defmodule Temporal.Client do
   alias Temporal.Workflows.WorkflowHandle
 
   @type t :: %__MODULE__{identity: String.t(), namespace: String.t(), runtime_id: String.t()}
-  @type extra_opts :: [{:runtime, Runtime.t()} | {:namespace, String.t()}]
+  @type extra_opts :: [{:runtime, Runtime.t()}]
 
   @spec new(target_host :: String.t(), ClientOpts.connection_opts_opts(), extra_opts()) ::
           {:ok, t()} | {:error, term()}

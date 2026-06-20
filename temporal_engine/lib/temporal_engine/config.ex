@@ -8,10 +8,13 @@ defmodule TemporalEngine.Config do
   deftype :worker_config do
     @structdoc "Defines per-worker configuration options"
 
-    @doc "Fort the lang SDK - helps track and interact with a unique worker."
+    @doc "(Deprecated) For the lang SDK - helps track and interact with a unique worker."
+    @deprecated
+    @default "global_worker"
     @type id :: required :: String.t()
 
     @doc "The Temporal service namespace this worker is bound to"
+    @default "default"
     @type namespace :: required :: String.t()
 
     @doc "What task queue will this worker poll from? This task queue name will be used for both workflow and activity polling."
@@ -25,10 +28,16 @@ defmodule TemporalEngine.Config do
 
     Workflows are evicted according to a least-recently-used policy once the cache maximum is reached. Workflows may also be explicitly evicted at any time, or as a result of errors or failures.
     """
+    @default 1_000
     @type max_cached_workflows :: pos_integer()
 
     @doc "Set a tuner for this worker. Either this or at least one of the max_outstanding_* fields must be set."
-    @type tuner :: nested!(Config.worker_tuner())
+    @default [
+      workflow_slot_supplier: [size: 100],
+      activity_slot_supplier: [size: 100],
+      local_activity_slot_supplier: [size: 100]
+    ]
+    @type tuner :: required :: nested!(Config.worker_tuner())
 
     @doc """
     Maximum number of concurrent poll workflow task requests we will perform at a time on this worker’s task queue.
@@ -63,6 +72,12 @@ defmodule TemporalEngine.Config do
 
     Note: At least one task type must be specified or the worker will fail validation.
     """
+    @default [
+      enable_workflows: true,
+      enable_local_activities: true,
+      enable_remote_activities: true,
+      enable_nexus: true
+    ]
     @type task_types :: required :: nested!(Config.worker_task_types())
 
     @doc "How long a workflow task is allowed to sit on the sticky queue before it is timed out and moved to the non-sticky queue where it may be picked up by any worker."
@@ -148,6 +163,11 @@ defmodule TemporalEngine.Config do
     @type max_outstanding_nexus_tasks :: pos_integer()
 
     @doc "A versioning strategy for this worker."
+    @default [
+     version: [build_id: "0.0.0", deployment_name: "elixir-sdk"],
+     use_worker_versioning: false,
+     default_versioning_behavior: nil
+    ]
     @type versioning_strategy :: required :: nested!(Config.worker_deployment_options())
 
     @doc "List of plugins used by lang."

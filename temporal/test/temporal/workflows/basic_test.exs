@@ -50,14 +50,20 @@ defmodule Temporal.Workflows.BasicTest do
     assert_receive {:job,
                     resolve_activity(
                       seq: 1,
-                      result: activity_resolution(status: activity_completed(result: "Hello, Testing1!"))
+                      result:
+                        activity_resolution(
+                          status: activity_completed(result: "Hello, Testing1!")
+                        )
                     )},
                    5000
 
     assert_receive {:job,
                     resolve_activity(
                       seq: 2,
-                      result: activity_resolution(status: activity_completed(result: "Hello, Testing2!"))
+                      result:
+                        activity_resolution(
+                          status: activity_completed(result: "Hello, Testing2!")
+                        )
                     )},
                    5000
 
