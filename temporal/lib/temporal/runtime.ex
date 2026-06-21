@@ -1,56 +1,26 @@
 defmodule Temporal.Runtime do
-  defstruct [:id]
+  @moduledoc """
+  Holds shared state/components needed to back instances of workers and clients.
 
-  alias Temporal.CoreSdk.CoreRuntime
-  alias Temporal.Runtimes
-  alias Temporal.RuntimeRegistry
-  alias Temporal.Supervisor.RuntimeSupervisor
+  More than one may be instantiated, but typically only one is needed.
 
-  @type t() :: %__MODULE__{id: CoreRuntime.runtime_id()}
+  More than one runtime instance may be useful if multiple different telemetry settings are required.
+  """
 
-  @global_name :_global
+  @opaque t() :: TemporalEngine.Runtime.t()
 
-  @spec with_id(CoreRuntime.runtime_id(), CoreRuntime.runtime_opts()) ::
-          {:ok, t()} | {:error, term()}
-  def with_id(runtime_id, opts \\ []) do
-    reg_name = via_registry({:runtime, runtime_id})
+  @doc "Provides the default, global runtime for Temporal Clients"
+  @spec global :: TemporalEngine.Runtime.t()
+  def global do
+    case :ets.lookup(Temporal.Storage.global_store(), :global_runtime) do
+      [{_, runtime}] ->
+        runtime
 
-    if _pid = GenServer.whereis(reg_name) do
-      {:ok, %__MODULE__{id: runtime_id}}
-    else
-      child_started =
-        DynamicSupervisor.start_child(
-          Runtimes,
-          Supervisor.child_spec(
-            {RuntimeSupervisor,
-             opts ++ [name: reg_name, runtime_id: runtime_id, shutdown: 60_000]},
-            restart: :transient
-          )
-        )
-
-      with {:ok, _pid} <- child_started do
-        {:ok, %__MODULE__{id: runtime_id}}
-      else
-        {:error, {:already_started, _pid}} ->
-          {:ok, %__MODULE__{id: runtime_id}}
-
-        {:error, err} ->
-          {:error, err}
-      end
+      _ ->
+        engine = Application.fetch_env!(:temporal, :engine)
+        {:ok, runtime} = engine.create_runtime(id: "_temporal_global")
+        :ets.insert(Temporal.Storage.global_store(), {:global_runtime, runtime})
+        runtime
     end
   end
-
-  def stop(runtime) do
-    if sup = GenServer.whereis(via_registry({:runtime, runtime.id})) do
-      Supervisor.stop(sup, :shutdown, :infinity)
-    else
-      {:error, :runtime_already_stopped}
-    end
-  end
-
-  @spec global() :: {:ok, t()} | {:error, term()}
-  def global, do: with_id(@global_name, heartbeat_interval_secs: 30)
-
-  defp via_registry(name),
-    do: {:via, Registry, {RuntimeRegistry, name}}
 end

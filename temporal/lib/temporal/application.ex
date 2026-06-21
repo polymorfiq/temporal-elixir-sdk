@@ -17,19 +17,10 @@ defmodule Temporal.Application do
   @impl true
   def start(_type, _args) do
     Temporal.Storage.initialize!()
-    :ets.new(@runtime_store, [:set, :public, :named_table, read_concurrency: true])
-    :ets.new(@client_store, [:set, :public, :named_table, read_concurrency: true])
-    :ets.new(@worker_store, [:set, :public, :named_table, read_concurrency: true])
 
     children = [
       {DynamicSupervisor, strategy: :one_for_one, name: Temporal.Workers},
-      {Registry, keys: :unique, name: Temporal.TemporalRegistry},
-      {Registry, keys: :unique, name: Temporal.RuntimeRegistry},
-      {Registry, keys: :unique, name: Temporal.ClientRegistry},
-      {Registry, keys: :unique, name: Temporal.WorkerRegistry},
-      {Registry, keys: :unique, name: Temporal.WorkflowRegistry},
-      {Registry, keys: :unique, name: Temporal.ActivityRegistry},
-      {Temporal.Supervisor.RuntimeList, [name: Temporal.Runtimes]}
+      {Registry, keys: :unique, name: Temporal.TemporalRegistry}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

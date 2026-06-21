@@ -1,4 +1,4 @@
-defmodule Temporal.Comms.Pollers.NexusTaskPoller do
+defmodule Temporal.Pollers.NexusTaskPoller do
   use GenStage
 
   alias TemporalEngine.Worker

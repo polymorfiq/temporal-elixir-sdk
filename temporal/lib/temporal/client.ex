@@ -1,115 +1,73 @@
 defmodule Temporal.Client do
-  defstruct [:identity, :namespace, :runtime_id]
+  @moduledoc """
+  Contains an instance of a namespace-bound client for interacting with the Temporal server.
+
+  Can be utilized to create workers or start/interact with Temporal Workflows.
+  """
 
   require TemporalEngine.Opts.ClientOpts
+  require TemporalEngine.Opts.WorkflowOpts
 
-  alias TemporalEngine.Opts.ClientOpts
-  alias Temporal.CoreSdk.CoreRuntime
-  alias Temporal.ClientRegistry
   alias Temporal.Constants
   alias Temporal.Runtime
-  alias Temporal.Supervisor.ClientSupervisor
-  alias Temporal.Supervisor.RuntimeSupervisor
-  alias Temporal.Workflows.WorkflowHandle
+  alias Temporal.Workflows.WorkflowName
+  alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Opts.{ClientOpts, WorkflowOpts}
+  alias TemporalEngine.WorkflowHandle
 
-  @type t :: %__MODULE__{identity: String.t(), namespace: String.t(), runtime_id: String.t()}
-  @type extra_opts :: [{:runtime, Runtime.t()}]
+  @opaque t :: TemporalEngine.Client.t()
 
-  @spec new(target_host :: String.t(), ClientOpts.connection_opts_opts(), extra_opts()) ::
+  @typedoc "A target URI where the Temporal Server can be found. Such as 'localhost:7233'"
+  @type target :: String.t()
+
+  @doc "Creates a new instance of a Temporal Client"
+  @spec new(target :: String.t(), [ClientOpts.connection_opts_opt() | {:runtime, Runtime.t()}]) ::
           {:ok, t()} | {:error, term()}
-  def new(target_host, opts \\ [], extra_opts \\ []) do
-    opts = Keyword.put(opts, :target, target_host)
+  def new(target, opts \\ []) do
+    opts = opts ++ [target: target]
+    opts = ensure_identity(opts)
+    {runtime_opts, opts} = Keyword.split(opts, [:runtime])
 
-    opts =
-      Keyword.put_new_lazy(opts, :identity, fn ->
-        with {:ok, hostname} <- :inet.gethostname() do
-          "#{Constants.sdk_name()}-#{Constants.sdk_version()}@#{hostname}"
-        else
-          _ ->
-            "#{Constants.sdk_name()}-#{Constants.sdk_version()}@no-host"
-        end
+    runtime =
+      Keyword.get_lazy(runtime_opts, :runtime, fn ->
+        Runtime.global()
       end)
 
     with {:ok, validated} <- ClientOpts.connection_opts_from_opts(opts) do
-      initialize_client(validated, extra_opts)
-    else
-      {:error, err} -> {:error, {:invalid_opts, err}}
+      TemporalEngine.Runtime.create_client(runtime, validated)
     end
   end
 
-  def stop(client, opts \\ []) do
-    if sup = GenServer.whereis({:via, Registry, {ClientRegistry, {:client, client.identity}}}) do
-      Supervisor.stop(sup, :shutdown, Keyword.get(opts, :timeout, :infinity))
-    else
-      {:error, :client_already_stopped}
+  @doc "Creates a new instance of a Temporal Client"
+  @spec new!(target :: String.t(), [ClientOpts.connection_opts_opt() | {:runtime, Runtime.t()}]) ::
+          t()
+  def new!(target, opts \\ []),
+    do: new(target, opts) |> then(fn {:ok, client} -> client end)
+
+  @spec execute_workflow(
+          t(),
+          WorkflowName.t(),
+          inputs :: [term()],
+          [WorkflowOpts.workflow_start_opts_opt()]
+        ) :: {:ok, WorkflowHandle.t()} | {:error, term()}
+  def execute_workflow(client, name, inputs, opts) do
+    {:ok, name} = WorkflowName.server_recognized_name(name)
+    args = Enum.map(inputs, &Payload.record_from_value/1)
+    definition = WorkflowOpts.workflow_definition(name: name)
+
+    with {:ok, opts} <- WorkflowOpts.workflow_start_opts_from_opts(opts) do
+      TemporalEngine.Client.start_workflow(client, definition, args, opts)
     end
   end
 
-  def core_runtime(client),
-    do: CoreRuntime.existing_for_id(client.runtime_id)
-
-  defp initialize_client(conn_opts, extra_opts) do
-    runtime_resp =
-      if runtime = Keyword.get(extra_opts, :runtime) do
-        {:ok, runtime}
+  defp ensure_identity(opts) do
+    Keyword.put_new_lazy(opts, :identity, fn ->
+      with {:ok, hostname} <- :inet.gethostname() do
+        "#{Constants.sdk_name()}-#{Constants.sdk_version()}@#{hostname}"
       else
-        Runtime.global()
+        _ ->
+          "#{Constants.sdk_name()}-#{Constants.sdk_version()}@no-host"
       end
-
-    reg_name =
-      {:via, Registry,
-       {ClientRegistry, {:client, ClientOpts.connection_opts(conn_opts, :identity)}}}
-
-    with {:ok, runtime} <- runtime_resp,
-         {:ok, runtime_core} <- CoreRuntime.existing_for_id(runtime.id),
-         {:ok, clients_sup} <- RuntimeSupervisor.clients_sup_for_id(runtime.id) do
-      child_started =
-        DynamicSupervisor.start_child(
-          clients_sup,
-          Supervisor.child_spec(
-            {ClientSupervisor,
-             {
-               runtime_core,
-               conn_opts,
-               [name: reg_name, shutdown: 60_000]
-             }},
-            restart: :transient
-          )
-        )
-
-      with {:ok, _} <- child_started do
-        {:ok,
-         %__MODULE__{
-           identity: ClientOpts.connection_opts(conn_opts, :identity),
-           namespace: ClientOpts.connection_opts(conn_opts, :namespace),
-           runtime_id: runtime.id
-         }}
-      end
-    end
-  end
-
-  @spec workflow(t(), workflow :: module() | String.t(), WorkflowHandle.handle_opts()) ::
-          WorkflowHandle.t()
-  def workflow(client, workflow, opts \\ []) do
-    is_module? = is_atom(workflow) && Kernel.function_exported?(workflow, :__info__, 1)
-
-    workflow_name =
-      if is_module? do
-        workflow
-        |> Module.split()
-        |> Enum.join(".")
-      else
-        "#{workflow}"
-      end
-
-    handle_opts = [name: workflow_name]
-    handle_opts = if is_module?, do: [{:module, workflow} | handle_opts], else: handle_opts
-
-    WorkflowHandle.new(client, handle_opts ++ opts)
-  end
-
-  @spec stop_all_workers(t()) :: :ok
-  def stop_all_workers(client) do
-    ClientSupervisor.stop_all_workers(client.identity)
+    end)
   end
 end

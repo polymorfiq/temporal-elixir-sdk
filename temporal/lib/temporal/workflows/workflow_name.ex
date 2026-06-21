@@ -1,7 +1,7 @@
 defprotocol Temporal.Workflows.WorkflowName do
   alias Temporal.Workflows.ActivityName
 
-  @spec server_recognized_name(t()) :: String.t()
+  @spec server_recognized_name(t()) :: {:ok, String.t()} | {:error, term()}
   def server_recognized_name(_name)
 
   @spec workflow_module(t()) :: {:ok, module()} | {:error, term()}

@@ -1,4 +1,4 @@
-defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
+defmodule Temporal.Pollers.WorkflowActivationPoller do
   use GenStage
 
   alias TemporalEngine.Worker
@@ -8,23 +8,22 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
 
   Record.defrecordp(:poll_state, [:worker, poll_pid: nil, poll_ref: nil, demand: 0])
 
-  @type poll_state ::
-          record(:poll_state,
-            worker: Worker.t(),
-            poll_pid: pid() | nil,
-            poll_ref: reference() | nil,
-            demand: integer()
-          )
+  @typep poll_state ::
+           record(:poll_state,
+             worker: Worker.t(),
+             poll_pid: pid() | nil,
+             poll_ref: reference() | nil,
+             demand: integer()
+           )
 
   def start_link(worker), do: GenStage.start_link(__MODULE__, worker)
 
-  @spec init(TemporalEngine.Worker.t()) :: {:producer, poll_state()}
+  @spec init(Worker.t()) :: {:producer, poll_state()}
   def init(worker) do
-    Process.set_label(:activity_task_poller)
+    Process.set_label(:workflow_activation_poller)
     {:producer, poll_state(worker: worker)}
   end
 
-  @spec handle_demand(integer(), poll_state()) :: {:noreply, list(), poll_state()}
   def handle_demand(demand, state) when demand > 0 do
     existing_demand = poll_state(state, :demand)
     GenStage.async_info(self(), :poll_if_not_already)
@@ -32,7 +31,6 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
     {:noreply, [], poll_state(state, demand: existing_demand + demand)}
   end
 
-  @spec handle_info(term(), poll_state()) :: {:noreply, list(), poll_state()}
   def handle_info(:poll_if_not_already, poll_state(poll_pid: poll_pid) = state)
       when is_pid(poll_pid) do
     {:noreply, [], state}
@@ -48,10 +46,10 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
     {poll_pid, poll_ref} =
       spawn_monitor(fn ->
         worker = poll_state(state, :worker)
-        Logger.debug("Polling activity tasks... (#{TemporalEngine.Worker.id(worker)})")
+        Logger.debug("Polling workflow activations... (#{TemporalEngine.Worker.id(worker)})")
 
-        with {:ok, task} <- Worker.poll_activity_task(worker) do
-          send(poller, {self(), {:ok, task}})
+        with {:ok, activation} <- Worker.poll_workflow_activation(worker) do
+          send(poller, {self(), {:ok, activation}})
         else
           {:error, "core_shutdown"} ->
             send(poller, {self(), :shutdown_requested})
@@ -68,8 +66,9 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
     {:noreply, [], state}
   end
 
-  def handle_info({sender, {:ok, task}}, poll_state(poll_pid: sender) = state) do
-    {:noreply, [task], poll_state(state, demand: poll_state(state, :demand) - 1)}
+  def handle_info({sender, {:ok, activation}}, poll_state(poll_pid: sender) = state) do
+    demand = poll_state(state, :demand)
+    {:noreply, [activation], poll_state(state, demand: demand - 1)}
   end
 
   def handle_info({sender, :shutdown_requested}, poll_state(poll_pid: sender) = state) do
@@ -78,7 +77,7 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
   end
 
   def handle_info(:shutdown_requested, state) do
-    Logger.debug("Shutdown requested for Activity Task Poller... Exiting...")
+    Logger.debug("Shutdown requested for Workflow Activation Poller... Exiting...")
     {:stop, :normal, state}
   end
 
@@ -86,7 +85,10 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
     if poll_state(state, :demand) > 0,
       do: GenStage.async_info(self(), :poll_if_not_already)
 
-    Logger.debug("Activity Task poll finished! Starting over!")
+    Logger.debug(
+      "Workflow Activation poll finished! Starting over! (Demand: #{poll_state(state, :demand)})"
+    )
+
     {:noreply, [], poll_state(state, poll_pid: nil, poll_ref: nil)}
   end
 end
