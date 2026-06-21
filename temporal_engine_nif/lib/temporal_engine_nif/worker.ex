@@ -12,7 +12,6 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   import TemporalEngine.Data.ActivityTaskCompletion
 
   alias TemporalEngineNif.Core
-  alias TemporalEngine.Data.ActivityTaskCompletion
 
   @impl true
   def id(worker), do: worker.id
@@ -24,8 +23,6 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
     child =
       spawn_link(fn ->
         Process.set_label({:long_activations_poll, worker.id})
-
-        Logger.debug("Polling workflow activations...")
 
         Core._worker_poll_workflow_activation(worker.runtime.core, worker.core, self())
         |> case do
@@ -60,8 +57,6 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
       spawn_link(fn ->
         Process.set_label({:long_activity_task_poll, worker.id})
 
-        Logger.debug("Polling activity tasks...")
-
         Core._worker_poll_activity_task(worker.runtime.core, worker.core, self())
         |> case do
           :ok ->
@@ -94,8 +89,6 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
     child =
       spawn_link(fn ->
         Process.set_label({:long_nexus_task_poll, worker.id})
-
-        Logger.debug("Polling nexus tasks...")
 
         Core._worker_poll_nexus_task(worker.runtime.core, worker.core, self())
         |> case do
@@ -157,14 +150,8 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   end
 
   @impl true
-  def complete_activity_task(worker, task_token, activity_completed() = completed) do
+  def complete_activity_task(worker, task_completion() = completion) do
     parent = self()
-
-    completion =
-      ActivityTaskCompletion.task_completion(
-        task_token: task_token,
-        result: ActivityTaskCompletion.activity_execution_result(status: completed)
-      )
 
     child =
       spawn_link(fn ->
@@ -182,7 +169,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
 
               {:error, err} ->
                 send(parent, {self(), {:error, err}})
-                Logger.error("Workflow Complete Activation Error - #{inspect(err)}")
+                Logger.error("Workflow Complete Activity Task Error - #{inspect(err)}")
             end
 
           other_resp ->

@@ -10,6 +10,15 @@ defmodule TemporalEngine.Data.Commands do
   alias TemporalEngine.Data.Priority
   alias TemporalEngine.Data.Timestamp
 
+  @type command ::
+          start_timer()
+          | schedule_activity()
+          | schedule_local_activity()
+          | request_cancel_activity()
+          | request_cancel_local_activity()
+          | complete_workflow_execution()
+          | fail_workflow_execution()
+
   deftype :start_timer do
     @doc "Lang’s incremental sequence number, used as the operation identifier"
     @default :not_specified

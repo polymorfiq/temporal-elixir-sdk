@@ -11,9 +11,10 @@ defmodule TemporalEngine.Data.ActivityTask do
   alias TemporalEngine.Data.Timestamp
 
   deftype :activity_task do
-    @type task_token :: required :: String.t()
     @type variant ::
             nested!(ActivityTask.start_activity()) | nested!(ActivityTask.cancel_activity())
+
+    @type task_token :: required :: String.t()
   end
 
   deftype :start_activity do

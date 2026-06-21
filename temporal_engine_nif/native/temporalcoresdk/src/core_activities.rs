@@ -11,8 +11,8 @@ use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 #[derive(Debug, NifRecord, Clone)]
 #[tag = "activity_task"]
 pub struct SdkActivityTask {
-    pub task_token: Vec<u8>,
     pub variant: Option<SdkActivityTaskVariant>,
+    pub task_token: Vec<u8>,
 }
 
 impl From<activity_task::ActivityTask> for SdkActivityTask {

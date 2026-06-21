@@ -11,6 +11,8 @@ defmodule TemporalEngine.Data.Jobs do
   alias TemporalEngine.Data.Timestamp
   alias TemporalEngine.Data.Jobs
 
+  @type job_variant :: Jobs.initialize_workflow() | Jobs.fire_timer() | Jobs.resolve_activity() | Jobs.remove_from_cache()
+
   deftype :job do
     @type variant ::
             nested!(Jobs.initialize_workflow())

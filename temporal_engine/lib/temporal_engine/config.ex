@@ -164,9 +164,9 @@ defmodule TemporalEngine.Config do
 
     @doc "A versioning strategy for this worker."
     @default [
-     version: [build_id: "0.0.0", deployment_name: "elixir-sdk"],
-     use_worker_versioning: false,
-     default_versioning_behavior: nil
+      version: [build_id: "0.0.0", deployment_name: "elixir-sdk"],
+      use_worker_versioning: false,
+      default_versioning_behavior: nil
     ]
     @type versioning_strategy :: required :: nested!(Config.worker_deployment_options())
 

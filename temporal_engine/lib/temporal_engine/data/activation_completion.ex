@@ -6,6 +6,8 @@ defmodule TemporalEngine.Data.ActivationCompletion do
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Payload
 
+  @type status :: success() | failure()
+
   deftype :completion do
     @structdoc "Result of a single workflow activation, reported from lang to core"
 

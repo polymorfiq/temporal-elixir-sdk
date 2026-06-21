@@ -114,6 +114,7 @@ defmodule TemporalEngine.Data.TypeSpec do
     from_opts_name = :"#{name}_from_opts"
     from_opts_bang_name = :"#{name}_from_opts!"
     opts_name = :"#{name}_opts"
+    opt_name = :"#{name}_opt"
 
     quote do
       @typedoc unquote(~s|#{structdoc}\n\n---\n\n#{Enum.join(fields_to_docs, "\n\n")}|)
@@ -124,7 +125,10 @@ defmodule TemporalEngine.Data.TypeSpec do
       Record.defrecord(unquote(name), unquote(field_names))
 
       @typedoc "See `t:#{unquote(name)}/0` for more details."
-      @type unquote({opts_name, [], nil}) :: unquote([opts_type_ast])
+      @type unquote({opt_name, [], nil}) :: unquote(opts_type_ast)
+
+      @typedoc "See `t:#{unquote(name)}/0` for more details."
+      @type unquote({opts_name, [], nil}) :: [unquote(opt_name)]
 
       @doc false
       @spec unquote(validate_opts_name)(opts :: keyword(), base_name :: String.t() | nil) ::
