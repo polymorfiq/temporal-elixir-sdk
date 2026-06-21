@@ -8,14 +8,23 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
 
   Record.defrecordp(:poll_state, [:worker, poll_pid: nil, poll_ref: nil, demand: 0])
 
+  @type poll_state ::
+          record(:poll_state,
+            worker: Worker.t(),
+            poll_pid: pid() | nil,
+            poll_ref: reference() | nil,
+            demand: integer()
+          )
+
   def start_link(worker), do: GenStage.start_link(__MODULE__, worker)
 
-  @spec init(TemporalEngine.Worker.t()) :: {:ok, pid()} | {:error, term()}
+  @spec init(TemporalEngine.Worker.t()) :: {:producer, poll_state()}
   def init(worker) do
     Process.set_label(:activity_task_poller)
     {:producer, poll_state(worker: worker)}
   end
 
+  @spec handle_demand(integer(), poll_state()) :: {:noreply, list(), poll_state()}
   def handle_demand(demand, state) when demand > 0 do
     existing_demand = poll_state(state, :demand)
     GenStage.async_info(self(), :poll_if_not_already)
@@ -23,6 +32,7 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
     {:noreply, [], poll_state(state, demand: existing_demand + demand)}
   end
 
+  @spec handle_info(term(), poll_state()) :: {:noreply, list(), poll_state()}
   def handle_info(:poll_if_not_already, poll_state(poll_pid: poll_pid) = state)
       when is_pid(poll_pid) do
     {:noreply, [], state}
@@ -77,6 +87,6 @@ defmodule Temporal.Comms.Pollers.ActivityTaskPoller do
       do: GenStage.async_info(self(), :poll_if_not_already)
 
     Logger.debug("Activity Task poll finished! Starting over!")
-    {:noreply, [], poll_state(poll_pid: nil, poll_ref: nil)}
+    {:noreply, [], poll_state(state, poll_pid: nil, poll_ref: nil)}
   end
 end

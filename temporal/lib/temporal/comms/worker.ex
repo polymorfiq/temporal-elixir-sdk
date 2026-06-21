@@ -9,12 +9,17 @@ defmodule Temporal.Comms.Worker do
 
   import TemporalEngine.Config
   import TemporalEngine.Data.Activation
+  import TemporalEngine.Data.Jobs
+  require Logger
   require Record
+  require TemporalEngine.Data.Jobs
 
   alias Temporal.Comms.Client
   alias Temporal.Comms.Pollers.{ActivityTaskPoller, NexusTaskPoller, WorkflowActivationPoller}
+  alias Temporal.Comms.Workflow.WorkflowExecution
   alias Temporal.Workflows.{ActivityName, WorkflowName}
   alias TemporalEngine.Config
+  alias TemporalEngine.Worker, as: EngineWorker
 
   @global_store Temporal.Storage.global_store()
 
@@ -25,13 +30,25 @@ defmodule Temporal.Comms.Worker do
 
   Record.defrecordp(:worker_state, [
     :id,
+    :task_queue,
     :client,
     :worker,
-    :config,
     :activation_poller,
     :activity_poller,
-    :nexus_poller
+    :nexus_poller,
+    workflows: %{}
   ])
+
+  @typep worker_state ::
+           record(:worker_state,
+             id: String.t(),
+             task_queue: String.t(),
+             client: Client.t(),
+             worker: EngineWorker.t(),
+             activation_poller: pid(),
+             activity_poller: pid(),
+             nexus_poller: pid()
+           )
 
   @opaque t() :: record(:worker, id: String.t(), pid: pid() | nil)
   @type extra_opt :: {:workflows, [WorkflowName.t()]} | {:activities, [ActivityName.t()]}
@@ -130,7 +147,10 @@ defmodule Temporal.Comms.Worker do
     do: GenStage.start_link(__MODULE__, {client, config}, name: name)
 
   @doc false
+  @spec init({Client.t(), Config.worker_config()}) :: {:consumer, worker_state(), keyword()}
   def init({client, config}) do
+    Process.flag(:trap_exit, true)
+
     identity =
       worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client)
 
@@ -144,9 +164,9 @@ defmodule Temporal.Comms.Worker do
       state =
         worker_state(
           id: worker_config(config, :id),
+          task_queue: worker_config(config, :task_queue),
           client: client,
           worker: worker,
-          config: config,
           activation_poller: activation_poller,
           activity_poller: activity_poller,
           nexus_poller: nexus_poller
@@ -165,7 +185,13 @@ defmodule Temporal.Comms.Worker do
   end
 
   @doc false
-  def handle_events(events, {activation_p, _}, worker_state(activation_poller: activation_p) = state) do
+  @spec handle_events(list(), {pid(), reference()}, worker_state()) ::
+          {:noreply, list(), worker_state()}
+  def handle_events(
+        events,
+        {activation_p, _},
+        worker_state(activation_poller: activation_p) = state
+      ) do
     Enum.each(events, &GenStage.cast(self(), &1))
 
     {:noreply, [], state}
@@ -183,9 +209,60 @@ defmodule Temporal.Comms.Worker do
     {:noreply, [], state}
   end
 
-  def handle_cast(activation(run_id: _run_id, jobs: jobs), state) do
-    jobs |> IO.inspect(label: "jobs")
+  @doc false
+  @spec handle_cast(term(), worker_state()) :: {:noreply, list(), worker_state()}
+  def handle_cast(
+        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init)]),
+        state
+      ) do
+    worker_id = worker_state(state, :id)
+    workflow_name = initialize_workflow(init, :workflow_type)
+    arity = Enum.count(initialize_workflow(init, :arguments)) + 1
 
+    found =
+      case :ets.lookup(@global_store, {:workflow, worker_id, workflow_name, arity}) do
+        [{_, wf_def}] ->
+          {:ok, wf_def}
+
+        _ ->
+          {:error,
+           "Workflow not found for Worker (#{inspect(worker_id)}: #{workflow_name}/#{arity}"}
+      end
+
+    task_queue = worker_state(state, :task_queue)
+
+    with {:ok, {wf_module, wf_exec_fn}} <- found,
+         {:ok, exec} =
+           WorkflowExecution.start_link({run_id, task_queue, wf_module, wf_exec_fn, init}) do
+      Logger.debug(
+        "Started workflow #{inspect(workflow_name)} (#{inspect(run_id)})... Subscribing..."
+      )
+
+      GenStage.async_subscribe(self(), to: exec, cancel: :temporary)
+
+      workflows = worker_state(state, :workflows) |> Map.put(exec, run_id)
+      {:noreply, [], worker_state(state, workflows: workflows)}
+    else
+      {:error, err} ->
+        Logger.error("Error starting workflow: #{inspect(err)}")
+        {:noreply, [], state}
+    end
+  end
+
+  def handle_info({:DOWN, _, :process, pid, reason}, worker_state(workflows: workflows) = state)
+      when is_map_key(workflows, pid) do
+    {pid, reason} |> IO.inspect(label: "Workflow down")
+    {:noreply, [], state}
+  end
+
+  def handle_info({:DOWN, _, :process, pid, reason}, state) do
+    {pid, reason} |> IO.inspect(label: "Something down?")
+    {:noreply, [], state}
+  end
+
+  def handle_info({:EXIT, workflow, reason}, worker_state(workflows: workflows) = state)
+      when is_map_key(workflows, workflow) do
+    {workflow, reason} |> IO.inspect(label: "Workflow down?")
     {:noreply, [], state}
   end
 end

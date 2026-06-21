@@ -77,8 +77,10 @@ defmodule Temporal.Comms.Pollers.WorkflowActivationPoller do
     if poll_state(state, :demand) > 0,
       do: GenStage.async_info(self(), :poll_if_not_already)
 
-    Logger.debug("Workflow Activation poll finished! Starting over!")
+    Logger.debug(
+      "Workflow Activation poll finished! Starting over! (Demand: #{poll_state(state, :demand)})"
+    )
 
-    {:noreply, [], poll_state(poll_pid: nil, poll_ref: nil)}
+    {:noreply, [], poll_state(state, poll_pid: nil, poll_ref: nil)}
   end
 end

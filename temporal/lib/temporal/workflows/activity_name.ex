@@ -42,7 +42,8 @@ defimpl Temporal.Workflows.ActivityName, for: Tuple do
         {:error, "Activity Function is not atom: #{inspect(activity_fn)}"}
 
       !Keyword.has_key?(module.__info__(:functions), activity_fn) ->
-        {:error, "Module #{inspect(module)} does not contain Activity Function: #{inspect(activity_fn)}"}
+        {:error,
+         "Module #{inspect(module)} does not contain Activity Function: #{inspect(activity_fn)}"}
 
       true ->
         {:ok, activity_fn}
@@ -64,4 +65,27 @@ defimpl Temporal.Workflows.ActivityName, for: Tuple do
   end
 
   defp is_module?(_), do: false
+end
+
+defimpl Temporal.Workflows.ActivityName, for: Function do
+  alias Temporal.Workflows.ActivityName
+
+  def server_recognized_name(name),
+    do: ActivityName.server_recognized_name(qualified(name))
+
+  def activity_module(name),
+    do: ActivityName.activity_module(qualified(name))
+
+  def activity_fn(name),
+    do: ActivityName.activity_fn(qualified(name))
+
+  def activity_arities(name),
+    do: ActivityName.activity_arities(qualified(name))
+
+  defp qualified(func) do
+    {:module, module_name} = Function.info(func, :module)
+    {:name, function_name} = Function.info(func, :name)
+
+    {module_name, function_name}
+  end
 end
