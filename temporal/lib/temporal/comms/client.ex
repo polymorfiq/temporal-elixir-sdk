@@ -6,10 +6,14 @@ defmodule Temporal.Comms.Client do
   """
 
   require TemporalEngine.Opts.ClientOpts
+  require TemporalEngine.Opts.WorkflowOpts
 
   alias Temporal.Constants
   alias Temporal.Comms.Runtime
-  alias TemporalEngine.Opts.ClientOpts
+  alias Temporal.Workflows.WorkflowName
+  alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Opts.{ClientOpts, WorkflowOpts}
+  alias TemporalEngine.WorkflowHandle
 
   @opaque t :: TemporalEngine.Client.t()
 
@@ -23,9 +27,10 @@ defmodule Temporal.Comms.Client do
     opts = ensure_identity(opts)
     {runtime_opts, opts} = Keyword.split(opts, [:runtime])
 
-    runtime = Keyword.get_lazy(runtime_opts, :runtime, fn ->
-      Runtime.global()
-    end)
+    runtime =
+      Keyword.get_lazy(runtime_opts, :runtime, fn ->
+        Runtime.global()
+      end)
 
     with {:ok, validated} <- ClientOpts.connection_opts_from_opts(opts) do
       TemporalEngine.Runtime.create_client(runtime, validated)
@@ -35,7 +40,23 @@ defmodule Temporal.Comms.Client do
   @doc "Creates a new instance of a Temporal Client"
   @spec new!(target :: String.t(), ClientOpts.connection_opts()) :: t()
   def new!(target, opts \\ []),
-      do: new(target, opts) |> then(fn {:ok, client} -> client end)
+    do: new(target, opts) |> then(fn {:ok, client} -> client end)
+
+  @spec execute_workflow(
+          t(),
+          WorkflowName.t(),
+          inputs :: [term()],
+          WorkflowOpts.workflow_start_opts_opts()
+        ) :: {:ok, WorkflowHandle.t()} | {:error, term()}
+  def execute_workflow(client, name, inputs, opts \\ []) do
+    {:ok, name} = WorkflowName.server_recognized_name(name)
+    args = Enum.map(inputs, &Payload.record_from_value/1)
+
+    with {:ok, definition} <- WorkflowOpts.workflow_definition_from_opts(name: name),
+         {:ok, opts} <- WorkflowOpts.workflow_start_opts_from_opts(opts) do
+      TemporalEngine.Client.start_workflow(client, definition, args, opts)
+    end
+  end
 
   defp ensure_identity(opts) do
     Keyword.put_new_lazy(opts, :identity, fn ->

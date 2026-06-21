@@ -117,11 +117,11 @@ defmodule Temporal.Worker do
 
       workflow_name =
         Keyword.get_lazy(opts, :name, fn ->
-          WorkflowName.server_recognized_name(workflow_mod, execute_fn)
+          WorkflowName.server_recognized_name({workflow_mod, execute_fn})
         end)
 
       with {:ok, manager_pid} <- WorkerSupervisor.workflow_manager_pid(worker.id) do
-        arities_resp = WorkflowName.execution_arities(workflow_mod, execute_fn)
+        arities_resp = WorkflowName.execution_arities({workflow_mod, execute_fn})
 
         cond do
           match?({:error, :unknown}, arities_resp) ->

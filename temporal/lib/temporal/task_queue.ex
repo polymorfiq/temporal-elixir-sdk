@@ -40,10 +40,10 @@ defmodule Temporal.TaskQueue do
     wf_server_name =
       case workflow_name do
         {workflow_name, execute_fn} ->
-          WorkflowName.server_recognized_name(workflow_name, execute_fn)
+          WorkflowName.server_recognized_name({workflow_name, execute_fn})
 
         _ ->
-          WorkflowName.server_recognized_name(workflow_name, :execute)
+          WorkflowName.server_recognized_name({workflow_name, :execute})
       end
 
     workflow_def = WorkflowOpts.workflow_definition_from_opts!(name: wf_server_name)
@@ -70,7 +70,7 @@ defmodule Temporal.TaskQueue do
           {workflow_name, :execute}
       end
 
-    case WorkflowName.execution_arities(workflow_name, execute_fn) do
+    case WorkflowName.execution_arities({workflow_name, execute_fn}) do
       {:ok, arities} ->
         given_arity = Enum.count(inputs)
         arity_with_ctx = given_arity + 1
@@ -81,10 +81,10 @@ defmodule Temporal.TaskQueue do
           server_name =
             case workflow_name do
               {workflow_name, execute_fn} ->
-                WorkflowName.server_recognized_name(workflow_name, execute_fn)
+                WorkflowName.server_recognized_name({workflow_name, execute_fn})
 
               workflow_name ->
-                WorkflowName.server_recognized_name(workflow_name, :execute)
+                WorkflowName.server_recognized_name({workflow_name, :execute})
             end
 
           {:error, "#{server_name} workflow does not implement execute/#{given_arity + 1}"}
