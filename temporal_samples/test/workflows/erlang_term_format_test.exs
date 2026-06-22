@@ -14,14 +14,15 @@ defmodule TemporalSamples.Workflows.ErlangTermFormatTest do
     :ok = Worker.register_workflows(worker, [TemporalSamples.Workflows.ErlangTermFormat])
   end
 
-  test "greets the world (Erlang style)", %{client: client} do
+  test "greets the world (Erlang style)", ctx do
     {:ok, handle} =
       Temporal.Client.execute_workflow(
-        client,
+        ctx.client,
         TemporalSamples.Workflows.ErlangTermFormat,
         [[name: "World", first_name: "Bob", last_name: "Smith"]],
         id_reuse_policy: :terminate_if_running,
-        worklfow_id: "erlang-term-format-3"
+        workflow_id: "erlang-term-format-3",
+        task_queue: ctx.task_queue
       )
 
     {:ok, ["Hello, World!", "Hello, Bob Smith!"]} = Workflow.result(handle)

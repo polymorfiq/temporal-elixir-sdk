@@ -96,9 +96,18 @@ defmodule TemporalEngine.Data.Failure do
     @type scheduled_event_id :: required :: integer()
     @type started_event_id :: required :: integer()
     @type identity :: required :: String.t()
-    @type activity_id :: required :: nested!(Failure.activity_type())
-    @type retry_state :: required :: nested!(Failure.retry_state())
     @type activity_type :: nested!(Failure.activity_type())
+    @type activity_id :: required :: String.t()
+    @type retry_state ::
+            required ::
+            :unspecified
+            | :in_progress
+            | :non_retryable_failure
+            | :timeout
+            | :maximum_attempts_reached
+            | :retry_policy_not_set
+            | :internal_server_error
+            | :cancel_requested
   end
 
   deftype :activity_type do
@@ -107,12 +116,20 @@ defmodule TemporalEngine.Data.Failure do
 
   deftype :child_execution do
     @type namespace :: required :: String.t()
-    @type initiated_event_id :: required :: integer()
-    @type started_event_id :: required :: integer()
-    @type retry_state :: required :: nested!(Failure.retry_state())
-
     @type workflow_execution :: nested!(Common.workflow_execution())
     @type workflow_type :: nested!(Failure.workflow_type())
+    @type initiated_event_id :: required :: integer()
+    @type started_event_id :: required :: integer()
+    @type retry_state ::
+            required ::
+            :unspecified
+            | :in_progress
+            | :non_retryable_failure
+            | :timeout
+            | :maximum_attempts_reached
+            | :retry_policy_not_set
+            | :internal_server_error
+            | :cancel_requested
   end
 
   deftype :workflow_type do
@@ -149,23 +166,8 @@ defmodule TemporalEngine.Data.Failure do
 
     @doc "Retry behavior, defaults to the retry behavior of the error type as defined in the spec."
     @default :unspecified
-    @type retry_behavior :: required :: nested!(Failure.retry_behavior())
+    @type retry_behavior :: required :: :unspecified | :retryable | :non_retryable
   end
-
-  @type retry_behavior :: :unspecified | :retryable | :non_retryable
-  @type retry_behavior_opts :: retry_behavior()
-
-  @type retry_state ::
-          :unspecified
-          | :in_progress
-          | :non_retryable_failure
-          | :timeout
-          | :maximum_attempts_reached
-          | :retry_policy_not_set
-          | :internal_server_error
-          | :cancel_requested
-
-  @type retry_state_opts :: retry_state()
 
   deftype :workflow_failed do
     @type failure :: required :: nested!(Failure.failure())
@@ -200,5 +202,112 @@ defmodule TemporalEngine.Data.Failure do
 
   deftype :workflow_other_error do
     @type message :: required :: String.t()
+  end
+
+  def to_map(failure() = f) do
+    %{
+      error_code: :workflow_failed,
+      message: failure(f, :message),
+      source: failure(f, :source),
+      stacktrace: failure(f, :stack_trace),
+      cause: failure(f, :cause),
+      failure:
+        case failure(f, :failure_info) do
+          application() = info ->
+            %{
+              type: :application,
+              info: %{
+                details: Enum.map(application(info, :details), &Payload.value_from_record/1),
+                non_retryable: application(info, :non_retryable),
+                next_retry_delay:
+                  if(d = application(info, :next_retry_delay),
+                    do: Duration.to_tuple(d)
+                  )
+              }
+            }
+
+          timeout_reached() = info ->
+            %{
+              type: :timeout_reached,
+              timeout_type: timeout_reached(info, :timeout_type),
+              last_heartbeat_details:
+                Enum.map(
+                  timeout_reached(info, :last_heartbeat_details) || [],
+                  &Payload.value_from_record/1
+                )
+            }
+
+          cancelled() = info ->
+            %{
+              type: :cancelled,
+              identity: cancelled(info, :identity),
+              details: Enum.map(cancelled(info, :details) || [], &Payload.value_from_record/1)
+            }
+
+          terminated() = info ->
+            %{
+              type: :terminated,
+              identity: terminated(info, :identity)
+            }
+
+          server() = info ->
+            %{
+              type: :server,
+              non_retryable: server(info, :non_retryable)
+            }
+
+          reset_workflow() = info ->
+            %{
+              type: :reset_workflow,
+              last_hearbeat_details:
+                Enum.map(
+                  reset_workflow(info, :last_heartbeat_details) || [],
+                  &Payload.value_from_record/1
+                )
+            }
+
+          activity() = info ->
+            %{
+              type: :activity,
+              scheduled_event_id: activity(info, :scheduled_event_id),
+              started_event_id: activity(info, :started_event_id),
+              identity: activity(info, :identity),
+              activity_id: activity(info, :activity_id),
+              activity_type:
+                if(type = activity(info, :activity_type), do: activity_type(type, :name)),
+              retry_state: activity(info, :retry_state)
+            }
+
+          child_execution() = info ->
+            %{
+              type: :child_execution,
+              namespace: child_execution(info, :namespace),
+              initiated_event_id: child_execution(info, :initiated_event_id),
+              started_event_id: child_execution(info, :started_event_id),
+              retry_state: child_execution(info, :retry_state),
+              workflow_execution: child_execution(info, :workflow_execution),
+              workflow_type:
+                if(type = child_execution(info, :workflow_type), do: workflow_type(type, :name))
+            }
+
+          nexus_operation() = info ->
+            %{
+              type: :nexus_operation,
+              scheduled_event_id: nexus_operation(info, :scheduled_event_id),
+              endpoint: nexus_operation(info, :endpoint),
+              service: nexus_operation(info, :service),
+              operation: nexus_operation(info, :operation),
+              operation_id: nexus_operation(info, :operation_id),
+              operation_token: nexus_operation(info, :operation_token)
+            }
+
+          nexus_handler() = info ->
+            %{
+              type: :nexus_handler,
+              failure_type: nexus_handler(info, :failure_type),
+              retry_behavior: nexus_handler(info, :retry_behavior)
+            }
+        end
+    }
   end
 end

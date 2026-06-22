@@ -123,6 +123,9 @@ defmodule Temporal.Workflow.WorkflowExecution do
         schedule_activity() = cmd, {cmds, seq} ->
           {cmds ++ [schedule_activity(cmd, seq: seq, activity_id: "#{seq}")], seq + 1}
 
+        schedule_local_activity() = cmd, {cmds, seq} ->
+          {cmds ++ [schedule_local_activity(cmd, seq: seq, activity_id: "#{seq}")], seq + 1}
+
         other, {cmds, seq} ->
           {cmds ++ [other], seq}
       end)
@@ -146,7 +149,14 @@ defmodule Temporal.Workflow.WorkflowExecution do
       awaiting = Map.get(all_awaiting, seq, [])
       queued_commands = workflow_state(state, :queued_commands)
 
-      {:noreply, [success(commands: queued_commands)],
+      # If we're waiting to schedule events or something, let's tell Temporal Server.
+      # If we're not, don't send an update to Temporal Server.
+      events =
+        if Enum.any?(queued_commands),
+          do: [success(commands: queued_commands)],
+          else: []
+
+      {:noreply, events,
        workflow_state(state,
          queued_commands: [],
          awaiting_activity: Map.put(all_awaiting, seq, [from | awaiting])
@@ -180,20 +190,30 @@ defmodule Temporal.Workflow.WorkflowExecution do
     all_awaiting = workflow_state(state, :awaiting_activity)
     awaiting_this = Map.get(all_awaiting, seq, [])
 
-    Enum.each(awaiting_this, fn awaiter ->
+    result =
       case status do
         activity_completed(result: result) ->
-          GenStage.reply(awaiter, {:ok, Payload.value_from_record(result)})
+          {:ok, Payload.value_from_record(result)}
 
         activity_failed(failure: failure) ->
-          GenStage.reply(awaiter, {:error, Failure.failure(failure, :message)})
+          {:error, Failure.failure(failure, :message)}
 
         activity_cancelled(failure: failure) ->
-          GenStage.reply(awaiter, {:error, {:cancelled, Failure.failure(failure, :message)}})
+          {:error, {:cancelled, Failure.failure(failure, :message)}}
       end
+
+    Enum.each(awaiting_this, fn awaiter ->
+      GenStage.reply(awaiter, result)
     end)
 
-    {:noreply, [], workflow_state(state, awaiting_activity: Map.delete(all_awaiting, seq))}
+    results = workflow_state(state, :activity_results)
+    results = Map.put(results, seq, result)
+
+    {:noreply, [],
+     workflow_state(state,
+       activity_results: results,
+       awaiting_activity: Map.delete(all_awaiting, seq)
+     )}
   end
 
   def handle_cast(job(variant: fire_timer(seq: seq)), state) do
@@ -204,7 +224,11 @@ defmodule Temporal.Workflow.WorkflowExecution do
       GenStage.reply(awaiter, :ok)
     end)
 
-    {:noreply, [], workflow_state(state, awaiting_timer: Map.delete(all_awaiting, seq))}
+    fired = workflow_state(state, :fired_timers)
+    fired = Map.put(fired, seq, true)
+
+    {:noreply, [],
+     workflow_state(state, fired_timers: fired, awaiting_timer: Map.delete(all_awaiting, seq))}
   end
 
   def handle_cast({:workflow_completed, resp}, state) do
@@ -220,6 +244,18 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
       {:noreply, [status], state}
     else
+      {:error, Failure.application() = app_error} ->
+        failure =
+          Failure.failure(
+            message: "Returned {:error, ApplicationFailure}",
+            source: "elixir-sdk",
+            stack_trace: "",
+            failure_info: app_error
+          )
+
+        status = success(commands: [command(variant: fail_workflow_execution(failure: failure))])
+        {:noreply, [status], state}
+
       {:error, err} ->
         failure =
           Failure.failure(

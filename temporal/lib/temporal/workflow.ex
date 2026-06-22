@@ -10,6 +10,7 @@ defmodule Temporal.Workflow do
   alias TemporalEngine.Data.Payload
 
   defdelegate execute_activity(ctx, name, inputs, opts \\ []), to: ActivityActions
+  defdelegate execute_local_activity(ctx, name, inputs, opts \\ []), to: ActivityActions
   defdelegate new_timer(ctx, duration), to: TimerActions
 
   def get(ActivityActions.activity_handle() = handle),
@@ -32,22 +33,55 @@ defmodule Temporal.Workflow do
   def result(handle, opts \\ []) do
     case WorkflowHandle.get_result(handle, opts) do
       {:ok, resp} ->
-        {:ok, resp}
+        {:ok, Payload.value_from_record(resp)}
 
       {:error,
        Failure.workflow_failed(
          failure:
            Failure.failure(
-             failure_info: Failure.application(failure_type: "ReturnedError", details: [resp_payload])
+             failure_info:
+               Failure.application(failure_type: "ReturnedError", details: [resp_payload])
            )
        )} ->
         {:error, Payload.value_from_record(resp_payload)}
 
       {:error, Failure.workflow_failed(failure: f)} ->
-        {:error, %{message: Failure.failure(f, :message), source: Failure.failure(f, :source), stacktrace: Failure.failure(f, :stack_trace), cause: Failure.failure(f, :cause), info: Failure.failure(f, :failure_info)}}
+        {:error, Failure.to_map(f) |> Map.put(:error_code, :workflow_failed)}
+
+      {:error, Failure.workflow_cancelled(details: details)} ->
+        {:error,
+         %{
+           error_code: :workflow_cancelled,
+           details: Enum.map(details, &Payload.value_from_record/1)
+         }}
+
+      {:error, Failure.workflow_terminated(details: details)} ->
+        {:error,
+         %{
+           error_code: :workflow_terminated,
+           details: Enum.map(details, &Payload.value_from_record/1)
+         }}
+
+      {:error, Failure.workflow_timed_out()} ->
+        {:error, %{error_code: :workflow_timed_out}}
+
+      {:error, Failure.workflow_continued_as_new()} ->
+        {:error, %{error_code: :workflow_continued_as_new}}
+
+      {:error, Failure.workflow_not_found()} ->
+        {:error, %{error_code: :workflow_not_found}}
+
+      {:error, Failure.workflow_payload_conversion(message: message)} ->
+        {:error, %{error_code: :workflow_payload_conversion, message: message}}
+
+      {:error, Failure.workflow_rpc_error(message: message)} ->
+        {:error, %{error_code: :workflow_rpc_error, message: message}}
+
+      {:error, Failure.workflow_other_error(message: message)} ->
+        {:error, %{error_code: :workflow_other_error, message: message}}
 
       {:error, err} ->
-        {:error, err |> IO.inspect(label: "my-error")}
+        {:error, err}
     end
   end
 

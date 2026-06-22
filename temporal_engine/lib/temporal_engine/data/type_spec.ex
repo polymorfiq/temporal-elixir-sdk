@@ -451,6 +451,10 @@ defmodule TemporalEngine.Data.TypeSpec do
     {:ok, val}
   end
 
+  defp from_nested_opts(other, _env, val) when is_atom(other) and is_atom(val) do
+    {:ok, val}
+  end
+
   defp from_nested_opts(other, _env, val) do
     Logger.warning("Unrecognized nested opts: #{inspect(other)} for #{inspect(val)}")
     {:ok, val}

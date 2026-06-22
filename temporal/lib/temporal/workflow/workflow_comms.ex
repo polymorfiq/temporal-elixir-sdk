@@ -29,7 +29,7 @@ defmodule Temporal.Workflow.WorkflowComms do
              workflow_type: String.t(),
              exec: pid(),
              scheduled_activities: %{integer() => map()},
-                                                     started_timers: %{integer() => map()},
+             started_timers: %{integer() => map()},
              state:
                :initialized
                | :scheduled_activities
@@ -97,15 +97,13 @@ defmodule Temporal.Workflow.WorkflowComms do
           started = comms_state(state, :started_timers) |> Map.delete(seq)
 
           if Enum.any?(started) do
-            {:ok,
-              comms_state(state, started_timers: started)}
+            {:ok, comms_state(state, started_timers: started)}
           else
             Logger.debug(
               "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) resolved all timers."
             )
 
-            {:ok,
-              comms_state(state, started_timers: started)}
+            {:ok, comms_state(state, started_timers: started)}
           end
 
         resolve_activity(seq: seq), {:ok, state} ->
@@ -176,7 +174,7 @@ defmodule Temporal.Workflow.WorkflowComms do
           {:error, "Tried to send command after cache removal."}
 
         fail_workflow_execution(), {:ok, comms_state(state: :initialized) = state} ->
-          Logger.warning(
+          Logger.debug(
             "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) failed on initialization."
           )
 
@@ -190,6 +188,13 @@ defmodule Temporal.Workflow.WorkflowComms do
           {:ok, comms_state(state, state: :completed)}
 
         schedule_activity(seq: seq), {:ok, state} ->
+          scheduled =
+            comms_state(state, :scheduled_activities)
+            |> Map.put(seq, %{scheduled: DateTime.utc_now()})
+
+          {:ok, comms_state(state, state: :scheduled_activities, scheduled_activities: scheduled)}
+
+        schedule_local_activity(seq: seq), {:ok, state} ->
           scheduled =
             comms_state(state, :scheduled_activities)
             |> Map.put(seq, %{scheduled: DateTime.utc_now()})

@@ -313,8 +313,7 @@ defmodule Temporal.Worker do
     {:noreply, [], state}
   end
 
-  def handle_info({:DOWN, _, :process, pid, :normal}, worker_state(workflows: workflows) = state)
-      when is_map_key(workflows, pid) do
+  def handle_info({:DOWN, _, :process, _pid, :normal}, state) do
     {:noreply, [], state}
   end
 
@@ -338,16 +337,19 @@ defmodule Temporal.Worker do
     {:noreply, [], worker_state(state, workflows: Map.delete(workflows, workflow))}
   end
 
-  def handle_info({:EXIT, wf_pid, remove_from_cache(reason: reason, message: msg)}, state) do
-    workflows = worker_state(state, :workflows)
+  def handle_info({:EXIT, activity, reason}, worker_state(activities: activities) = state)
+      when is_map_key(activities, activity) do
+    # Workflow exited
+    activities = worker_state(state, :activities)
+    run_id = Map.get(activities, activity)
 
-    if run_id = Map.get(workflows, wf_pid) do
-      Logger.debug(
-        "Workflow removed from cache (Run ID: #{inspect(run_id)}, reason: #{inspect(reason)}) - #{inspect(msg)}"
+    if reason != :normal do
+      Logger.warning(
+        "Activity (Run ID: #{inspect(run_id)}) down for unexpected reason: #{inspect(reason)}"
       )
     end
 
-    {:noreply, [], worker_state(state, workflows: Map.delete(workflows, wf_pid))}
+    {:noreply, [], worker_state(state, activities: Map.delete(activities, activity))}
   end
 
   def handle_info(
