@@ -19,6 +19,7 @@ defmodule Temporal.Workflow.WorkflowComms do
     :worker,
     :exec,
     scheduled_activities: %{},
+    started_timers: %{},
     state: nil
   ])
 
@@ -28,6 +29,7 @@ defmodule Temporal.Workflow.WorkflowComms do
              workflow_type: String.t(),
              exec: pid(),
              scheduled_activities: %{integer() => map()},
+                                                     started_timers: %{integer() => map()},
              state:
                :initialized
                | :scheduled_activities
@@ -90,8 +92,23 @@ defmodule Temporal.Workflow.WorkflowComms do
     type = comms_state(state, :workflow_type)
 
     future_state =
-      Enum.reduce(job_variants, state, fn
-        resolve_activity(seq: seq), state ->
+      Enum.reduce(job_variants, {:ok, state}, fn
+        fire_timer(seq: seq), {:ok, state} ->
+          started = comms_state(state, :started_timers) |> Map.delete(seq)
+
+          if Enum.any?(started) do
+            {:ok,
+              comms_state(state, started_timers: started)}
+          else
+            Logger.debug(
+              "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) resolved all timers."
+            )
+
+            {:ok,
+              comms_state(state, started_timers: started)}
+          end
+
+        resolve_activity(seq: seq), {:ok, state} ->
           scheduled = comms_state(state, :scheduled_activities) |> Map.delete(seq)
 
           if Enum.any?(scheduled) do
@@ -178,6 +195,13 @@ defmodule Temporal.Workflow.WorkflowComms do
             |> Map.put(seq, %{scheduled: DateTime.utc_now()})
 
           {:ok, comms_state(state, state: :scheduled_activities, scheduled_activities: scheduled)}
+
+        start_timer(seq: seq), {:ok, state} ->
+          started_timers =
+            comms_state(state, :started_timers)
+            |> Map.put(seq, %{started: DateTime.utc_now()})
+
+          {:ok, comms_state(state, started_timers: started_timers)}
 
         fail_workflow_execution(), {:ok, state} ->
           Logger.debug("Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) failed.")

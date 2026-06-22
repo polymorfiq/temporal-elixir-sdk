@@ -21,9 +21,8 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
   alias TemporalEngineNif.Core
   alias TemporalEngine.Data.Failure
 
-
   @impl true
-  def get_result(handle, opts) do
+  def get_result(handle, opts \\ []) do
     with {:ok, opts} <- get_workflow_result_opts_from_opts(opts) do
       parent = self()
 

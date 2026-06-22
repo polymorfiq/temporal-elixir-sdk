@@ -7,7 +7,7 @@ defmodule TemporalSamples.Workflows.ErlangTermFormat do
   Look in [test/workflows/erlang_term_format_test.exs](test/workflows/erlang_term_format_test.exs) for usage
   """
 
-  use Temporal.Workflow, activities: [greet: 2]
+  use Temporal.Workflow, activities: [:greet]
   alias Temporal.Workflow
 
   @doc """

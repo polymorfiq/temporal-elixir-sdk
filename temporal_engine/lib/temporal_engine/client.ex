@@ -19,4 +19,8 @@ defprotocol TemporalEngine.Client do
   @doc "A unique identifier for the client"
   @spec id(t()) :: String.t()
   def id(client)
+
+  @doc "The namespace the client is listening to"
+  @spec namespace(t()) :: String.t()
+  def namespace(client)
 end

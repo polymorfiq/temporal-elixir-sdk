@@ -59,14 +59,16 @@ impl Encoder for SdkPayload {
             .metadata
             .iter()
             .map(|(k, v)| {
-                let mut bin = OwnedBinary::new(v.len()).expect("Could not allocate payload metadata buffer");
+                let mut bin =
+                    OwnedBinary::new(v.len()).expect("Could not allocate payload metadata buffer");
                 bin.copy_from_slice(&v);
 
                 (k.to_string(), bin.release(env).encode(env))
             })
             .collect();
 
-        let mut data = OwnedBinary::new(self.data.len()).expect("Could not allocate payload data buffer");
+        let mut data =
+            OwnedBinary::new(self.data.len()).expect("Could not allocate payload data buffer");
         data.copy_from_slice(&self.data);
 
         (

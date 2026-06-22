@@ -10,24 +10,23 @@ defmodule WorkflowHelpers do
     alias Temporal.{Client, Runtime}
 
     # Connect to Temporal Server
-    {:ok, runtime} = Runtime.with_id(System.unique_integer(), engine: TemporalEngine.Mock.Engine)
-    {:ok, client} = Client.new("localhost:7233", [identity: ctx.task_queue], runtime: runtime)
-    on_exit(fn -> Client.stop(client) end)
-    on_exit(fn -> Runtime.stop(runtime) end)
+    {:ok, runtime} =
+      Runtime.with_id("#{System.unique_integer()}", engine: TemporalEngine.Mock.Engine)
+
+    {:ok, client} = Client.new("localhost:7233", identity: ctx.task_queue, runtime: runtime)
 
     Map.put(ctx, :client, client)
   end
 
   def setup_worker(ctx) do
-    alias Temporal.{TaskQueue, Worker}
-    queue = TaskQueue.new(ctx.client, ctx.task_queue)
-
+    alias Temporal.Worker
     worker_opts = Map.get(ctx, :worker_opts, [])
 
     worker_resp =
       Worker.new(
-        queue,
+        ctx.client,
         [
+          task_queue: ctx.task_queue,
           max_cached_workflows: 100,
           nonsticky_to_sticky_poll_ratio: 0.5,
           versioning_strategy: [
@@ -50,20 +49,21 @@ defmodule WorkflowHelpers do
       )
 
     with {:ok, worker} <- worker_resp do
-      :ok = Worker.register_workflow(worker, TestWorkflows.ActivitiesWithAwait)
-      :ok = Worker.register_workflow(worker, TestWorkflows.TimerWithAwait)
-      :ok = Worker.register_workflow(worker, TestWorkflows.Queries)
+      :ok =
+        Worker.register_workflows(worker, [
+          TestWorkflows.ActivitiesWithAwait,
+          TestWorkflows.TimerWithAwait,
+          TestWorkflows.Queries
+        ])
 
       :ok =
-        Worker.register_workflow(
-          worker,
-          {TestWorkflows.Activities, [:workflow_with_long_activity]}
-        )
+        Worker.register_workflows(worker, [
+          {TestWorkflows.Activities, :workflow_with_long_activity}
+        ])
 
-      {:ok, mocked_worker} = WorkerMock.mocked_for_id(worker.id)
+      {:ok, mocked_worker} = WorkerMock.mocked_for_id(Temporal.Worker.id(worker))
 
-      on_exit(fn -> Worker.shutdown(worker) end)
-      %{queue: queue, worker: mocked_worker}
+      %{worker: mocked_worker}
     else
       {:error, err} -> {:error, err}
     end

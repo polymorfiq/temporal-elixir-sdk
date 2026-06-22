@@ -1,5 +1,5 @@
 defmodule TemporalSamples.Workflows.LocalActivities do
-  use Temporal.Workflow, activities: [greet: 2]
+  use Temporal.Workflow, activities: [:greet]
   alias Temporal.Workflow
 
   def execute(ctx, name) do

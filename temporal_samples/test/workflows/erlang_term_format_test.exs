@@ -1,7 +1,7 @@
 defmodule TemporalSamples.Workflows.ErlangTermFormatTest do
   use ExUnit.Case
 
-  alias Temporal.{Workflow, Worker, TaskQueue}
+  alias Temporal.{Workflow, Worker}
 
   # Defined in test/test_helpers.exs
   setup_all [
@@ -11,17 +11,17 @@ defmodule TemporalSamples.Workflows.ErlangTermFormatTest do
   ]
 
   setup_all %{worker: worker} do
-    :ok = Worker.register_workflow(worker, TemporalSamples.Workflows.ErlangTermFormat)
+    :ok = Worker.register_workflows(worker, [TemporalSamples.Workflows.ErlangTermFormat])
   end
 
-  test "greets the world (Erlang style)", %{queue: queue} do
+  test "greets the world (Erlang style)", %{client: client} do
     {:ok, handle} =
-      TaskQueue.start_workflow(
-        queue,
-        "erlang-term-format-3",
+      Temporal.Client.execute_workflow(
+        client,
         TemporalSamples.Workflows.ErlangTermFormat,
         [[name: "World", first_name: "Bob", last_name: "Smith"]],
-        id_reuse_policy: :terminate_if_running
+        id_reuse_policy: :terminate_if_running,
+        worklfow_id: "erlang-term-format-3"
       )
 
     {:ok, ["Hello, World!", "Hello, Bob Smith!"]} = Workflow.result(handle)

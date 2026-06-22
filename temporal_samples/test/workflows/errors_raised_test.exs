@@ -1,7 +1,7 @@
 defmodule TemporalSamples.Workflows.ErrorsRaisedTest do
   use ExUnit.Case, async: true
 
-  alias Temporal.{Workflow, Worker, TaskQueue}
+  alias Temporal.{Workflow, Worker}
 
   # Defined in test/test_helpers.exs
   setup_all [
@@ -12,52 +12,58 @@ defmodule TemporalSamples.Workflows.ErrorsRaisedTest do
 
   setup_all %{worker: worker} do
     :ok =
-      Worker.register_workflow(
+      Worker.register_workflows(
         worker,
-        {TemporalSamples.Workflows.ErrorsRaised,
-         [:exception_workflow, :error_workflow, :error_with_info_workflow]}
+        [
+          {TemporalSamples.Workflows.ErrorsRaised, :exception_workflow},
+          {TemporalSamples.Workflows.ErrorsRaised, :error_workflow},
+          {TemporalSamples.Workflows.ErrorsRaised, :error_with_info_workflow}
+        ]
       )
   end
 
-  test "exception is raised", %{queue: queue} do
+  test "exception is raised", ctx do
     {:ok, handle} =
-      TaskQueue.start_workflow(
-        queue,
-        "errors-raised-exception",
+      Temporal.Client.execute_workflow(
+        ctx.client,
         {TemporalSamples.Workflows.ErrorsRaised, :exception_workflow},
         [],
         id_reuse_policy: :terminate_if_running,
-        retry_policy: [maximum_attempts: 1]
+        retry_policy: [maximum_attempts: 1],
+        workflow_id: "errors-raised-exception",
+        task_queue: ctx.task_queue
       )
 
-    assert {:error, %{failure: %{message: "Crash the workflow before it finishes"}}} =
+    assert {:error, %{message: "Crash the workflow before it finishes"}} =
              Workflow.result(handle, timeout: [seconds: 1])
   end
 
-  test "error tuple is returned", %{queue: queue} do
+  test "error tuple is returned", ctx do
     {:ok, handle} =
-      TaskQueue.start_workflow(
-        queue,
-        "errors-returned",
+      Temporal.Client.execute_workflow(
+        ctx.client,
         {TemporalSamples.Workflows.ErrorsRaised, :error_workflow},
         [],
         id_reuse_policy: :terminate_if_running,
-        retry_policy: [maximum_attempts: 1]
+        retry_policy: [maximum_attempts: 1],
+        workflow_id: "errors-returned",
+        task_queue: ctx.task_queue
       )
 
     assert {:error, "Error returned from function"} =
              Workflow.result(handle, timeout: [seconds: 1])
   end
 
-  test "error tuple containing Application Failure, applies that info", %{queue: queue} do
+  test "error tuple containing Application Failure, applies that info", ctx do
     {:ok, handle} =
-      TaskQueue.start_workflow(
-        queue,
-        "errors-returned-with-info",
+      Temporal.Client.execute_workflow(
+        ctx.client,
         {TemporalSamples.Workflows.ErrorsRaised, :error_with_info_workflow},
         [],
         id_reuse_policy: :terminate_if_running,
-        retry_policy: [maximum_attempts: 1]
+        retry_policy: [maximum_attempts: 1],
+        workflow_id: "errors-returned-with-info",
+        task_queue: ctx.task_queue
       )
 
     assert {:error,

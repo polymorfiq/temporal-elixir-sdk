@@ -6,7 +6,7 @@ defmodule TemporalSamples.Workflows.HelloWorld do
   Look in [test/workflows/hello_world_test.exs](test/workflows/hello_world_test.exs) for usage.
   """
 
-  use Temporal.Workflow, activities: [greet: 2]
+  use Temporal.Workflow, activities: [:greet]
   alias Temporal.Workflow
 
   @doc "The main body of the workflow"

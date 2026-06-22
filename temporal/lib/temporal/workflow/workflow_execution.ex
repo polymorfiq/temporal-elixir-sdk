@@ -25,6 +25,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
     :exec_fn,
     awaiting_activity: %{},
     activity_results: %{},
+    awaiting_timer: %{},
+    fired_timers: %{},
     exec_ref: nil,
     exec_pid: nil,
     queued_commands: [],
@@ -41,6 +43,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
              task_queue: String.t(),
              module: module(),
              exec_fn: atom(),
+             awaiting_activity: %{integer() => [pid()]},
+             activity_results: %{integer() => term()},
+             awaiting_timer: %{integer() => [pid()]},
+             fired_timers: %{integer() => boolean()},
              exec_ref: reference() | nil,
              exec_pid: pid() | nil,
              activity_results: %{integer() => term()},
@@ -90,6 +96,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
   def get_activity_results(pid, seq),
     do: GenStage.call(pid, {:get_activity_results, seq}, :infinity)
 
+  @spec wait_for_timer(pid(), seq :: pos_integer()) :: {:ok, term()} | {:error, term()}
+  def wait_for_timer(pid, seq),
+    do: GenStage.call(pid, {:wait_for_timer, seq}, :infinity)
+
   @doc false
   @spec handle_demand(integer(), workflow_state()) :: {:noreply, list(), workflow_state()}
   def handle_demand(demand, state) when demand > 0 do
@@ -107,6 +117,9 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
     {commands, seq} =
       Enum.reduce(commands, {[], seq}, fn
+        start_timer() = cmd, {cmds, seq} ->
+          {cmds ++ [start_timer(cmd, seq: seq)], seq + 1}
+
         schedule_activity() = cmd, {cmds, seq} ->
           {cmds ++ [schedule_activity(cmd, seq: seq, activity_id: "#{seq}")], seq + 1}
 
@@ -141,6 +154,25 @@ defmodule Temporal.Workflow.WorkflowExecution do
     end
   end
 
+  def handle_call({:wait_for_timer, seq}, from, state) do
+    fired = workflow_state(state, :fired_timers)
+
+    if Map.has_key?(fired, seq) do
+      GenStage.reply(from, :ok)
+      {:noreply, [], state}
+    else
+      all_awaiting = workflow_state(state, :awaiting_timer)
+      awaiting = Map.get(all_awaiting, seq, [])
+      queued_commands = workflow_state(state, :queued_commands)
+
+      {:noreply, [success(commands: queued_commands)],
+       workflow_state(state,
+         queued_commands: [],
+         awaiting_timer: Map.put(all_awaiting, seq, [from | awaiting])
+       )}
+    end
+  end
+
   def handle_cast(
         job(variant: resolve_activity(seq: seq, result: activity_resolution(status: status))),
         state
@@ -162,6 +194,17 @@ defmodule Temporal.Workflow.WorkflowExecution do
     end)
 
     {:noreply, [], workflow_state(state, awaiting_activity: Map.delete(all_awaiting, seq))}
+  end
+
+  def handle_cast(job(variant: fire_timer(seq: seq)), state) do
+    all_awaiting = workflow_state(state, :awaiting_timer)
+    awaiting_this = Map.get(all_awaiting, seq, [])
+
+    Enum.each(awaiting_this, fn awaiter ->
+      GenStage.reply(awaiter, :ok)
+    end)
+
+    {:noreply, [], workflow_state(state, awaiting_timer: Map.delete(all_awaiting, seq))}
   end
 
   def handle_cast({:workflow_completed, resp}, state) do
@@ -186,7 +229,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
             failure_info:
               Failure.application(
                 failure_type: "ReturnedError",
-                details: Payload.record_from_value(err)
+                details: [Payload.record_from_value(err)]
               )
           )
 

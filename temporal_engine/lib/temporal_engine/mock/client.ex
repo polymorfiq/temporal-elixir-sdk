@@ -20,6 +20,9 @@ defimpl TemporalEngine.Client, for: TemporalEngine.Mock.Client do
     "mocked(#{TemporalEngine.Client.id(client.real_client)})"
   end
 
+  def namespace(client),
+    do: TemporalEngine.Client.namespace(client.real_client)
+
   def create_worker(client, opts) do
     with {:ok, real_worker} <- TemporalEngine.Client.create_worker(client.real_client, opts) do
       worker_id = TemporalEngine.Worker.id(real_worker)

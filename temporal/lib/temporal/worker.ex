@@ -40,7 +40,8 @@ defmodule Temporal.Worker do
     :activity_poller,
     :nexus_poller,
     workflows: %{},
-    activities: %{}
+    activities: %{},
+    pollers_shutdown: []
   ])
 
   @typep worker_state ::
@@ -53,7 +54,8 @@ defmodule Temporal.Worker do
              activity_poller: pid(),
              nexus_poller: pid(),
              workflows: %{pid() => String.t()},
-             activities: %{pid() => {String.t(), String.t()}}
+             activities: %{pid() => {String.t(), String.t()}},
+             pollers_shutdown: [atom()]
            )
 
   @opaque t() :: record(:worker, id: String.t(), pid: pid() | nil)
@@ -75,7 +77,11 @@ defmodule Temporal.Worker do
       name = {:via, Registry, {Temporal.TemporalRegistry, {:worker, id}}}
 
       worker_started =
-        DynamicSupervisor.start_child(Temporal.Workers, {__MODULE__, {name, client, config}})
+        DynamicSupervisor.start_child(Temporal.Workers, %{
+          id: :worker,
+          start: {__MODULE__, :start_link, [{name, client, config}]},
+          restart: :transient
+        })
 
       with {:ok, pid} <- worker_started do
         {:ok, worker(id: id, pid: pid)}
@@ -85,6 +91,12 @@ defmodule Temporal.Worker do
       end
     end
   end
+
+  @spec id(t()) :: String.t()
+  def id(worker), do: worker(worker, :id)
+
+  @spec shutdown(t()) :: :ok
+  def shutdown(worker), do: GenStage.cast(worker(worker, :pid), :shutdown)
 
   @spec register_workflows(t(), [WorkflowName.t()]) :: :ok | {:error, term()}
   def register_workflows(worker(id: worker_id) = worker, workflow_names) do
@@ -180,9 +192,9 @@ defmodule Temporal.Worker do
 
       {:consumer, state,
        subscribe_to: [
-         activation_poller,
-         activity_poller,
-         nexus_poller
+         {activation_poller, [cancel: :transient]},
+         {activity_poller, [cancel: :transient]},
+         {nexus_poller, [cancel: :transient]}
        ]}
     else
       {:error, err} ->
@@ -294,14 +306,20 @@ defmodule Temporal.Worker do
     {:noreply, [], state}
   end
 
-  def handle_info({:DOWN, _, :process, pid, reason}, worker_state(workflows: workflows) = state)
+  def handle_cast(:shutdown, state) do
+    worker = worker_state(state, :worker)
+    TemporalEngine.Worker.initiate_shutdown(worker)
+
+    {:noreply, [], state}
+  end
+
+  def handle_info({:DOWN, _, :process, pid, :normal}, worker_state(workflows: workflows) = state)
       when is_map_key(workflows, pid) do
-    {pid, reason} |> IO.inspect(label: "Workflow down")
     {:noreply, [], state}
   end
 
   def handle_info({:DOWN, _, :process, pid, reason}, state) do
-    {pid, reason} |> IO.inspect(label: "Something down?")
+    Logger.warning("Worker saw unexpected PID go down: #{inspect(pid)}: #{inspect(reason)}")
     {:noreply, [], state}
   end
 
@@ -332,8 +350,48 @@ defmodule Temporal.Worker do
     {:noreply, [], worker_state(state, workflows: Map.delete(workflows, wf_pid))}
   end
 
+  def handle_info(
+        {:EXIT, activation_poller, :normal},
+        worker_state(activation_poller: activation_poller) = state
+      ) do
+    record_shutdown(state, :activation)
+  end
+
+  def handle_info(
+        {:EXIT, nexus_poller, :normal},
+        worker_state(nexus_poller: nexus_poller) = state
+      ) do
+    record_shutdown(state, :nexus)
+  end
+
+  def handle_info(
+        {:EXIT, activity_poller, :normal},
+        worker_state(activity_poller: activity_poller) = state
+      ) do
+    record_shutdown(state, :activity)
+  end
+
   def handle_info({:EXIT, pid, reason}, state) do
-    {pid, reason} |> IO.inspect(label: "Something else down?")
+    Logger.warning("Worker saw unexpected PID exit: #{inspect(pid)}: #{inspect(reason)}")
     {:noreply, [], state}
+  end
+
+  defp record_shutdown(state, poller) do
+    pollers_shutdown = [poller | worker_state(state, :pollers_shutdown)]
+    state = worker_state(state, pollers_shutdown: pollers_shutdown)
+
+    if Enum.member?(pollers_shutdown, :activity) && Enum.member?(pollers_shutdown, :activation) &&
+         Enum.member?(pollers_shutdown, :nexus) do
+      Logger.debug(
+        "All pollers shutdown for Worker (#{inspect(worker_state(state, :id))}). Shutting down..."
+      )
+
+      worker_state(state, :worker)
+      |> TemporalEngine.Worker.finalize_shutdown()
+
+      {:stop, :normal, state}
+    else
+      {:noreply, [], state}
+    end
   end
 end

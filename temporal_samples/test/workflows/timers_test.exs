@@ -1,7 +1,7 @@
 defmodule TemporalSamples.Workflows.TimersTest do
   use ExUnit.Case, async: true
 
-  alias Temporal.{Workflow, Worker, TaskQueue}
+  alias Temporal.{Workflow, Worker}
 
   # Defined in test/test_helpers.exs
   setup_all [
@@ -11,17 +11,18 @@ defmodule TemporalSamples.Workflows.TimersTest do
   ]
 
   setup_all %{worker: worker} do
-    :ok = Worker.register_workflow(worker, TemporalSamples.Workflows.Timers)
+    :ok = Worker.register_workflows(worker, [TemporalSamples.Workflows.Timers])
   end
 
-  test "respects timer duration", %{queue: queue} do
+  test "respects timer duration", ctx do
     {:ok, handle_5k} =
-      TaskQueue.start_workflow(
-        queue,
-        "timers-1-5s",
+      Temporal.Client.execute_workflow(
+        ctx.client,
         TemporalSamples.Workflows.Timers,
-        [[seconds: 5]],
-        id_reuse_policy: :terminate_if_running
+        [{5, :seconds}],
+        id_reuse_policy: :terminate_if_running,
+        workflow_id: "timers-1-5s",
+        task_queue: ctx.task_queue
       )
 
     {:ok, waited_5k_ms} = Workflow.result(handle_5k)
@@ -32,14 +33,15 @@ defmodule TemporalSamples.Workflows.TimersTest do
                     "Actual timer duration (#{waited_5k_ms}ms) was not within error bounds of 5s (+- 1.5 seconds)"
   end
 
-  test "respects (short) timer duration", %{queue: queue} do
+  test "respects (short) timer duration", ctx do
     {:ok, handle_250} =
-      TaskQueue.start_workflow(
-        queue,
-        "timers-1-250ms",
+      Temporal.Client.execute_workflow(
+        ctx.client,
         TemporalSamples.Workflows.Timers,
-        [[nanos: 250_000_000]],
-        id_reuse_policy: :terminate_if_running
+        [{250, :milliseconds}],
+        id_reuse_policy: :terminate_if_running,
+        workflow_id: "timers-1-250ms",
+        task_queue: ctx.task_queue
       )
 
     {:ok, waited_250_ms} = Workflow.result(handle_250)

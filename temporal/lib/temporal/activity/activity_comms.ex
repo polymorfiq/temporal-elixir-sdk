@@ -79,6 +79,6 @@ defmodule Temporal.Activity.ActivityComms do
         task_completion(task_token: task_token, result: result)
       )
 
-    {:noreply, [], state}
+    {:stop, :normal, state}
   end
 end

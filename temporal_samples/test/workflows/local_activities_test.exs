@@ -1,7 +1,7 @@
 defmodule TemporalSamples.Workflows.LocalActivitiesTest do
   use ExUnit.Case
 
-  alias Temporal.{Workflow, Worker, TaskQueue}
+  alias Temporal.{Workflow, Worker}
 
   # Defined in test/test_helpers.exs
   setup_all [
@@ -11,17 +11,18 @@ defmodule TemporalSamples.Workflows.LocalActivitiesTest do
   ]
 
   setup_all %{worker: worker} do
-    :ok = Worker.register_workflow(worker, TemporalSamples.Workflows.LocalActivities)
+    :ok = Worker.register_workflows(worker, [TemporalSamples.Workflows.LocalActivities])
   end
 
-  test "greets the world", %{queue: queue} do
+  test "greets the world", ctx do
     {:ok, handle} =
-      TaskQueue.start_workflow(
-        queue,
-        "local-activities-1",
+      Temporal.Client.execute_workflow(
+        ctx.client,
         TemporalSamples.Workflows.LocalActivities,
         ["World"],
-        id_reuse_policy: :terminate_if_running
+        id_reuse_policy: :terminate_if_running,
+        workflow_id: "local-activities-1",
+        task_queue: ctx.task_queue
       )
 
     {:ok, "Hello, World!"} = Workflow.result(handle)

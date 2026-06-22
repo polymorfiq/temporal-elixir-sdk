@@ -34,7 +34,8 @@ defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
                 %Client{
                   id: connection_opts(client_opts, :identity),
                   core: client,
-                  runtime: runtime
+                  runtime: runtime,
+                  namespace: connection_opts(client_opts, :namespace)
                 }}}
             )
 
