@@ -6,6 +6,8 @@
 
 Configure your local development environment to get started developing with Temporal.
 
+The completed version of this guide can be found in [/guides/01_quickstart](/guides/01_quickstart) within the repo
+
 ## Install Elixir
 
 Make sure you have Elixir installed. These tutorials were produced using `Erlang/OTP 28` and `Elixir 1.19.4`. Check your version of Elixir with the
@@ -33,9 +35,9 @@ Add the following to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "dbb3874"},
-      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "dbb3874", override: true},
-      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "dbb3874"},
+      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "6853310"},
+      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "6853310", override: true},
+      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "6853310"},
       ...
   ]
 end
@@ -227,7 +229,7 @@ end
 Then run:
 
 ```bash
-go run start/main.go Temporal
+mix start.greeting "Temporal"
 ```
 
 ### Verify Success
@@ -241,3 +243,20 @@ If everything is working correctly, you should see:
 - [Run your first Temporal Application](https://learn.temporal.io/getting_started/go/first_program_in_go/): Create a basic Workflow and run it with the Temporal Go SDK
 
 - [Take a Temporal 101 course](https://learn.temporal.io/courses/): Learn Temporal concepts and build your first application with a guided course
+
+### Optional: JSON serialization
+
+By default, the Elixir SDK uses Erlang's [External Term Format](https://www.erlang.org/doc/apps/erts/erl_ext_dist.html) to transmit messages. This is very useful for everything behaving as natural Elixir. But, it can limit your ability to read results in the Temporal UI.
+
+You can configure your JSON serialization library of choice via the Application Config, by creating a `config/config.exs` file with the following:
+
+```elixir
+# config/config.exs
+import Config
+
+config :temporal, engine: TemporalEngineNif.Engine
+config :temporal_engine, json_encoder: Jason
+
+```
+
+This will make it so that if a value can be encoded into JSON, it will by default and thus improve the debugging experience within the Temporal UI.
