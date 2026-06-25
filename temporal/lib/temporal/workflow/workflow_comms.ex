@@ -120,6 +120,12 @@ defmodule Temporal.Workflow.WorkflowComms do
             {:ok,
              comms_state(state, state: :all_activities_resolved, scheduled_activities: scheduled)}
           end
+
+        _, {:ok, state} ->
+          {:ok, state}
+
+        _, {:error, err} ->
+          {:error, err}
       end)
 
     with {:ok, state} <- future_state do
@@ -215,6 +221,9 @@ defmodule Temporal.Workflow.WorkflowComms do
         complete_workflow_execution(), {:ok, state} ->
           Logger.debug("Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) completed.")
           {:ok, comms_state(state, state: :completed)}
+
+        _, {:ok, state} ->
+          {:ok, state}
 
         _, {:error, err} ->
           {:error, err}

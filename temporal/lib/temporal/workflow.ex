@@ -1,10 +1,13 @@
 defmodule Temporal.Workflow do
   require Temporal.Workflow.ActivityActions
   require Temporal.Workflow.TimerActions
+  require Temporal.Workflow.WorkflowContext
   require TemporalEngine.Data.Failure
 
   alias Temporal.Workflow.ActivityActions
   alias Temporal.Workflow.TimerActions
+  alias Temporal.Workflow.WorkflowContext
+  alias Temporal.Workflow.WorkflowExecution
   alias TemporalEngine.WorkflowHandle
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Payload
@@ -25,8 +28,12 @@ defmodule Temporal.Workflow do
   def get(_ctx, TimerActions.timer_handle() = handle),
     do: TimerActions.get(handle)
 
-  def query_handler(_ctx, _name, _handler) do
-    {:error, :not_implemented}
+  @spec set_query_handler(WorkflowContext.workflow_context(), name :: atom() | String.t(),
+          handler: fun()
+        ) :: :ok
+  def set_query_handler(ctx, name, handler) do
+    exec = WorkflowContext.workflow_context(ctx, :execution)
+    WorkflowExecution.set_query_handler(exec, "#{name}", handler)
   end
 
   @spec result(WorkflowHandle.t(), opts :: keyword()) :: {:ok, term()} | {:error, term()}

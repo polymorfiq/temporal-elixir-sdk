@@ -25,7 +25,9 @@ use temporalio_sdk_common::protos::temporal::api::enums::v1::{
     WorkflowIdConflictPolicy, WorkflowIdReusePolicy,
 };
 use temporalio_sdk_common::protos::temporal::api::failure::v1::failure::FailureInfo;
+use temporalio_sdk_common::protos::temporal::api::query::v1::{QueryRejected, WorkflowQuery};
 use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
+use temporalio_sdk_common::protos::temporal::api::workflowservice::v1::QueryWorkflowResponse;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::{HasWorkflowDefinition, WorkflowDefinition};
 
@@ -2789,7 +2791,7 @@ impl Into<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleAct
 }
 
 #[derive(Debug, NifRecord, Clone)]
-#[tag = "respond_to_query"]
+#[tag = "query_result"]
 pub struct SdkWorkflowCommandQueryResult {
     pub query_id: String,
     pub variant: Option<SdkWorkflowCommandQueryResultVariant>,
@@ -3795,7 +3797,7 @@ impl Into<workflow_commands::signal_external_workflow_execution::Target>
     }
 }
 
-#[derive(Debug, NifTaggedEnum, Clone)]
+#[derive(Debug, NifUntaggedEnum, Clone)]
 pub enum SdkWorkflowCommandQueryResultVariant {
     Succeeded(SdkWorkflowCommandQuerySuccess),
     Failed(SdkWorkflowFailure),
@@ -4041,5 +4043,176 @@ impl Into<temporalio_sdk_client::WorkflowGetResultOptions> for SdkWorkflowGetRes
         temporalio_sdk_client::WorkflowGetResultOptions::builder()
             .follow_runs(self.follow_runs)
             .build()
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "workflow_query"]
+pub struct SdkWorkflowQuery {
+    pub query_type: String,
+    pub query_args: Vec<SdkPayload>,
+    pub header: Option<SdkHeader>,
+}
+
+impl From<WorkflowQuery> for SdkWorkflowQuery {
+    fn from(external: WorkflowQuery) -> Self {
+        Self {
+            query_type: external.query_type,
+            query_args: match external.query_args {
+                None => vec![],
+                Some(p) => p.payloads.iter().map(|val| val.clone().into()).collect(),
+            },
+            header: external.header.try_into_or_none(),
+        }
+    }
+}
+
+impl Into<WorkflowQuery> for SdkWorkflowQuery {
+    fn into(self) -> WorkflowQuery {
+        WorkflowQuery {
+            query_type: self.query_type,
+            query_args: if self.query_args.len() > 0 {
+                Some(Payloads {
+                    payloads: self.query_args.iter().map(|val| val.into()).collect(),
+                })
+            } else {
+                None
+            },
+            header: self.header.try_into_or_none(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(Debug, NifUnitEnum, Clone)]
+pub enum SdkQueryRejectCondition {
+    Unspecified = 0,
+    None = 1,
+    NotOpen = 2,
+    NotCompletedCleanly = 3,
+}
+impl Into<i32> for SdkQueryRejectCondition {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::None => 1,
+            Self::NotOpen => 2,
+            Self::NotCompletedCleanly => 3,
+        }
+    }
+}
+
+impl From<i32> for SdkQueryRejectCondition {
+    fn from(intent: i32) -> SdkQueryRejectCondition {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::None,
+            2 => Self::NotOpen,
+            3 => Self::NotCompletedCleanly,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "query_workflow_response"]
+pub struct SdkQueryWorkflowResponse {
+    pub query_result: Vec<SdkPayload>,
+    pub query_rejected: Option<SdkQueryRejected>,
+}
+
+impl From<QueryWorkflowResponse> for SdkQueryWorkflowResponse {
+    fn from(external: QueryWorkflowResponse) -> Self {
+        Self {
+            query_result: match external.query_result {
+                None => vec![],
+                Some(p) => p.payloads.iter().map(|val| val.clone().into()).collect(),
+            },
+            query_rejected: external.query_rejected.try_into_or_none(),
+        }
+    }
+}
+
+impl Into<QueryWorkflowResponse> for SdkQueryWorkflowResponse {
+    fn into(self) -> QueryWorkflowResponse {
+        QueryWorkflowResponse {
+            query_result: if self.query_result.len() > 0 {
+                Some(Payloads {
+                    payloads: self.query_result.iter().map(|val| val.into()).collect(),
+                })
+            } else {
+                None
+            },
+            query_rejected: self.query_rejected.try_into_or_none(),
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "query_rejected"]
+pub struct SdkQueryRejected {
+    pub status: SdkWorkflowExecutionStatus,
+}
+
+impl From<QueryRejected> for SdkQueryRejected {
+    fn from(external: QueryRejected) -> Self {
+        Self {
+            status: external.status.into(),
+        }
+    }
+}
+
+impl Into<QueryRejected> for SdkQueryRejected {
+    fn into(self) -> QueryRejected {
+        QueryRejected {
+            status: self.status.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(Debug, NifUnitEnum, Clone)]
+pub enum SdkWorkflowExecutionStatus {
+    Unspecified = 0,
+    Running = 1,
+    Completed = 2,
+    Failed = 3,
+    Canceled = 4,
+    Terminated = 5,
+    ContinuedAsNew = 6,
+    TimedOut = 7,
+    Paused = 8,
+}
+
+impl Into<i32> for SdkWorkflowExecutionStatus {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Running => 1,
+            Self::Completed => 2,
+            Self::Failed => 3,
+            Self::Canceled => 4,
+            Self::Terminated => 5,
+            Self::ContinuedAsNew => 6,
+            Self::TimedOut => 7,
+            Self::Paused => 8,
+        }
+    }
+}
+
+impl From<i32> for SdkWorkflowExecutionStatus {
+    fn from(intent: i32) -> SdkWorkflowExecutionStatus {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Running,
+            2 => Self::Completed,
+            3 => Self::Failed,
+            4 => Self::Canceled,
+            5 => Self::Terminated,
+            6 => Self::ContinuedAsNew,
+            7 => Self::TimedOut,
+            8 => Self::Paused,
+            _ => Self::Unspecified,
+        }
     }
 }

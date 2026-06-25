@@ -14,8 +14,9 @@ end
 
 defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
   require TemporalEngine.Data.Failure
-  import TemporalEngine.Opts.HandleOpts
+  import TemporalEngine.Data.Queries
   import TemporalEngine.Data.Payload
+  import TemporalEngine.Opts.HandleOpts
 
   alias TemporalEngine.Data.Duration
   alias TemporalEngineNif.Core
@@ -95,6 +96,44 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
         timeout ->
           {:error, :timeout}
       end
+    end
+  end
+
+  @impl true
+  def query(handle, query_type, args, opts) do
+    parent = self()
+
+    query = workflow_query(query_type: query_type, query_args: args)
+
+    {pid, ref} =
+      spawn_monitor(fn ->
+        Core._handle_query_workflow(
+          handle.client.runtime.core,
+          handle.core,
+          query,
+          query_options(opts, :reject_condition),
+          self()
+        )
+        |> case do
+          :ok -> :ok
+          {:error, err} -> raise "Could not start workflow via Core SDK: #{inspect(err)}"
+        end
+
+        receive do
+          {:ok, response} ->
+            send(parent, {self(), {:ok, response}})
+
+          {:error, err} ->
+            send(parent, {self(), {:error, err}})
+        end
+      end)
+
+    receive do
+      {^pid, response} ->
+        response
+
+      {:DOWN, ^ref, :process, ^pid, reason} ->
+        {:error, reason}
     end
   end
 end

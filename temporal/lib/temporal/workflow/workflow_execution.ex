@@ -23,6 +23,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
     :task_queue,
     :module,
     :exec_fn,
+    query_handlers: %{},
     awaiting_activity: %{},
     activity_results: %{},
     awaiting_timer: %{},
@@ -43,6 +44,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
              task_queue: String.t(),
              module: module(),
              exec_fn: atom(),
+             query_handlers: %{String.t() => fun()},
              awaiting_activity: %{integer() => [pid()]},
              activity_results: %{integer() => term()},
              awaiting_timer: %{integer() => [pid()]},
@@ -85,6 +87,11 @@ defmodule Temporal.Workflow.WorkflowExecution do
     with {:ok, cmds} <- queue_commands(pid, [command]) do
       {:ok, List.first(cmds)}
     end
+  end
+
+  @spec set_query_handler(pid(), name :: String.t(), handler :: fun()) :: :ok
+  def set_query_handler(pid, name, handler) do
+    GenStage.cast(pid, {:set_query_handler, name, handler})
   end
 
   @spec queue_commands(pid(), [Commands.command()]) ::
@@ -231,6 +238,98 @@ defmodule Temporal.Workflow.WorkflowExecution do
      workflow_state(state, fired_timers: fired, awaiting_timer: Map.delete(all_awaiting, seq))}
   end
 
+  def handle_cast(
+        job(variant: query_workflow(query_id: query_id, query_type: query_type, arguments: args)),
+        state
+      ) do
+    args = Enum.map(args, &Payload.value_from_record/1)
+    handlers = workflow_state(state, :query_handlers)
+
+    resp =
+      if handler = Map.get(handlers, {"#{query_type}", Enum.count(args)}) do
+        try do
+          apply(handler, args)
+        rescue
+          err ->
+            {:error, {:exception, err, __STACKTRACE__}}
+        end
+      else
+        {:error, :handler_not_found}
+      end
+
+    variant =
+      with {:ok, result} <- resp do
+        query_success(response: Payload.record_from_value(result))
+      else
+        {:error, :handler_not_found} ->
+          Failure.failure(
+            message: "Query handler (#{inspect(query_type)}/#{Enum.count(args)}) not found.",
+            source: "elixir-sdk",
+            stack_trace: "",
+            failure_info:
+              Failure.application(failure_type: "HandlerNotFound", non_retryable: true)
+          )
+
+        {:error, Failure.application() = app_error} ->
+          query_success(
+            response:
+              Payload.record_from_value(
+                {:error,
+                 Failure.failure(
+                   message: Failure.application(app_error, :failure_type),
+                   source: "elixir-sdk",
+                   stack_trace: "",
+                   failure_info: app_error
+                 )}
+              )
+          )
+
+        {:error, {:exception, Failure.application() = app_error, stacktrace}} ->
+          query_success(
+            response:
+              Payload.record_from_value(
+                {:error,
+                 Failure.failure(
+                   message: Failure.application(app_error, :failure_type),
+                   source: "elixir-sdk",
+                   stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                   failure_info: app_error
+                 )}
+              )
+          )
+
+        {:error, {:exception, %ex_type{} = exception, stacktrace}} ->
+          query_success(
+            response:
+              Payload.record_from_value(
+                {:error,
+                 Failure.failure(
+                   message: inspect(exception),
+                   source: "elixir-sdk",
+                   stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                   failure_info: Failure.application(failure_type: "#{ex_type}")
+                 )}
+              )
+          )
+
+        {:error, err} ->
+          query_success(response: Payload.record_from_value({:error, err}))
+      end
+
+    status =
+      success(commands: [command(variant: query_result(query_id: query_id, variant: variant))])
+
+    {:noreply, [status], state}
+  end
+
+  def handle_cast({:set_query_handler, name, handler}, state) do
+    handlers = workflow_state(state, :query_handlers)
+    {:arity, arity} = Function.info(handler, :arity)
+
+    handlers = Map.put(handlers, {"#{name}", arity}, handler)
+    {:noreply, [], workflow_state(state, query_handlers: handlers)}
+  end
+
   def handle_cast({:workflow_completed, resp}, state) do
     with {:ok, result} <- resp do
       status =
@@ -302,7 +401,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
     {exec_pid, exec_ref} =
       spawn_monitor(fn ->
-        resp = apply(module, exec_fn, [ctx | arguments])
+        resp =
+          try do
+            apply(module, exec_fn, [ctx | arguments])
+          rescue
+            err ->
+              {:error, err}
+          end
 
         GenStage.cast(parent, {:workflow_completed, resp})
       end)

@@ -3,6 +3,7 @@ defmodule TemporalEngine.Data.Commands do
 
   require TemporalEngine.Data.Common
 
+  alias TemporalEngine.Data.Commands
   alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
@@ -14,6 +15,7 @@ defmodule TemporalEngine.Data.Commands do
           start_timer()
           | schedule_activity()
           | schedule_local_activity()
+          | query_result()
           | request_cancel_activity()
           | request_cancel_local_activity()
           | complete_workflow_execution()
@@ -165,6 +167,17 @@ defmodule TemporalEngine.Data.Commands do
     """
     @default :wait_cancellation_completed
     @type cancellation_type :: :try_cancel | :wait_cancellation_completed | :abandon
+  end
+
+  deftype :query_result do
+    @doc "Corresponds to the id provided in the activation job"
+    @type query_id :: required :: String.t()
+
+    @type variant :: required :: nested!(Commands.query_success()) | nested!(Failure.failure())
+  end
+
+  deftype :query_success do
+    @type response :: Payload.payload()
   end
 
   deftype :request_cancel_activity do

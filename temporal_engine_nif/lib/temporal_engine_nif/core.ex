@@ -8,6 +8,8 @@ defmodule TemporalEngineNif.Core do
   alias TemporalEngineNif.Data.RuntimeOpts
   alias TemporalEngineNif.Data.WorkerOpts
   alias TemporalEngineNif.Data.ActivityTaskCompletion
+  alias TemporalEngineNif.WorkflowHandle
+  alias TemporalEngine.Data.Queries
   alias TemporalEngine.Opts.WorkflowOpts.WorkflowDefinition
   alias TemporalEngine.Opts.WorkflowOpts.WorkflowStartOpts
 
@@ -87,6 +89,23 @@ defmodule TemporalEngineNif.Core do
           {:ok, bool()} | {:error, term()}
   def _client_start_workflow(_runtime, _client, _workflow, _input, _opts, _resp_pid),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _handle_query_workflow(
+          runtime :: term(),
+          handle :: WorkflowHandle.t(),
+          query :: Queries.workflow_query(),
+          query_reject_condition :: Queries.query_reject_condition(),
+          resp_pid :: pid()
+        ) :: {:ok, Queries.query_workflow_response()} | {:error, term()}
+  def _handle_query_workflow(
+        _runtime,
+        _handle,
+        _query,
+        _query_reject_condition,
+        _resp_pid
+      ),
+      do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
   @spec _workflow_handle_get_result(

@@ -5,12 +5,17 @@ defmodule Temporal.Client do
   Can be utilized to create workers or start/interact with Temporal Workflows.
   """
 
+  import TemporalEngine.Data.Queries
+
+  require TemporalEngine.Data.Failure
   require TemporalEngine.Opts.ClientOpts
   require TemporalEngine.Opts.WorkflowOpts
 
   alias Temporal.Constants
   alias Temporal.Runtime
   alias Temporal.Workflows.WorkflowName
+  alias TemporalEngine.Data.Failure
+  alias TemporalEngine.Data.Queries
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Opts.{ClientOpts, WorkflowOpts}
   alias TemporalEngine.WorkflowHandle
@@ -57,6 +62,42 @@ defmodule Temporal.Client do
 
     with {:ok, opts} <- WorkflowOpts.workflow_start_opts_from_opts(opts) do
       TemporalEngine.Client.start_workflow(client, definition, args, opts)
+    end
+  end
+
+  @spec query_workflow(
+          WorkflowHandle.t(),
+          query_name :: atom() | String.t(),
+          query_args :: [term()],
+          query_opts :: [Queries.query_options_opts()]
+        ) :: {:ok, term()} | {:error, term()}
+  def query_workflow(handle, query_name, query_args \\ [], query_opts \\ []) do
+    args = Enum.map(query_args, &Payload.record_from_value/1)
+
+    with {:ok, opts} <- Queries.query_options_from_opts(query_opts) do
+      resp = TemporalEngine.WorkflowHandle.query(handle, "#{query_name}", args, opts)
+
+      case resp do
+        {:ok, query_workflow_response(query_rejected: query_rejected(status: status))} ->
+          {:error, status}
+
+        {:ok, query_workflow_response(query_result: [result])} ->
+          val = if(result, do: Payload.value_from_record(result), else: nil)
+
+          case val do
+            {:error, Failure.failure() = failure} ->
+              {:error, Failure.to_map(failure) |> Map.put(:error_code, :query_failed)}
+
+            {:error, err} ->
+              {:error, err}
+
+            _ ->
+              {:ok, val}
+          end
+
+        {:error, err} ->
+          {:error, err}
+      end
     end
   end
 

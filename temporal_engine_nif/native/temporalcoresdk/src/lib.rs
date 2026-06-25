@@ -4,8 +4,9 @@ use crate::core_nexus::SdkNexusTask;
 use crate::core_runtime::{ElixirRuntime, SdkRuntimeOpts};
 use crate::core_worker::ElixirWorker;
 use crate::core_workflows::{
-    ElixirWorkflowHandle, SdkWorkflowActivation, SdkWorkflowActivationCompletion,
-    SdkWorkflowDefinition, SdkWorkflowGetResultError, SdkWorkflowGetResultOptions,
+    ElixirWorkflowHandle, SdkQueryRejectCondition, SdkQueryWorkflowResponse, SdkWorkflowActivation,
+    SdkWorkflowActivationCompletion, SdkWorkflowDefinition, SdkWorkflowExecution,
+    SdkWorkflowGetResultError, SdkWorkflowGetResultOptions, SdkWorkflowQuery,
     SdkWorkflowStartOptions,
 };
 use crate::data::common::SdkWorkflowArguments;
@@ -14,8 +15,13 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use temporalio_sdk_client::{Client, ClientOptions, Connection, ConnectionOptions};
+use temporalio_sdk_client::grpc::WorkflowService;
+use temporalio_sdk_client::tonic::Request;
+use temporalio_sdk_client::{
+    Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient,
+};
 use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
+use temporalio_sdk_common::protos::temporal::api::workflowservice::v1::QueryWorkflowRequest;
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::worker::{
     WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes,
@@ -626,6 +632,52 @@ fn _worker_finalize_shutdown(worker: ResourceArc<ElixirWorker>) -> NifResult<Ato
             "Core Worker instance unavailable...",
         ))),
     }
+}
+
+#[rustler::nif]
+fn _handle_query_workflow(
+    runtime: ResourceArc<ElixirRuntime>,
+    wf_handle: ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>,
+    query: Option<SdkWorkflowQuery>,
+    query_reject_condition: SdkQueryRejectCondition,
+    resp_pid: LocalPid,
+) -> NifResult<Atom> {
+    let wf_handle_ref = wf_handle
+        .handle
+        .read()
+        .expect("Could not unwrap Workflow Handle");
+    let mut client = wf_handle_ref.client().clone();
+    let wf_info = wf_handle_ref.info();
+    let exec = SdkWorkflowExecution {
+        workflow_id: wf_info.workflow_id.clone(),
+        run_id: wf_info.run_id.clone().unwrap(),
+    };
+
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        let query_resp = client
+            .query_workflow(Request::new(QueryWorkflowRequest {
+                namespace: client.namespace(),
+                execution: Some(exec.into()),
+                query: query.try_into_or_none(),
+                query_reject_condition: query_reject_condition.into(),
+            }))
+            .await;
+
+        let msg: Result<SdkQueryWorkflowResponse, String> = match query_resp {
+            Ok(resp) => Ok(resp.into_inner().into()),
+            Err(error) => Err(format!("Error starting workflow - {}", error)),
+        };
+
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+    });
+
+    Ok(atoms::ok())
 }
 
 #[rustler::nif]
