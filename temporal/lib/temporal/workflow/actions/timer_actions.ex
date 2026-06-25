@@ -23,6 +23,14 @@ defmodule Temporal.Workflow.TimerActions do
     end
   end
 
+  @spec get(timer_handle()) :: :ok | {:error, term()}
   def get(timer_handle(seq: seq, execution: exec)),
     do: WorkflowExecution.wait_for_timer(exec, seq)
+
+  @spec sleep(WorkflowContext.workflow_context(), Duration.duration()) :: :ok | {:error, term()}
+  def sleep(ctx, duration) do
+    with {:ok, timer} <- new_timer(ctx, duration) do
+      get(timer)
+    end
+  end
 end

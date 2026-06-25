@@ -15,6 +15,7 @@ defmodule Temporal.Workflow do
   defdelegate execute_activity(ctx, name, inputs, opts \\ []), to: ActivityActions
   defdelegate execute_local_activity(ctx, name, inputs, opts \\ []), to: ActivityActions
   defdelegate new_timer(ctx, duration), to: TimerActions
+  defdelegate sleep(ctx, duration), to: TimerActions
 
   def get(ActivityActions.activity_handle() = handle),
     do: ActivityActions.get(handle)

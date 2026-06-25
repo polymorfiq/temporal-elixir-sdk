@@ -23,8 +23,7 @@ defmodule TemporalSamples.Workflows.Queries do
       {:error, "Some error"}
     end)
 
-    {:ok, timer} = Workflow.new_timer(ctx, {1, :minutes})
-    Workflow.get(timer)
+    :ok = Workflow.sleep(ctx, {1, :minutes})
 
     {:ok, 456}
   end

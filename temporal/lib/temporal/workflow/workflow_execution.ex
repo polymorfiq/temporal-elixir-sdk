@@ -167,7 +167,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
        workflow_state(state,
          queued_commands: [],
          awaiting_activity: Map.put(all_awaiting, seq, [from | awaiting])
-       )}
+       ), :hibernate}
     end
   end
 
@@ -186,7 +186,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
        workflow_state(state,
          queued_commands: [],
          awaiting_timer: Map.put(all_awaiting, seq, [from | awaiting])
-       )}
+       ), :hibernate}
     end
   end
 
