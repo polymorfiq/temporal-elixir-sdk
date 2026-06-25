@@ -3,7 +3,6 @@ defmodule Temporal.Activity.ActivityExecution do
 
   require TemporalEngine.Data.Failure
   import TemporalEngine.Data.ActivityTask
-  import Temporal.Activity.ActivityContext
   import TemporalEngine.Data.Common, only: [workflow_execution: 2]
   import TemporalEngine.Data.ActivityTaskCompletion
 
@@ -88,19 +87,11 @@ defmodule Temporal.Activity.ActivityExecution do
     exec_fn = activity_state(state, :exec_fn)
     arguments = activity_state(state, :arguments)
 
-    ctx =
-      activity_context(
-        execution: self(),
-        run_id: activity_state(state, :run_id),
-        activity_type: activity_state(state, :activity_type),
-        activity_id: activity_state(state, :activity_id)
-      )
-
     parent = self()
 
     {exec_pid, exec_ref} =
       spawn_monitor(fn ->
-        resp = apply(module, exec_fn, [ctx | arguments])
+        resp = apply(module, exec_fn, arguments)
         GenStage.cast(parent, {:activity_completed, resp})
       end)
 

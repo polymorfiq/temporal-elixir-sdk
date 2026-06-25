@@ -287,7 +287,7 @@ defmodule Temporal.Worker do
         activity_task(variant: start_activity() = start, task_token: task_token), state ->
           worker_id = worker_state(state, :id)
           activity_type = start_activity(start, :activity_type)
-          arity = Enum.count(start_activity(start, :input)) + 1
+          arity = Enum.count(start_activity(start, :input))
 
           found =
             case :ets.lookup(@global_store, {:activity, worker_id, activity_type, arity}) do
@@ -314,6 +314,16 @@ defmodule Temporal.Worker do
           else
             {:error, err} ->
               Logger.error("Error starting activity: #{inspect(err)}")
+              state
+          end
+
+        activity_task(variant: cancel_activity(), task_token: task_token), state ->
+          case Registry.lookup(Temporal.TemporalRegistry, {:activity, task_token}) do
+            [{comms, _info}] ->
+              activities = worker_state(state, :activities) |> Map.delete(comms)
+              worker_state(state, activities: activities)
+
+            [] ->
               state
           end
       end)

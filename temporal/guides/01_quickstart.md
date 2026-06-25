@@ -33,9 +33,9 @@ Add the following to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "db6504e"},
-      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "db6504e", override: true},
-      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "db6504e"},
+      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "dbb3874"},
+      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "dbb3874", override: true},
+      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "dbb3874"},
       ...
   ]
 end
@@ -124,14 +124,14 @@ Create a Workflow file (`lib/temporal_getting_started/greeting/say_hello_workflo
 ```elixir
 defmodule TemporalGettingStarted.Greeting.SayHelloWorkflow do
   use Temporal.Workflow
-  
+
   alias Temporal.{Workflow, WorkflowContext}
   alias TemporalGettingStarted.Greeting
-  
+
   @spec execute(WorkflowContext.t(), name :: String.t()) :: {:ok, String.t()} | {:error, term()}
   def execute(ctx, name) do
     ctx = Workflow.with_activity_opts(ctx, start_to_close_timeout: {10, :seconds})
-    
+
     with  {:ok, activity} <- Workflow.execute_activity(ctx, &Greeting.greet/1, [name]) do
       Workflow.get(ctx, activity)
     end
@@ -158,17 +158,16 @@ defmodule TemporalGettingStarted.Application do
   use Application
 
   alias Temporal.Client
-  alias TemporalGettingStarted.{Greeting, Workflow}
+  alias TemporalGettingStarted.Greeting
 
   @impl true
   def start(_type, _args) do
     client = Client.new!("localhost:7233", engine: TemporalEngineNif.Engine)
 
     children = [
-       Temporal,
        {Temporal.Worker, [
          client: client,
-         workflows: [Workflow],
+         workflows: [Greeting.SayHelloWorkflow],
          activities: [&Greeting.greet/1],
          task_queue: "my-task-queue",
          server_opts: [name: TemporalGettingStarted.MyWorker]
@@ -199,6 +198,7 @@ Create a separate file called (`lib/mix/tasks/start/greeting.exs`):
 defmodule Mix.Tasks.Start.Greeting do
   use Mix.Task
 
+  alias Temporal.{Client, WorkflowExecution}
   alias TemporalGettingStarted.Greeting
 
   @shortdoc "Runs Temporal's Getting Started workflow"
@@ -210,12 +210,16 @@ defmodule Mix.Tasks.Start.Greeting do
 
   @impl Mix.Task
   def run(args) do
+    Mix.Task.run("app.start")
     client = Client.new!("localhost:7233", engine: TemporalEngineNif.Engine)
 
-    {:ok, we} = Client.execute_workflow(client, Greeting.SayHelloWorkflow, ["World"], [
+    {:ok, we} = Client.execute_workflow(client, Greeting.SayHelloWorkflow, args, [
       id: "greeting-workflow",
       task_queue: "my-task-queue"
     ])
+
+    {:ok, result} = WorkflowExecution.get(we)
+    IO.puts("Workflow result: #{result}")
   end
 end
 ```

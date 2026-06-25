@@ -29,7 +29,7 @@ defmodule TemporalSamples.Workflows.ErlangTermFormat do
     {:ok, given_name} =
       Workflow.execute_activity(
         ctx,
-        &greet/2,
+        &greet/1,
         [etf({:given_name, name})],
         start_to_close_timeout: {1, :seconds}
       )
@@ -40,7 +40,7 @@ defmodule TemporalSamples.Workflows.ErlangTermFormat do
     {:ok, first_last_name} =
       Workflow.execute_activity(
         ctx,
-        &greet/2,
+        &greet/1,
         [etf({:first_last_name, fname, lname})],
         start_to_close_timeout: {1, :seconds}
       )
@@ -57,11 +57,11 @@ defmodule TemporalSamples.Workflows.ErlangTermFormat do
 
   Note the tuple it takes as an input, made possible by {:etf, ...}
   """
-  def greet(_ctx, {:given_name, name}) do
+  def greet({:given_name, name}) do
     {:ok, etf({:greeting, "Hello, #{name}!"})}
   end
 
-  def greet(_ctx, {:first_last_name, first_name, last_name}) do
+  def greet({:first_last_name, first_name, last_name}) do
     {:ok, etf({:greeting, "Hello, #{first_name} #{last_name}!"})}
   end
 

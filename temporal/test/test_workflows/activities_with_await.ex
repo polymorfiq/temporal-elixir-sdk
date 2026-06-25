@@ -16,7 +16,7 @@ defmodule TestWorkflows.ActivitiesWithAwait do
     get(ctx, act2)
   end
 
-  def greet_activity(_ctx, msg) do
+  def greet_activity(msg) do
     {:ok, "Hello, #{msg}!"}
   end
 end

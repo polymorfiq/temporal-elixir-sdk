@@ -49,6 +49,13 @@ defmodule Temporal.Activity.ActivityComms do
     run_id = workflow_execution(workflow_exec, :run_id)
     Process.set_label({:activity_comms, run_id, activity_type, activity_id})
 
+    {:ok, _} =
+      Registry.register(Temporal.TemporalRegistry, {:activity, task_token}, %{
+        activity_type: activity_type,
+        activity_id: activity_id,
+        exec: workflow_exec
+      })
+
     {:ok, exec} = ActivityExecution.start_link(exec_args)
 
     {:consumer,

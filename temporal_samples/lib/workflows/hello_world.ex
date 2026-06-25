@@ -13,7 +13,7 @@ defmodule TemporalSamples.Workflows.HelloWorld do
   def execute(ctx, name) do
     # Schedule activity (non-blocking)
     {:ok, act1} =
-      Workflow.execute_activity(ctx, &greet/2, [name], start_to_close_timeout: {1, :seconds})
+      Workflow.execute_activity(ctx, &greet/1, [name], start_to_close_timeout: {1, :seconds})
 
     # Get result of activity (blocks until finished).
     {:ok, msg} = Workflow.get(ctx, act1)
@@ -23,7 +23,7 @@ defmodule TemporalSamples.Workflows.HelloWorld do
   end
 
   @doc "A simple activity, marked as such by the use Temporal.Workflow, [activities: ...] above."
-  def greet(_ctx, name) do
+  def greet(name) do
     {:ok, "Hello, #{name}!"}
   end
 end

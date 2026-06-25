@@ -14,13 +14,13 @@ defmodule Temporal.WorkflowExecution do
         {:ok, Payload.value_from_record(resp)}
 
       {:error,
-        Failure.workflow_failed(
-          failure:
-            Failure.failure(
-              failure_info:
-                Failure.application(failure_type: "ReturnedError", details: [resp_payload])
-            )
-        )} ->
+       Failure.workflow_failed(
+         failure:
+           Failure.failure(
+             failure_info:
+               Failure.application(failure_type: "ReturnedError", details: [resp_payload])
+           )
+       )} ->
         {:error, Payload.value_from_record(resp_payload)}
 
       {:error, Failure.workflow_failed(failure: f)} ->
@@ -28,17 +28,17 @@ defmodule Temporal.WorkflowExecution do
 
       {:error, Failure.workflow_cancelled(details: details)} ->
         {:error,
-          %{
-            error_code: :workflow_cancelled,
-            details: Enum.map(details, &Payload.value_from_record/1)
-          }}
+         %{
+           error_code: :workflow_cancelled,
+           details: Enum.map(details, &Payload.value_from_record/1)
+         }}
 
       {:error, Failure.workflow_terminated(details: details)} ->
         {:error,
-          %{
-            error_code: :workflow_terminated,
-            details: Enum.map(details, &Payload.value_from_record/1)
-          }}
+         %{
+           error_code: :workflow_terminated,
+           details: Enum.map(details, &Payload.value_from_record/1)
+         }}
 
       {:error, Failure.workflow_timed_out()} ->
         {:error, %{error_code: :workflow_timed_out}}
