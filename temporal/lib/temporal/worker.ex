@@ -79,8 +79,9 @@ defmodule Temporal.Worker do
           {:ok, t()} | {:error, term()}
   def new(client, opts \\ []) do
     identity = opts[:client_identity_override] || TemporalEngine.Client.id(client)
+    {_, config_opts} = Keyword.split(opts, [:workflows, :activities])
 
-    with {:ok, config} <- worker_config_from_opts(opts),
+    with {:ok, config} <- worker_config_from_opts(config_opts),
          id <- "#{identity}_#{worker_config(config, :namespace)}" do
       server_opts = [name: {:via, Registry, {Temporal.TemporalRegistry, {:worker, id}}}]
 

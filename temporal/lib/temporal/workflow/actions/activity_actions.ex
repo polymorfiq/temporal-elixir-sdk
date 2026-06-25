@@ -56,6 +56,14 @@ defmodule Temporal.Workflow.ActivityActions do
     end
   end
 
+  @spec execute_local_activity!(WorkflowContext.t(), ActivityName.t(), [term()], [
+    Commands.schedule_local_activity_opt()
+  ]) :: activity_handle()
+  def execute_local_activity!(ctx, name, inputs, opts \\ []) do
+    {:ok, handle} = execute_local_activity(ctx, name, inputs, opts)
+    handle
+  end
+
   @spec execute_local_activity(WorkflowContext.t(), ActivityName.t(), [term()], [
           Commands.schedule_local_activity_opt()
         ]) :: {:ok, activity_handle()} | {:error, term()}

@@ -11,7 +11,9 @@ defmodule Temporal.Workflow do
   alias TemporalEngine.Data.Commands
 
   defdelegate execute_activity(ctx, name, inputs, opts \\ []), to: ActivityActions
+  defdelegate execute_activity!(ctx, name, inputs, opts \\ []), to: ActivityActions
   defdelegate execute_local_activity(ctx, name, inputs, opts \\ []), to: ActivityActions
+  defdelegate execute_local_activity!(ctx, name, inputs, opts \\ []), to: ActivityActions
   defdelegate new_timer(ctx, duration), to: TimerActions
   defdelegate sleep(ctx, duration), to: TimerActions
 
