@@ -17,6 +17,7 @@ defmodule TemporalEngine.Data.TypeSpec do
     deprecated :: @deprecated :: extract!(message)
     required_field :: @type extract!(type_name) :: required :: extract!(typespec)
     field :: @type extract!(type_name) :: extract!(typespec)
+    opts_type :: @opts_type :: extract!(typespec)
   end
 
   defmacro deftype(name, do: do_block) do
@@ -27,6 +28,9 @@ defmodule TemporalEngine.Data.TypeSpec do
         fn
           {:structdoc, tag}, acc ->
             {:cont, %{structdoc: tag[:contents]}, acc}
+
+          {:opts_type, tag}, acc ->
+            {:cont, %{opts_type: tag[:typespec]}, acc}
 
           {:required_field, tag}, acc ->
             {:cont, Map.merge(acc, %{field: tag, required: true}), %{}}
@@ -116,6 +120,138 @@ defmodule TemporalEngine.Data.TypeSpec do
     opts_name = :"#{name}_opts"
     opt_name = :"#{name}_opt"
 
+    specs_and_funcs =
+      case do_block do
+        {:__block__, _, body} ->
+          Enum.filter(body, fn
+            {:@, _, [{:spec, _, _}]} -> true
+            {:def, _, _} -> true
+            _ -> false
+          end)
+
+        _ ->
+          []
+      end
+
+    from_opts_specs_funcs =
+      Enum.filter(specs_and_funcs, fn
+        {:@, _, [{:spec, _, [{:"::", _, [{:from_opts, _, _} | _]}]}]} ->
+          true
+
+        {:def, _, [{:from_opts, _, _} | _]} ->
+          true
+
+        _ ->
+          false
+      end)
+
+    {from_opts_specs_funcs, _} =
+      Macro.prewalk(from_opts_specs_funcs, [], fn
+        {:t, m, []}, acc ->
+          {{name, m, []}, acc}
+
+        {:opts, m, []}, acc ->
+          {{opts_name, m, []}, acc}
+
+        {:from_opts, m, args}, acc ->
+          {{from_opts_name, m, args}, acc}
+
+        ast, acc ->
+          {ast, acc}
+      end)
+
+    from_opts_defs =
+      if Enum.any?(from_opts_specs_funcs) do
+        quote do
+          (unquote_splicing(expand_nested_modules(from_opts_specs_funcs, __CALLER__)))
+        end
+      else
+        quote do
+          @doc "Produces #{unquote(name)} from a keyword list of options"
+          @spec unquote(from_opts_name)(opts :: unquote(opts_name)()) ::
+                  {:ok, unquote(name)()} | {:error, keyword()}
+          def unquote(from_opts_name)(opts),
+            do:
+              TemporalEngine.Data.TypeSpec.from_opts(
+                opts,
+                %{name: unquote(name), full_name: nil, module: unquote(__CALLER__.module)},
+                unquote(expand_nested_modules(field_names, __CALLER__))
+              )
+        end
+      end
+
+    validate_opts_specs_funcs =
+      Enum.filter(specs_and_funcs, fn
+        {:@, _, [{:spec, _, [{:"::", _, [{:validate_opts, _, _} | _]}]}]} ->
+          true
+
+        {:def, _, [{:validate_opts, _, _} | _]} ->
+          true
+
+        _ ->
+          false
+      end)
+
+    {validate_opts_specs_funcs, _} =
+      Macro.prewalk(validate_opts_specs_funcs, [], fn
+        {:t, m, []}, acc ->
+          {{name, m, []}, acc}
+
+        {:opts, m, []}, acc ->
+          {{opts_name, m, []}, acc}
+
+        {:validate_opts, m, args}, acc ->
+          {{validate_opts_name, m, args}, acc}
+
+        {:from_opts, m, args}, acc ->
+          {{from_opts_name, m, args}, acc}
+
+        ast, acc ->
+          {ast, acc}
+      end)
+
+    validate_opts_defs =
+      if Enum.any?(validate_opts_specs_funcs) do
+        quote do
+          (unquote_splicing(expand_nested_modules(validate_opts_specs_funcs, __CALLER__)))
+        end
+      else
+        quote do
+          @doc false
+          @spec unquote(validate_opts_name)(opts :: keyword(), base_name :: String.t() | nil) ::
+                  {:ok, validated :: keyword()} | {:error, keyword()}
+          def unquote(validate_opts_name)(opts, base_name \\ nil),
+            do:
+              TemporalEngine.Data.TypeSpec.validate(
+                opts,
+                %{name: unquote(name), full_name: base_name, module: unquote(__CALLER__.module)},
+                unquote(expand_nested_modules(field_names, __CALLER__))
+              )
+        end
+      end
+
+    opts_typespec = Enum.find_value(extracted, & &1[:opts_type])
+
+    opts_defs =
+      if opts_typespec do
+        quote do
+          @type unquote({opts_name, [], nil}) :: unquote(opts_typespec)
+        end
+      else
+        quote do
+          @typedoc "See `t:#{unquote(name)}/0` for more details."
+          @type unquote({opt_name, [], nil}) :: unquote(opts_type_ast)
+
+          @typedoc "See `t:#{unquote(name)}/0` for more details."
+          @type unquote({opts_name, [], nil}) :: [unquote({opt_name, [], []})]
+
+          @doc false
+          @spec unquote(field_opts_types_name)() :: term()
+          def unquote(field_opts_types_name)(),
+            do: unquote(Macro.escape(expand_nested_modules(fields_to_opt_types, __CALLER__)))
+        end
+      end
+
     quote do
       @typedoc unquote(~s|#{structdoc}\n\n---\n\n#{Enum.join(fields_to_docs, "\n\n")}|)
       @type unquote({name, [], nil}) ::
@@ -124,22 +260,9 @@ defmodule TemporalEngine.Data.TypeSpec do
       @doc "#{unquote(structdoc)}\n\nSee `t:#{unquote(name)}/0` for more details."
       Record.defrecord(unquote(name), unquote(field_names))
 
-      @typedoc "See `t:#{unquote(name)}/0` for more details."
-      @type unquote({opt_name, [], nil}) :: unquote(opts_type_ast)
+      unquote(opts_defs)
 
-      @typedoc "See `t:#{unquote(name)}/0` for more details."
-      @type unquote({opts_name, [], nil}) :: [unquote({opt_name, [], []})]
-
-      @doc false
-      @spec unquote(validate_opts_name)(opts :: keyword(), base_name :: String.t() | nil) ::
-              {:ok, validated :: keyword()} | {:error, keyword()}
-      def unquote(validate_opts_name)(opts, base_name \\ nil),
-        do:
-          TemporalEngine.Data.TypeSpec.validate(
-            opts,
-            %{name: unquote(name), full_name: base_name, module: unquote(__CALLER__.module)},
-            unquote(expand_nested_modules(field_names, __CALLER__))
-          )
+      unquote(validate_opts_defs)
 
       @doc "Produces #{unquote(name)} from a keyword list of options"
       @spec unquote(from_opts_bang_name)(opts :: unquote(opts_name)()) :: unquote(name)()
@@ -148,30 +271,12 @@ defmodule TemporalEngine.Data.TypeSpec do
         record
       end
 
-      if !unquote(fields[:_opts_type]) do
-        @doc "Produces #{unquote(name)} from a keyword list of options"
-        @spec unquote(from_opts_name)(opts :: unquote(opts_name)()) ::
-                {:ok, unquote(name)()} | {:error, keyword()}
-        def unquote(from_opts_name)(opts),
-          do:
-            TemporalEngine.Data.TypeSpec.from_opts(
-              opts,
-              %{name: unquote(name), full_name: nil, module: unquote(__CALLER__.module)},
-              unquote(expand_nested_modules(field_names, __CALLER__))
-            )
-      end
+      unquote(from_opts_defs)
 
       @doc false
       @spec unquote(field_types_name)() :: term()
       def unquote(field_types_name)(),
         do: unquote(Macro.escape(expand_nested_modules(fields_to_types, __CALLER__)))
-
-      if !unquote(fields[:_opts_type]) do
-        @doc false
-        @spec unquote(field_opts_types_name)() :: term()
-        def unquote(field_opts_types_name)(),
-          do: unquote(Macro.escape(expand_nested_modules(fields_to_opt_types, __CALLER__)))
-      end
     end
   end
 
@@ -599,13 +704,11 @@ defmodule TemporalEngine.Data.TypeSpec do
         with {:ok, validated} <- apply(mod, validation_fn_name, [val, env.full_name]) do
           {:ok, validated}
         else
-          {:error, errors} ->
-            errors =
-              Enum.map(errors, fn {_name, error} ->
-                {env.name, error}
-              end)
+          {:error, errors} when is_list(errors) ->
+            {:error, Enum.map(errors, &{env.name, &1})}
 
-            {:error, errors}
+          {:error, err} ->
+            {:error, [{env.name, err}]}
         end
     end
   end

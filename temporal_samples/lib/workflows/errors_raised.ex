@@ -23,8 +23,8 @@ defmodule TemporalSamples.Workflows.ErrorsRaised do
      Failure.application_from_opts!(
        failure_type: "MyExpectedType",
        non_retryable: true,
-       next_retry_delay: [seconds: 10]
-     )
-     |> Failure.application(details: [TemporalEngine.Data.Payload.record_from_value("Some Info")])}
+       next_retry_delay: {10, :seconds},
+       details: ["Some Info"]
+     )}
   end
 end

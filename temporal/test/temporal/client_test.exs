@@ -27,11 +27,11 @@ defmodule Temporal.ClientTest do
                "localhost:7233",
                runtime: runtime,
                retry_options: [
-                 initial_interval: [seconds: 30],
+                 initial_interval: {30, :seconds},
                  randomization_factor: 5.0,
                  multiplier: 2.0,
-                 max_interval: [seconds: 60],
-                 max_elapsed_time: [seconds: 60],
+                 max_interval: {60, :seconds},
+                 max_elapsed_time: {60, :seconds},
                  max_retries: 30
                ]
              )

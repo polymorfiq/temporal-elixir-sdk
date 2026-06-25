@@ -35,7 +35,7 @@ defmodule TemporalSamples.Workflows.ErrorsRaisedTest do
       )
 
     assert {:error, %{message: "Crash the workflow before it finishes"}} =
-             Workflow.result(handle, timeout: [seconds: 1])
+             Workflow.result(handle, timeout: {1, :seconds})
   end
 
   test "error tuple is returned", ctx do
@@ -51,7 +51,7 @@ defmodule TemporalSamples.Workflows.ErrorsRaisedTest do
       )
 
     assert {:error, "Error returned from function"} =
-             Workflow.result(handle, timeout: [seconds: 1])
+             Workflow.result(handle, timeout: {1, :seconds})
   end
 
   test "error tuple containing Application Failure, applies that info", ctx do
@@ -78,7 +78,7 @@ defmodule TemporalSamples.Workflows.ErrorsRaisedTest do
                 }
               }
             }} =
-             Workflow.result(handle, timeout: [seconds: 1])
+             Workflow.result(handle, timeout: {1, :seconds})
   end
 
   defp configure_task_queue(_), do: %{task_queue: "#{__MODULE__}"}

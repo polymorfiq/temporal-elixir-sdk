@@ -81,15 +81,15 @@ defmodule TemporalEngine.Config do
     @type task_types :: required :: nested!(Config.worker_task_types())
 
     @doc "How long a workflow task is allowed to sit on the sticky queue before it is timed out and moved to the non-sticky queue where it may be picked up by any worker."
-    @default [seconds: 60]
+    @default {1, :minutes}
     @type sticky_queue_schedule_to_start_timeout :: required :: nested!(Duration.duration())
 
     @doc "Longest interval for throttling activity heartbeats"
-    @default [seconds: 60]
+    @default {1, :minutes}
     @type max_heartbeat_throttle_interval :: required :: nested!(Duration.duration())
 
     @doc "Default interval for throttling activity heartbeats in case `ActivityOptions.heartbeat_timeout` is unset. When the timeout is set in the `ActivityOptions`, throttling is set to heartbeat_timeout * 0.8."
-    @default [seconds: 300]
+    @default {5, :minutes}
     @type default_heartbeat_throttle_interval :: required :: nested!(Duration.duration())
 
     @doc """
@@ -120,7 +120,7 @@ defmodule TemporalEngine.Config do
     @type graceful_shutdown_period :: nested!(Duration.duration())
 
     @doc "The amount of time core will wait before timing out activities using its own local timers after one of them elapses. This is to avoid racing with server’s own tracking of the timeout."
-    @default [seconds: 5, nanos: 0]
+    @default {5, :seconds}
     @type local_timeout_buffer_for_activities :: required :: nested!(Duration.duration())
 
     @doc "Any error types listed here will cause any workflow being processed by this worker to fail, rather than simply failing the workflow task."

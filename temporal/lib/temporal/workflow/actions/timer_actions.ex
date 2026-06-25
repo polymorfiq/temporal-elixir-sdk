@@ -10,14 +10,13 @@ defmodule Temporal.Workflow.TimerActions do
   Record.defrecord(:timer_handle, [:seq, :execution])
   @type timer_handle :: record(:timer_handle, seq: pos_integer(), execution: pid())
 
-  @spec new_timer(WorkflowContext.t(), Duration.shorthand()) :: {:ok, timer_handle()} | {:error, term()}
+  @spec new_timer(WorkflowContext.t(), Duration.shorthand()) ::
+          {:ok, timer_handle()} | {:error, term()}
   def new_timer(ctx, duration) do
     workflow_context(execution: exec) = ctx
 
-    duration = Duration.from_tuple(duration)
-
-    with {:ok, cmd} <-
-           WorkflowExecution.queue_command(exec, start_timer(start_to_fire_timeout: duration)) do
+    with {:ok, timer_cmd} <- start_timer_from_opts(start_to_fire_timeout: duration),
+         {:ok, cmd} <- WorkflowExecution.queue_command(exec, timer_cmd) do
       {:ok, timer_handle(seq: start_timer(cmd, :seq), execution: exec)}
     end
   end

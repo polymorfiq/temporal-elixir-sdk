@@ -140,12 +140,7 @@ defmodule Temporal.Activity.ActivityExecution do
 
   def handle_cast({:activity_completed, resp}, state) do
     with {:ok, result} <- resp do
-      status =
-        activity_execution_result(
-          status: activity_completed(result: Payload.record_from_value(result))
-        )
-
-      {:noreply, [status], state}
+      {:noreply, [activity_execution_result_from_opts!(status: [result: result])], state}
     else
       {:error, err} ->
         failure =
@@ -156,7 +151,7 @@ defmodule Temporal.Activity.ActivityExecution do
             failure_info:
               Failure.application(
                 failure_type: "ReturnedError",
-                details: Payload.record_from_value(err)
+                details: [Payload.record_from_value(err)]
               )
           )
 

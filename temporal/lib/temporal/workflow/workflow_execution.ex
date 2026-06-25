@@ -317,7 +317,9 @@ defmodule Temporal.Workflow.WorkflowExecution do
       end
 
     status =
-      success(commands: [command(variant: respond_to_query(query_id: query_id, variant: variant))])
+      success(
+        commands: [command(variant: respond_to_query(query_id: query_id, variant: variant))]
+      )
 
     {:noreply, [status], state}
   end

@@ -10,7 +10,7 @@ defmodule TemporalEngine.Opts.ClientOpts do
     @type id :: required :: String.t()
 
     @doc "Optional worker heartbeat interval - This configures the heartbeat setting of all workers created using this runtime."
-    @default [seconds: 30]
+    @default {30, :seconds}
     @type heartbeat_interval :: nested!(Duration.duration())
   end
 
@@ -57,11 +57,11 @@ defmodule TemporalEngine.Opts.ClientOpts do
 
     @doc "Retry configuration for the server client. Default is RetryOptions::default"
     @default [
-      initial_interval: [seconds: 0, nanos: 100_000_000],
+      initial_interval: {100, :milliseconds},
       randomization_factor: 0.2,
       multiplier: 1.7,
-      max_interval: [seconds: 5, nanos: 0],
-      max_elapsed_time: [seconds: 10, nanos: 0],
+      max_interval: {5, :seconds},
+      max_elapsed_time: {10, :seconds},
       max_retries: 10
     ]
 
@@ -69,8 +69,8 @@ defmodule TemporalEngine.Opts.ClientOpts do
 
     @doc "If set, HTTP2 gRPC keep alive will be enabled."
     @default [
-      interval: [seconds: 30, nanos: 0],
-      timeout: [seconds: 15, nanos: 0]
+      interval: {30, :seconds},
+      timeout: {15, :seconds}
     ]
     @type keep_alive :: nested!(ClientOpts.keep_alive_opts())
 
@@ -102,7 +102,7 @@ defmodule TemporalEngine.Opts.ClientOpts do
 
     Incompatible with `:service_override` and `:http_connect_proxy`. Setting either in addition to this field is an error. Set to `nil` to disable.
     """
-    @default [resolution_interval: [seconds: 30, nanos: 0]]
+    @default [resolution_interval: {30, :seconds}]
     @type dns_load_balancing :: nested!(ClientOpts.dns_lb_opts())
 
     @doc "If set true, error code labels will not be included on request failure metrics."

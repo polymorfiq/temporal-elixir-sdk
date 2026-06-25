@@ -307,7 +307,10 @@ defmodule TemporalEngine.Data.Jobs do
   deftype :child_workflow_result do
     @structdoc "Used by core to resolve child workflow executions."
 
-    @type status :: {:completed, nested!(Payload.payload)} | {:failed, nested!(Failure.failure)} | {:cancelled, nested!(Failure.failure)}
+    @type status ::
+            {:completed, nested!(Payload.payload())}
+            | {:failed, nested!(Failure.failure())}
+            | {:cancelled, nested!(Failure.failure())}
   end
 
   deftype :resolve_signal_external_workflow do

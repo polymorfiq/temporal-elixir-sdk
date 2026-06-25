@@ -31,7 +31,7 @@ defmodule TemporalSamples.Workflows.ErlangTermFormat do
         ctx,
         &greet/2,
         [etf({:given_name, name})],
-        start_to_close_timeout: [seconds: 1]
+        start_to_close_timeout: {1, :seconds}
       )
 
     fname = Keyword.fetch!(kw_list_input, :first_name)
@@ -42,7 +42,7 @@ defmodule TemporalSamples.Workflows.ErlangTermFormat do
         ctx,
         &greet/2,
         [etf({:first_last_name, fname, lname})],
-        start_to_close_timeout: [seconds: 1]
+        start_to_close_timeout: {1, :seconds}
       )
 
     # Get result of activity (blocks until activity finished).

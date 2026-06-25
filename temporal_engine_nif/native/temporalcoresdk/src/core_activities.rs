@@ -254,8 +254,8 @@ impl Into<activity_task::ActivityCancellationDetails> for SdkActivityCancellatio
 #[derive(Debug, NifRecord, Clone)]
 #[tag = "task_completion"]
 pub struct SdkActivityTaskCompletion {
-    task_token: Vec<u8>,
     result: Option<SdkActivityExecutionResult>,
+    task_token: Vec<u8>,
 }
 
 impl From<temporalio_sdk_common::protos::coresdk::ActivityTaskCompletion>
