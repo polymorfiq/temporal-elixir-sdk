@@ -61,9 +61,43 @@ defmodule Temporal.Worker do
   @opaque t() :: record(:worker, id: String.t(), pid: pid() | nil)
   @type extra_opt :: {:workflows, [WorkflowName.t()]} | {:activities, [ActivityName.t()]}
 
+  def child_spec(client, opts, server_opts \\ []) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [client, opts, server_opts]},
+      restart: :transient,
+      shutdown: 5000,
+      type: :worker
+    }
+  end
+
   @spec new(Client.t(), [Config.worker_config_opt() | extra_opt()]) ::
           {:ok, t()} | {:error, term()}
   def new(client, opts \\ []) do
+    identity = opts[:client_identity_override] || TemporalEngine.Client.id(client)
+
+    with {:ok, config} <- worker_config_from_opts(opts),
+         id <- "#{identity}_#{worker_config(config, :namespace)}" do
+      server_opts = [name: {:via, Registry, {Temporal.TemporalRegistry, {:worker, id}}}]
+
+      worker_started =
+        DynamicSupervisor.start_child(Temporal.Workers, %{
+          id: :worker,
+          start: {__MODULE__, :start_link, [client, opts, server_opts]},
+          restart: :transient
+        })
+
+      with {:ok, pid} <- worker_started do
+        {:ok, worker(id: id, pid: pid)}
+      else
+        {:error, {:already_started, pid}} ->
+          {:ok, worker(id: id, pid: pid)}
+      end
+    end
+  end
+
+  @doc false
+  def start_link(client, opts \\ [], server_opts \\ []) do
     {extra_opts, opts} = Keyword.split(opts, [:workflows, :activities])
     workflows = Keyword.get(extra_opts, :workflows, [])
     activities = Keyword.get(extra_opts, :activities, [])
@@ -74,21 +108,8 @@ defmodule Temporal.Worker do
          :ok <- register_workflows(worker(id: id), workflows),
          :ok <- register_activities(worker(id: id), activities) do
       config = worker_config(config, id: id)
-      name = {:via, Registry, {Temporal.TemporalRegistry, {:worker, id}}}
 
-      worker_started =
-        DynamicSupervisor.start_child(Temporal.Workers, %{
-          id: :worker,
-          start: {__MODULE__, :start_link, [{name, client, config}]},
-          restart: :transient
-        })
-
-      with {:ok, pid} <- worker_started do
-        {:ok, worker(id: id, pid: pid)}
-      else
-        {:error, {:already_started, pid}} ->
-          {:ok, worker(id: id, pid: pid)}
-      end
+      GenStage.start_link(__MODULE__, {client, config}, server_opts)
     end
   end
 
@@ -159,10 +180,6 @@ defmodule Temporal.Worker do
       :ok
     end
   end
-
-  @doc false
-  def start_link({name, client, config}),
-    do: GenStage.start_link(__MODULE__, {client, config}, name: name)
 
   @doc false
   @spec init({Client.t(), Config.worker_config()}) :: {:consumer, worker_state(), keyword()}

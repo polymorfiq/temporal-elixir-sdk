@@ -25,7 +25,7 @@ Elixir 1.19.4 (compiled with Erlang/OTP 28)
 
 ## Install the Temporal Elixir SDK
 
-If you are creating a new project using the Temporal Elixir SDK, you can start by creating a new directory via `mix new temporal_getting_started`.
+If you are creating a new project using the Temporal Elixir SDK, you can start by creating a new directory via `mix new --sup temporal_getting_started`.
 
 Next, switch to the new directory (`cd temporal_getting_started`).
 
@@ -33,9 +33,9 @@ Add the following to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "893551c"},
-      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "893551c", override: true},
-      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "893551c"},
+      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "3aa3f0c"},
+      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "3aa3f0c", override: true},
+      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "3aa3f0c"},
       ...
   ]
 end
@@ -104,6 +104,8 @@ Create an Activity file (`lib/temporal_getting_started/greeting.ex`):
 
 ```elixir
 defmodule TemporalGettingStarted.Greeting do
+  @moduledoc "Activities for producing greetings"
+  
   @spec greet(name :: String.t()) :: {:ok, String.t()} | {:error, term()}
   def greet(name) do
     {:ok, "Hello #{name}"}
@@ -124,35 +126,17 @@ defmodule TemporalGettingStarted.Workflow do
   use Temporal.Workflow
   
   alias Temporal.{Workflow, WorkflowContext}
+  alias TemporalGettingStarted.Greeting
   
-  @spec say_hello_workflow()
+  @spec say_hello_workflow(WorkflowContext.t(), name :: String.t()) :: {:ok, String.t()} | {:error, term()}
   def say_hello_workflow(ctx, name) do
+    ctx = Workflow.with_activity_opts(ctx, start_to_close_timeout: {10, :seconds})
+    
+    with  {:ok, activity} <- Workflow.execute_activity(ctx, &Greeting.greet/1, [name]) do
+      Workflow.get(ctx, activity)
+    end
   end
 end
-
-package greeting
-
-import (
-	"time"
-
-	"go.temporal.io/sdk/workflow"
-)
-
-func SayHelloWorkflow(ctx workflow.Context, name string) (string, error) {
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: time.Second * 10,
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
-
-	var result string
-	err := workflow.ExecuteActivity(ctx, Greet, name).Get(ctx, &result)
-	if err != nil {
-		return "", err
-	}
-
-	return result, nil
-}
-
 ```
 
 ### 3. Create and Run the Worker
@@ -163,9 +147,9 @@ it then executes that task.
 
 Workers are a crucial part of your Temporal application as they're what actually execute the tasks defined in your
 Workflows and Activities. For more information on Workers, see
-[Understanding Temporal](/evaluate/understanding-temporal#workers) and a [deep dive into Workers](/workers).
+[Understanding Temporal](https://docs.temporal.io/evaluate/understanding-temporal#workers) and a [deep dive into Workers](https://docs.temporal.io/workers).
 
-Create a Worker file (worker/main.go):
+Register a Worker (`lib/temporal_getting_started/application.ex`):
 
 ```go
 package main

@@ -12,8 +12,8 @@ defmodule TestWorkflows.ActivitiesWithAwait do
     {:ok, act2} =
       execute_activity(ctx, "activity_b", ["#{msg}2"], start_to_close_timeout: {1, :seconds})
 
-    get(act1)
-    get(act2)
+    get(ctx, act1)
+    get(ctx, act2)
   end
 
   def greet_activity(_ctx, msg) do

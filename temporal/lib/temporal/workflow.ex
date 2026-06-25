@@ -2,6 +2,7 @@ defmodule Temporal.Workflow do
   require Temporal.Workflow.ActivityActions
   require Temporal.Workflow.TimerActions
   require Temporal.WorkflowContext
+  require TemporalEngine.Data.Commands
   require TemporalEngine.Data.Failure
 
   alias Temporal.Workflow.ActivityActions
@@ -9,6 +10,7 @@ defmodule Temporal.Workflow do
   alias Temporal.WorkflowContext
   alias Temporal.Workflow.WorkflowExecution
   alias TemporalEngine.WorkflowHandle
+  alias TemporalEngine.Data.Commands
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Payload
 
@@ -17,13 +19,14 @@ defmodule Temporal.Workflow do
   defdelegate new_timer(ctx, duration), to: TimerActions
   defdelegate sleep(ctx, duration), to: TimerActions
 
-  @spec get(ActivityActions.activity_handle() | TimerActions.timer_handle()) ::
-          {:ok, term()} | {:error, term()}
-  def get(ActivityActions.activity_handle() = handle),
-    do: ActivityActions.get(handle)
-
-  def get(TimerActions.timer_handle() = handle),
-    do: TimerActions.get(handle)
+  @spec with_activity_opts(
+          WorkflowContext.t(),
+          activity_opts :: Commands.schedule_activity_opts()
+        ) :: WorkflowContext.t()
+  def with_activity_opts(ctx, opts) do
+    existing_opts = WorkflowContext.workflow_context(ctx, :activity_options)
+    WorkflowContext.workflow_context(ctx, activity_options: existing_opts ++ opts)
+  end
 
   @spec get(WorkflowContext.t(), ActivityActions.activity_handle() | TimerActions.timer_handle()) ::
           {:ok, term()} | {:error, term()}

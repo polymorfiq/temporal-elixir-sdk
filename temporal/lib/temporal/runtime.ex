@@ -10,14 +10,18 @@ defmodule Temporal.Runtime do
   @opaque t() :: TemporalEngine.Runtime.t()
 
   @doc "Provides the default, global runtime for Temporal Clients"
-  @spec global :: TemporalEngine.Runtime.t()
-  def global do
+  @spec global(opts :: [{:engine, module()}]) :: TemporalEngine.Runtime.t()
+  def global(opts \\ []) do
     case :ets.lookup(Temporal.Storage.global_store(), :global_runtime) do
       [{_, runtime}] ->
         runtime
 
       _ ->
-        engine = Application.fetch_env!(:temporal, :engine)
+        engine =
+          Keyword.get_lazy(opts, :engine, fn ->
+            Application.fetch_env!(:temporal, :engine)
+          end)
+
         {:ok, runtime} = engine.create_runtime(id: "_temporal_global")
         :ets.insert(Temporal.Storage.global_store(), {:global_runtime, runtime})
         runtime
@@ -33,7 +37,11 @@ defmodule Temporal.Runtime do
         {:ok, runtime}
 
       _ ->
-        engine = Keyword.get(opts, :engine, Application.fetch_env!(:temporal, :engine))
+        engine =
+          Keyword.get_lazy(opts, :engine, fn ->
+            Application.fetch_env!(:temporal, :engine)
+          end)
+
         {:ok, runtime} = engine.create_runtime(id: id)
         :ets.insert(Temporal.Storage.global_store(), {{:runtime, id}, runtime})
         {:ok, runtime}

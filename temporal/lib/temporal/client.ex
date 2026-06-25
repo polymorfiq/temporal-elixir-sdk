@@ -33,11 +33,13 @@ defmodule Temporal.Client do
   def new(target, opts \\ []) do
     opts = opts ++ [target: target]
     opts = ensure_identity(opts)
-    {runtime_opts, opts} = Keyword.split(opts, [:runtime])
+
+    {extra_opts, opts} = Keyword.split(opts, [:runtime])
+    {runtime_opts, opts} = Keyword.split(opts, [:engine])
 
     runtime =
-      Keyword.get_lazy(runtime_opts, :runtime, fn ->
-        Runtime.global()
+      Keyword.get_lazy(extra_opts, :runtime, fn ->
+        Runtime.global(runtime_opts)
       end)
 
     with {:ok, validated} <- ClientOpts.connection_opts_from_opts(opts) do

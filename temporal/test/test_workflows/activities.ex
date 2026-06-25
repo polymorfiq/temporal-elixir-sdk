@@ -4,7 +4,7 @@ defmodule TestWorkflows.Activities do
   def workflow_with_long_activity(ctx) do
     with {:ok, act} <-
            execute_activity(ctx, &really_long/1, [], start_to_close_timeout: {5, :minutes}) do
-      get(act)
+      get(ctx, act)
     end
   end
 
