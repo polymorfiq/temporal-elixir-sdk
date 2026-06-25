@@ -1,7 +1,7 @@
 defmodule TemporalSamples.Workflows.TimersTest do
   use ExUnit.Case, async: true
 
-  alias Temporal.{Workflow, Worker}
+  alias Temporal.{WorkflowExecution, Worker}
 
   # Defined in test/test_helpers.exs
   setup_all [
@@ -25,7 +25,7 @@ defmodule TemporalSamples.Workflows.TimersTest do
         task_queue: ctx.task_queue
       )
 
-    {:ok, waited_5k_ms} = Workflow.result(handle_5k)
+    {:ok, waited_5k_ms} = WorkflowExecution.get(handle_5k)
 
     assert_in_delta waited_5k_ms,
                     5000,
@@ -44,7 +44,7 @@ defmodule TemporalSamples.Workflows.TimersTest do
         task_queue: ctx.task_queue
       )
 
-    {:ok, waited_250_ms} = Workflow.result(handle_250)
+    {:ok, waited_250_ms} = WorkflowExecution.get(handle_250)
 
     assert_in_delta waited_250_ms,
                     250,

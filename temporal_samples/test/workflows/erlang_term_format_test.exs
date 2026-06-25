@@ -1,7 +1,7 @@
 defmodule TemporalSamples.Workflows.ErlangTermFormatTest do
   use ExUnit.Case
 
-  alias Temporal.{Workflow, Worker}
+  alias Temporal.{WorkflowExecution, Worker}
 
   # Defined in test/test_helpers.exs
   setup_all [
@@ -25,7 +25,7 @@ defmodule TemporalSamples.Workflows.ErlangTermFormatTest do
         task_queue: ctx.task_queue
       )
 
-    {:ok, ["Hello, World!", "Hello, Bob Smith!"]} = Workflow.result(handle)
+    {:ok, ["Hello, World!", "Hello, Bob Smith!"]} = WorkflowExecution.get(handle)
   end
 
   defp configure_task_queue(_), do: %{task_queue: "#{__MODULE__}"}

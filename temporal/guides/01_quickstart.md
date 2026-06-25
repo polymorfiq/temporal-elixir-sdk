@@ -192,46 +192,31 @@ mix run --no-halt
 
 Now that your Worker is running, it's time to start a Workflow Execution.
 
-Create a separate file called start/main.go:
+Create a separate file called (`lib/mix/tasks/start/greeting.exs`):
 
-```go
-package main
+```elixir
+defmodule Mix.Tasks.Start.Greeting do
+  use Mix.Task
 
-import (
-	"context"
-	"log"
-	"os"
+  alias TemporalGettingStarted.Greeting
 
-	greeting "my-org/greeting"
+  @shortdoc "Runs Temporal's Getting Started workflow"
+  @moduledoc """
+  Tells Temporal Server to run the Getting Started workflow we created.
 
-	"go.temporal.io/sdk/client"
-)
+  Temporal Server looks for running workers that can execute the workflow and relevant tasks, to durably complete the request.
+  """
 
-func main() {
-	c, err := client.Dial(client.Options{})
-	if err != nil {
-		log.Fatalln("Unable to create client", err)
-	}
-	defer c.Close()
+  @impl Mix.Task
+  def run(args) do
+    client = Client.new!("localhost:7233", engine: TemporalEngineNif.Engine)
 
-	options := client.StartWorkflowOptions{
-		ID:        "greeting-workflow",
-		TaskQueue: "my-task-queue",
-	}
-
-	we, err := c.ExecuteWorkflow(context.Background(), options, greeting.SayHelloWorkflow, os.Args[1])
-	if err != nil {
-		log.Fatalln("Unable to execute workflow", err)
-	}
-	log.Println("Started workflow", "WorkflowID", we.GetID(), "RunID", we.GetRunID())
-
-	var result string
-	err = we.Get(context.Background(), &result)
-	if err != nil {
-		log.Fatalln("Unable get workflow result", err)
-	}
-	log.Println("Workflow result:", result)
-}
+    {:ok, _wf_handle} = Client.execute_workflow(client, Greeting.SayHelloWorkflow, ["World"], [
+      id: "greeting-workflow",
+      task_queue: "my-task-queue"
+    ])
+  end
+end
 ```
 
 Then run:

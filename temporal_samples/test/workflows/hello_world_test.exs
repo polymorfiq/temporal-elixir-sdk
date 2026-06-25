@@ -1,7 +1,7 @@
 defmodule TemporalSamples.Workflows.HelloWorldTest do
   use ExUnit.Case
 
-  alias Temporal.{Workflow, Worker}
+  alias Temporal.{WorkflowExecution, Worker}
 
   # Defined in test/test_helpers.exs
   setup_all [
@@ -25,7 +25,7 @@ defmodule TemporalSamples.Workflows.HelloWorldTest do
         task_queue: ctx.task_queue
       )
 
-    {:ok, "Hello, World!"} = Workflow.result(handle)
+    {:ok, "Hello, World!"} = WorkflowExecution.get(handle)
   end
 
   defp configure_task_queue(_), do: %{task_queue: "#{__MODULE__}"}
