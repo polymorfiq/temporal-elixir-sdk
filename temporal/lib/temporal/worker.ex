@@ -61,7 +61,11 @@ defmodule Temporal.Worker do
   @opaque t() :: record(:worker, id: String.t(), pid: pid() | nil)
   @type extra_opt :: {:workflows, [WorkflowName.t()]} | {:activities, [ActivityName.t()]}
 
-  def child_spec(client, opts, server_opts \\ []) do
+  def child_spec(opts) do
+    client = Keyword.fetch!(opts, :client)
+    server_opts = Keyword.get(opts, :server_opts)
+    {_, opts} = Keyword.split(opts, [:client, :server_opts])
+
     %{
       id: __MODULE__,
       start: {__MODULE__, :start_link, [client, opts, server_opts]},
