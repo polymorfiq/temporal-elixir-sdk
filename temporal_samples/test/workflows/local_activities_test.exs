@@ -20,8 +20,8 @@ defmodule TemporalSamples.Workflows.LocalActivitiesTest do
         ctx.client,
         TemporalSamples.Workflows.LocalActivities,
         ["World"],
+        id: "local-activities-1",
         id_reuse_policy: :terminate_if_running,
-        workflow_id: "local-activities-1",
         task_queue: ctx.task_queue
       )
 

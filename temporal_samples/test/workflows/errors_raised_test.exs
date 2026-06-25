@@ -30,7 +30,7 @@ defmodule TemporalSamples.Workflows.ErrorsRaisedTest do
         [],
         id_reuse_policy: :terminate_if_running,
         retry_policy: [maximum_attempts: 1],
-        workflow_id: "errors-raised-exception",
+        id: "errors-raised-exception",
         task_queue: ctx.task_queue
       )
 
@@ -46,7 +46,7 @@ defmodule TemporalSamples.Workflows.ErrorsRaisedTest do
         [],
         id_reuse_policy: :terminate_if_running,
         retry_policy: [maximum_attempts: 1],
-        workflow_id: "errors-returned",
+        id: "errors-returned",
         task_queue: ctx.task_queue
       )
 
@@ -62,7 +62,7 @@ defmodule TemporalSamples.Workflows.ErrorsRaisedTest do
         [],
         id_reuse_policy: :terminate_if_running,
         retry_policy: [maximum_attempts: 1],
-        workflow_id: "errors-returned-with-info",
+        id: "errors-returned-with-info",
         task_queue: ctx.task_queue
       )
 

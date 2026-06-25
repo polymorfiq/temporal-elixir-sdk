@@ -132,7 +132,7 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
                   client: client,
                   core: workflow_handle,
                   workflow_name: workflow_definition(definition, :name),
-                  workflow_id: workflow_start_opts(opts, :workflow_id),
+                  workflow_id: workflow_start_opts(opts, :id),
                   task_queue: workflow_start_opts(opts, :task_queue)
                 }}}
             )

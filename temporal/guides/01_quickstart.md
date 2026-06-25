@@ -33,9 +33,9 @@ Add the following to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "3aa3f0c"},
-      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "3aa3f0c", override: true},
-      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "3aa3f0c"},
+      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "7ebcb29"},
+      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "7ebcb29", override: true},
+      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "7ebcb29"},
       ...
   ]
 end
@@ -119,17 +119,17 @@ Workflows orchestrate Activities and contain the application logic. Temporal Wor
 keep running—for years, even if the underlying infrastructure fails. If the application itself crashes, Temporal will
 automatically recreate its pre-failure state so it can continue right where it left off.
 
-Create a Workflow file (`lib/temporal_getting_started/workflow.ex`):
+Create a Workflow file (`lib/temporal_getting_started/greeting/say_hello_workflow.ex`):
 
 ```elixir
-defmodule TemporalGettingStarted.Workflow do
+defmodule TemporalGettingStarted.Greeting.SayHelloWorkflow do
   use Temporal.Workflow
   
   alias Temporal.{Workflow, WorkflowContext}
   alias TemporalGettingStarted.Greeting
   
-  @spec say_hello_workflow(WorkflowContext.t(), name :: String.t()) :: {:ok, String.t()} | {:error, term()}
-  def say_hello_workflow(ctx, name) do
+  @spec execute(WorkflowContext.t(), name :: String.t()) :: {:ok, String.t()} | {:error, term()}
+  def execute(ctx, name) do
     ctx = Workflow.with_activity_opts(ctx, start_to_close_timeout: {10, :seconds})
     
     with  {:ok, activity} <- Workflow.execute_activity(ctx, &Greeting.greet/1, [name]) do
@@ -149,43 +149,43 @@ Workers are a crucial part of your Temporal application as they're what actually
 Workflows and Activities. For more information on Workers, see
 [Understanding Temporal](https://docs.temporal.io/evaluate/understanding-temporal#workers) and a [deep dive into Workers](https://docs.temporal.io/workers).
 
-Register a Worker (`lib/temporal_getting_started/application.ex`):
+Register a Worker in your supervision tree (`lib/temporal_getting_started/application.ex`):
 
-```go
-package main
+```elixir
+defmodule TemporalGettingStarted.Application do
+  @moduledoc false
 
-import (
-	"log"
+  use Application
 
-	"my-org/greeting"
+  alias Temporal.Client
+  alias TemporalGettingStarted.{Greeting, Workflow}
 
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/worker"
-)
+  @impl true
+  def start(_type, _args) do
+    client = Client.new!("localhost:7233", engine: TemporalEngineNif.Engine)
 
-func main() {
-	c, err := client.Dial(client.Options{})
-	if err != nil {
-		log.Fatalln("Unable to create client", err)
-	}
-	defer c.Close()
+    children = [
+       {Temporal.Worker, [
+         client: client,
+         workflows: [Workflow],
+         activities: [&Greeting.greet/1],
+         task_queue: "my-task-queue",
+         server_opts: [name: TemporalGettingStarted.MyWorker]
+       ]}
+    ]
 
-	w := worker.New(c, "my-task-queue", worker.Options{})
-
-	w.RegisterWorkflow(greeting.SayHelloWorkflow)
-	w.RegisterActivity(greeting.Greet)
-
-	err = w.Run(worker.InterruptCh())
-	if err != nil {
-		log.Fatalln("Unable to start worker", err)
-	}
-}
+    # See https://hexdocs.pm/elixir/Supervisor.html
+    # for other strategies and supported options
+    opts = [strategy: :one_for_one, name: TemporalGettingStarted.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+end
 ```
 
 Run the Worker:
 
 ```bash
-go run worker/main.go
+mix run --no-halt
 ```
 
 ### 4. Execute the Workflow

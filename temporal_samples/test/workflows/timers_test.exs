@@ -20,8 +20,8 @@ defmodule TemporalSamples.Workflows.TimersTest do
         ctx.client,
         TemporalSamples.Workflows.Timers,
         [{5, :seconds}],
+        id: "timers-1-5s",
         id_reuse_policy: :terminate_if_running,
-        workflow_id: "timers-1-5s",
         task_queue: ctx.task_queue
       )
 
@@ -39,8 +39,8 @@ defmodule TemporalSamples.Workflows.TimersTest do
         ctx.client,
         TemporalSamples.Workflows.Timers,
         [{250, :milliseconds}],
+        id: "timers-1-250ms",
         id_reuse_policy: :terminate_if_running,
-        workflow_id: "timers-1-250ms",
         task_queue: ctx.task_queue
       )
 

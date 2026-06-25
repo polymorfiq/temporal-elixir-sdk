@@ -20,8 +20,8 @@ defmodule TemporalSamples.Workflows.HelloWorldTest do
         ctx.client,
         TemporalSamples.Workflows.HelloWorld,
         ["World"],
+        id: "hello-world-1",
         id_reuse_policy: :terminate_if_running,
-        workflow_id: "hello-world-1",
         task_queue: ctx.task_queue
       )
 

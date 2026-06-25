@@ -15,7 +15,7 @@ defmodule Temporal.Queries.BasicTest do
         ctx.client,
         TestWorkflows.Queries,
         [],
-        workflow_id: "set-query-handler",
+        id: "set-query-handler",
         id_conflict_policy: :terminate_existing,
         task_queue: ctx.task_queue
       )

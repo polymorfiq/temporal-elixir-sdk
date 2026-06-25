@@ -18,7 +18,7 @@ defmodule TemporalEngine.Opts.WorkflowOpts do
     @type task_queue :: required :: String.t()
 
     @doc "The workflow ID."
-    @type workflow_id :: required :: String.t()
+    @type id :: required :: String.t()
 
     @doc """
     Defines whether to allow re-using a workflow id from a previously closed workflow. If the request is denied, the server returns a WorkflowExecutionAlreadyStartedFailure error.

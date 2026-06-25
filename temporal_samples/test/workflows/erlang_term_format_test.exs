@@ -20,8 +20,8 @@ defmodule TemporalSamples.Workflows.ErlangTermFormatTest do
         ctx.client,
         TemporalSamples.Workflows.ErlangTermFormat,
         [[name: "World", first_name: "Bob", last_name: "Smith"]],
+        id: "erlang-term-format-3",
         id_reuse_policy: :terminate_if_running,
-        workflow_id: "erlang-term-format-3",
         task_queue: ctx.task_queue
       )
 
