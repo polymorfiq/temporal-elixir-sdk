@@ -16,6 +16,8 @@ defmodule Temporal.Workflow.ActivityActions do
         ]) ::
           {:ok, activity_handle()} | {:error, term()}
   def execute_activity(ctx, name, inputs, opts \\ []) do
+    opts = WorkflowContext.workflow_context(ctx, :activity_options) ++ opts
+
     if !opts[:schedule_to_close_timeout] && !opts[:start_to_close_timeout] do
       {:current_stacktrace, full_stack} = Process.info(self(), :current_stacktrace)
       caller_stack = Enum.drop(full_stack, 2)

@@ -33,9 +33,9 @@ Add the following to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "7ebcb29"},
-      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "7ebcb29", override: true},
-      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "7ebcb29"},
+      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "db6504e"},
+      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "db6504e", override: true},
+      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "db6504e"},
       ...
   ]
 end
@@ -165,6 +165,7 @@ defmodule TemporalGettingStarted.Application do
     client = Client.new!("localhost:7233", engine: TemporalEngineNif.Engine)
 
     children = [
+       Temporal,
        {Temporal.Worker, [
          client: client,
          workflows: [Workflow],
@@ -211,7 +212,7 @@ defmodule Mix.Tasks.Start.Greeting do
   def run(args) do
     client = Client.new!("localhost:7233", engine: TemporalEngineNif.Engine)
 
-    {:ok, _wf_handle} = Client.execute_workflow(client, Greeting.SayHelloWorkflow, ["World"], [
+    {:ok, we} = Client.execute_workflow(client, Greeting.SayHelloWorkflow, ["World"], [
       id: "greeting-workflow",
       task_queue: "my-task-queue"
     ])
