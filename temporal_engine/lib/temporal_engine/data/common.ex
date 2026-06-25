@@ -2,6 +2,7 @@ defmodule TemporalEngine.Data.Common do
   use TemporalEngine.Data.TypeSpec
 
   alias TemporalEngine.Data.Common
+  alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
 
   @type versioning_behavior :: :unspecified | :pinned | :auto_upgrade

@@ -2539,7 +2539,7 @@ impl Into<UserMetadata> for SdkUserMetadata {
 pub enum SdkWorkflowCommandVariant {
     StartTimer(SdkWorkflowCommandStartTimer),
     ScheduleActivity(SdkWorkflowCommandScheduleActivity),
-    RespondToQuery(SdkWorkflowCommandQueryResult),
+    RespondToQuery(SdkWorkflowCommandRespondToQuery),
     RequestCancelActivity(SdkWorkflowCommandRequestCancelActivity),
     CancelTimer(SdkWorkflowCommandCancelTimer),
     CompleteWorkflowExecution(SdkWorkflowCommandCompleteWorkflowExecution),
@@ -2791,13 +2791,13 @@ impl Into<workflow_commands::ScheduleActivity> for SdkWorkflowCommandScheduleAct
 }
 
 #[derive(Debug, NifRecord, Clone)]
-#[tag = "query_result"]
-pub struct SdkWorkflowCommandQueryResult {
+#[tag = "respond_to_query"]
+pub struct SdkWorkflowCommandRespondToQuery {
     pub query_id: String,
     pub variant: Option<SdkWorkflowCommandQueryResultVariant>,
 }
 
-impl From<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult {
+impl From<workflow_commands::QueryResult> for SdkWorkflowCommandRespondToQuery {
     fn from(external: workflow_commands::QueryResult) -> Self {
         Self {
             query_id: external.query_id,
@@ -2806,7 +2806,7 @@ impl From<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult {
     }
 }
 
-impl Into<workflow_commands::QueryResult> for SdkWorkflowCommandQueryResult {
+impl Into<workflow_commands::QueryResult> for SdkWorkflowCommandRespondToQuery {
     fn into(self) -> workflow_commands::QueryResult {
         workflow_commands::QueryResult {
             query_id: self.query_id,

@@ -1,8 +1,9 @@
 defprotocol TemporalEngine.Client do
   alias TemporalEngine.Config
-  alias TemporalEngine.Worker
-
+  alias TemporalEngine.Data.Payload
   alias TemporalEngine.Opts.WorkflowOpts
+  alias TemporalEngine.Worker
+  alias TemporalEngine.WorkflowHandle
 
   @spec create_worker(t(), Config.worker_config()) ::
           {:ok, Worker.t()} | {:error, reason :: term()}
@@ -12,7 +13,7 @@ defprotocol TemporalEngine.Client do
           t(),
           WorkflowOpts.workflow_definition(),
           inputs :: [Payload.payload()],
-          WorkflowOpts.worfklow_start_opts()
+          WorkflowOpts.workflow_start_opts()
         ) :: {:ok, WorkflowHandle.t()} | {:error, reason :: term()}
   def start_workflow(client, definition, args, opts)
 

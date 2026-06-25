@@ -11,17 +11,23 @@ defmodule TemporalEngine.Data.Jobs do
   alias TemporalEngine.Data.Timestamp
   alias TemporalEngine.Data.Jobs
 
-  @type job_variant ::
-          Jobs.initialize_workflow()
-          | Jobs.fire_timer()
-          | Jobs.resolve_activity()
-          | Jobs.remove_from_cache()
-
   deftype :job do
     @type variant ::
             nested!(Jobs.initialize_workflow())
             | nested!(Jobs.fire_timer())
+            | nested!(Jobs.update_random_seed())
+            | nested!(Jobs.query_workflow())
+            | nested!(Jobs.cancel_workflow())
+            | nested!(Jobs.signal_workflow())
             | nested!(Jobs.resolve_activity())
+            | nested!(Jobs.notify_has_patch())
+            | nested!(Jobs.resolve_child_workflow_execution_start())
+            | nested!(Jobs.resolve_child_workflow_execution())
+            | nested!(Jobs.resolve_signal_external_workflow())
+            | nested!(Jobs.resolve_request_cancel_external_workflow())
+            | nested!(Jobs.do_update())
+            | nested!(Jobs.resolve_nexus_operation_start())
+            | nested!(Jobs.resolve_nexus_operation())
             | nested!(Jobs.remove_from_cache())
   end
 
@@ -124,8 +130,18 @@ defmodule TemporalEngine.Data.Jobs do
     @type seq :: required :: pos_integer()
   end
 
+  deftype :update_random_seed do
+    @structdoc "Workflow was reset. The randomness seed must be updated."
+
+    @type randomness_seed :: required :: non_neg_integer()
+  end
+
   deftype :query_workflow do
-    @structdoc "Query a workflow"
+    @structdoc """
+    A request to query the workflow was received.
+
+    It is guaranteed that queries (one or more) always come in their own activation after other mutating jobs.
+    """
 
     @doc """
     For `PollWFTResp` query field, this will be set to the special value legacy. For the queries field, the server provides a unique identifier.
@@ -145,8 +161,27 @@ defmodule TemporalEngine.Data.Jobs do
     @type headers :: required :: %{String.t() => nested!(Payload.payload())}
   end
 
+  deftype :cancel_workflow do
+    @structdoc "A request to cancel the workflow was received."
+
+    @type reason :: required :: String.t()
+  end
+
+  deftype :signal_workflow do
+    @structdoc "A request to signal the workflow was received."
+
+    @type signal_name :: required :: String.t()
+    @type input :: required :: [nested!(Payload.payload())]
+
+    @doc "Identity of the sender of the signal"
+    @type identity :: required :: String.t()
+
+    @doc "Headers attached to the signal"
+    @type headers :: required :: %{String.t() => nested!(Payload.payload())}
+  end
+
   deftype :resolve_activity do
-    @structdoc "Notify a workflow that an activity has been resolved"
+    @structdoc "An activity was resolved, result could be completed, failed or cancelled"
 
     @doc "Sequence number as provided by lang in the corresponding ScheduleActivity command"
     @type seq :: required :: pos_integer()
@@ -168,45 +203,6 @@ defmodule TemporalEngine.Data.Jobs do
             | nested!(Jobs.activity_failed())
             | nested!(Jobs.activity_cancelled())
             | nested!(Jobs.activity_backoff())
-  end
-
-  deftype :remove_from_cache do
-    @type reason ::
-            required ::
-            :unspecified
-            | :cache_full
-            | :cache_miss
-            | :non_determinism
-            | :lang_fail
-            | :lang_requested
-            | :task_not_found
-            | :unhandled_command
-            | :fatal
-            | :pagination_or_history_fetch
-            | :workflow_execution_ending
-
-    @type message :: required :: String.t()
-  end
-
-  @type continued_as_new_initiator :: :unspecified | :workflow | :retry | :cron_schedule
-  @type continued_as_new_initiator_opts :: continued_as_new_initiator()
-
-  deftype :memo do
-    @structdoc "A user-defined set of unindexed fields that are exposed when listing/searching workflows"
-
-    @default %{}
-    @type fields :: required :: %{String.t() => nested!(Payload.payload())}
-  end
-
-  deftype :search_attribs do
-    @structdoc """
-    A user-defined set of indexed fields that are used/exposed when listing/searching workflows.
-
-    The payload is not serialized in a user-defined way.
-    """
-
-    @default %{}
-    @type indexed_fields :: required :: %{String.t() => nested!(Payload.payload())}
   end
 
   deftype :activity_completed do
@@ -253,5 +249,229 @@ defmodule TemporalEngine.Data.Jobs do
 
     @doc "The time the first attempt of this local activity was scheduled. Must be passed with attempt to the retry LA."
     @type original_schedule_time :: nested!(Timestamp.timestamp())
+  end
+
+  deftype :notify_has_patch do
+    @structdoc """
+    A patch marker has been detected and lang is being told that change exists.
+
+    This job is strange in that it is sent pre-emptively to lang without any corresponding command being sent first.
+    """
+
+    @type patch_id :: required :: String.t()
+  end
+
+  deftype :resolve_child_workflow_execution_start do
+    @structdoc "A child workflow execution has started or failed to start"
+
+    @doc "Sequence number as provided by lang in the corresponding `start_child_workflow_execution` command"
+    @type seq :: required :: pos_integer()
+
+    @type status ::
+            nested!(Jobs.child_workflow_start_succeeded())
+            | nested!(Jobs.child_workflow_start_failed())
+            | nested!(Jobs.child_workflow_start_cancelled())
+  end
+
+  deftype :child_workflow_start_succeeded do
+    @doc "Simply pass the run_id to lang"
+    @type run_id :: required :: String.t()
+  end
+
+  deftype :child_workflow_start_failed do
+    @doc "Lang should have this information but it’s more convenient to pass it back for error construction on the lang side."
+    @type workflow_id :: required :: String.t()
+
+    @type workflow_type :: required :: String.t()
+    @type cause :: required :: :unspecified | :workflow_already_exists
+  end
+
+  deftype :child_workflow_start_cancelled do
+    @structdoc """
+    `failure` should be `child_workflow_failure` with cause set to `cancelled_failure`.
+
+    The `failure` is constructed in core for lang’s convenience.
+    """
+    @type failure :: nested!(Failure.failure())
+  end
+
+  deftype :resolve_child_workflow_execution do
+    @structdoc "A child workflow was resolved, result could be completed or failed"
+
+    @doc "Sequence number as provided by lang in the corresponding `start_child_workflow_execution` command"
+    @type seq :: required :: pos_integer()
+
+    @type status :: nested!(child_workflow_result)
+  end
+
+  deftype :child_workflow_result do
+    @structdoc "Used by core to resolve child workflow executions."
+
+    @type status ::
+            nested!(Jobs.child_workflow_succeeded())
+            | nested!(Jobs.child_workflow_failed())
+            | nested!(Jobs.child_workflow_cancelled())
+  end
+
+  deftype :child_workflow_succeeded do
+    @doc "Used in `child_workflow_result` to report successful completion."
+    @type result :: required :: nested!(Payload.payload())
+  end
+
+  deftype :child_workflow_failed do
+    @doc "Used in ChildWorkflowResult to report non successful outcomes such as application failures, timeouts, terminations, and cancellations."
+    @type failure :: nested!(Failure.failure())
+  end
+
+  deftype :child_workflow_cancelled do
+    @structdoc "Used in `child_workflow_result` to report cancellation. Failure should be `child_workflow_failure` with a CanceledFailure cause."
+    @type failure :: nested!(Failure.failure())
+  end
+
+  deftype :resolve_signal_external_workflow do
+    @structdoc "An attempt to signal an external workflow resolved"
+
+    @doc "Sequence number as provided by lang in the corresponding `signal_external_workflow_execution` command"
+    @type seq :: required :: pos_integer()
+
+    @doc "If populated, this signal either failed to be sent or was cancelled depending on failure type / info."
+    @type failure :: nested!(Failure.failure())
+  end
+
+  deftype :resolve_request_cancel_external_workflow do
+    @structdoc "An attempt to cancel an external workflow resolved"
+
+    @doc "Sequence number as provided by lang in the corresponding `request_cancel_external_workflow_execution` command"
+    @type seq :: required :: pos_integer()
+
+    @doc "If populated, this signal either failed to be sent or was cancelled depending on failure type / info."
+    @type failure :: nested!(Failure.failure())
+  end
+
+  deftype :do_update do
+    @structdoc """
+    Lang is requested to invoke an update handler on the workflow.
+
+    Lang should invoke the update validator first (if requested). If it accepts the update, immediately invoke the update handler.
+
+    Lang must reply to the activation containing this job with an `update_response`.
+    """
+
+    @doc "A workflow-unique identifier for this update"
+    @type id :: required :: String.t()
+
+    @doc "The protocol message instance ID - this is used to uniquely track the ID server side and internally."
+    @type protocol_instance_id :: required :: String.t()
+
+    @doc "The name of the update handler"
+    @type name :: required :: String.t()
+
+    @doc "The input to the update"
+    @default []
+    @type input :: required :: [nested!(Payload.payload())]
+
+    @doc "Headers attached to the update"
+    @default %{}
+    @type headers :: required :: %{String.t() => nested!(Payload.payload())}
+
+    @doc "Remaining metadata associated with the update. The update_id field is stripped from here and moved to id, since it is guaranteed to be present."
+    @type meta :: nested!(Jobs.update_meta())
+
+    @doc "If set true, lang must run the update’s validator before running the handler. This will be set false during replay, since validation is not re-run during replay."
+    @type run_validator :: required :: boolean()
+  end
+
+  deftype :update_meta do
+    @structdoc "Metadata about a Workflow Update."
+
+    @doc "An ID with workflow-scoped uniqueness for this Update."
+    @type update_id :: required :: String.t()
+
+    @doc "A string identifying the agent that requested this Update."
+    @type identity :: required :: String.t()
+  end
+
+  deftype :resolve_nexus_operation_start do
+    @structdoc "A nexus operation started."
+
+    @doc "Sequence number as provided by lang in the corresponding `schedule_nexus_operation` command"
+    @type seq :: required :: pos_integer()
+
+    @type status ::
+            nested!(Jobs.nexus_operation_started_token())
+            | nested!(Jobs.nexus_operation_started_sync())
+            | nested!(Jobs.nexus_operation_start_failed())
+  end
+
+  deftype :nexus_operation_started_token do
+    @structdoc "The operation started asynchronously. Contains a token that can be used to perform operations on the started operation by, ex, clients. A `resolve_nexus_operation` job will follow at some point."
+    @type token :: required :: String.t()
+  end
+
+  deftype :nexus_operation_started_sync do
+    @structdoc "If true the operation “started” but only because it’s also already resolved. A `resolve_nexus_operation` job will be in the same activation."
+    @type started_sync :: required :: boolean()
+  end
+
+  deftype :nexus_operation_start_failed do
+    @structdoc "The operation either failed to start, was cancelled before it started, timed out, or failed synchronously. Details are included inside the message. In this case, the subsequent `resolve_nexus_operation` will never be sent."
+    @type failure :: required :: nested!(Failure.failure())
+  end
+
+  deftype :resolve_nexus_operation do
+    @structdoc "A nexus operation resolved."
+
+    @doc "Sequence number as provided by lang in the corresponding `schedule_nexus_operation` command"
+    @type seq :: required :: pos_integer()
+
+    @type result :: nested!(Jobs.nexus_operation_result())
+  end
+
+  deftype :nexus_operation_result do
+    @structdoc "Used by core to resolve nexus operations."
+
+    @type status ::
+            {:completed, nested!(Payload.payload())}
+            | {:failed, nested!(Failure.failure())}
+            | {:cancelled, nested!(Failure.failure())}
+            | {:timed_out, nested!(Failure.failure())}
+  end
+
+  deftype :remove_from_cache do
+    @structdoc "Remove the workflow identified by the [WorkflowActivation] containing this job from the cache after performing the activation. It is guaranteed that this will be the only job in the activation if present."
+
+    @type reason ::
+            required ::
+            :unspecified
+            | :cache_full
+            | :cache_miss
+            | :non_determinism
+            | :lang_fail
+            | :lang_requested
+            | :task_not_found
+            | :unhandled_command
+            | :fatal
+            | :pagination_or_history_fetch
+            | :workflow_execution_ending
+
+    @type message :: required :: String.t()
+  end
+
+  deftype :memo do
+    @structdoc "A user-defined set of unindexed fields that are exposed when listing/searching workflows"
+
+    @default %{}
+    @type fields :: required :: %{String.t() => nested!(Payload.payload())}
+  end
+
+  deftype :search_attribs do
+    @structdoc """
+    A user-defined set of indexed fields that are used/exposed when listing/searching workflows.
+
+    The payload is not serialized in a user-defined way.
+    """
+
+    @default %{}
+    @type indexed_fields :: required :: %{String.t() => nested!(Payload.payload())}
   end
 end
