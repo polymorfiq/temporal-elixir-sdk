@@ -1,9 +1,9 @@
 defmodule TemporalSamples.Workflows.Timers do
   use Temporal.Workflow
-  alias Temporal.Workflow
+  alias Temporal.{Workflow, WorkflowContext}
   alias TemporalEngine.Data.Duration
 
-  @spec execute(Workflow.WorkflowContext.t(), Duration.shorthand()) :: {:ok, {:json, integer()}}
+  @spec execute(WorkflowContext.t(), Duration.shorthand()) :: {:ok, {:json, integer()}}
   def execute(ctx, wait_duration) do
     {:ok, timer} = Workflow.new_timer(ctx, wait_duration)
 

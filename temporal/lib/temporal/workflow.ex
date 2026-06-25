@@ -1,12 +1,12 @@
 defmodule Temporal.Workflow do
   require Temporal.Workflow.ActivityActions
   require Temporal.Workflow.TimerActions
-  require Temporal.Workflow.WorkflowContext
+  require Temporal.WorkflowContext
   require TemporalEngine.Data.Failure
 
   alias Temporal.Workflow.ActivityActions
   alias Temporal.Workflow.TimerActions
-  alias Temporal.Workflow.WorkflowContext
+  alias Temporal.WorkflowContext
   alias Temporal.Workflow.WorkflowExecution
   alias TemporalEngine.WorkflowHandle
   alias TemporalEngine.Data.Failure
@@ -97,7 +97,7 @@ defmodule Temporal.Workflow do
   end
 
   defmacro __using__(opts) do
-    require Temporal.Workflow.WorkflowContext
+    require Temporal.WorkflowContext
 
     activities = Keyword.get(opts, :activities)
 

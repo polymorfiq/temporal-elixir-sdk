@@ -1,4 +1,4 @@
-defmodule Temporal.Workflow.WorkflowContext do
+defmodule Temporal.WorkflowContext do
   require Record
 
   Record.defrecord(:workflow_context, [:execution, :task_queue, :workflow_id, :run_id])

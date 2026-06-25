@@ -1,10 +1,10 @@
 defmodule Temporal.Workflow.TimerActions do
   require Record
-  import Temporal.Workflow.WorkflowContext
+  import Temporal.WorkflowContext
   import TemporalEngine.Data.Commands
 
   alias Temporal.Workflow.WorkflowExecution
-  alias Temporal.Workflow.WorkflowContext
+  alias Temporal.WorkflowContext
   alias TemporalEngine.Data.Duration
 
   Record.defrecord(:timer_handle, [:seq, :execution])

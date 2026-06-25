@@ -1,10 +1,10 @@
 defmodule TemporalSamples.Workflows.Queries do
   use Temporal.Workflow
-  alias Temporal.Workflow
+  alias Temporal.{Workflow, WorkflowContext}
 
   @dialyzer {:no_return, {:execute, 1}}
 
-  @spec execute(Workflow.WorkflowContext.t()) :: {:ok, 456}
+  @spec execute(WorkflowContext.t()) :: {:ok, 456}
   def execute(ctx) do
     Workflow.set_query_handler(ctx, :no_args, fn ->
       {:ok, "No args!"}

@@ -2,7 +2,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
   use GenStage
 
   require TemporalEngine.Data.Failure
-  import Temporal.Workflow.WorkflowContext
+  import Temporal.WorkflowContext
   import TemporalEngine.Data.Jobs
   import TemporalEngine.Data.Commands
   import TemporalEngine.Data.ActivationCompletion

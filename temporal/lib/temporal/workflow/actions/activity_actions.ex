@@ -1,10 +1,10 @@
 defmodule Temporal.Workflow.ActivityActions do
   require Record
-  import Temporal.Workflow.WorkflowContext
+  import Temporal.WorkflowContext
   import TemporalEngine.Data.Commands
 
   alias Temporal.Workflow.WorkflowExecution
-  alias Temporal.Workflow.WorkflowContext
+  alias Temporal.WorkflowContext
   alias Temporal.Workflows.ActivityName
   alias TemporalEngine.Data.Commands
 

@@ -1,8 +1,8 @@
 defmodule TemporalSamples.Workflows.LocalActivities do
   use Temporal.Workflow, activities: [:greet]
-  alias Temporal.Workflow
+  alias Temporal.{Workflow, WorkflowContext}
 
-  @spec execute(Workflow.WorkflowContext.t(), String.t()) :: {:ok, String.t()}
+  @spec execute(WorkflowContext.t(), String.t()) :: {:ok, String.t()}
   def execute(ctx, name) do
     {:ok, act1} =
       Workflow.execute_local_activity(ctx, &greet/2, [name],

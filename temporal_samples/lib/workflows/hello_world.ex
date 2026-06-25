@@ -7,9 +7,9 @@ defmodule TemporalSamples.Workflows.HelloWorld do
   """
 
   use Temporal.Workflow, activities: [:greet]
-  alias Temporal.Workflow
+  alias Temporal.{Workflow, WorkflowContext}
 
-  @spec execute(Workflow.WorkflowContext.t(), String.t()) :: {:ok, String.t()}
+  @spec execute(WorkflowContext.t(), String.t()) :: {:ok, String.t()}
   def execute(ctx, name) do
     # Schedule activity (non-blocking)
     {:ok, act1} =
