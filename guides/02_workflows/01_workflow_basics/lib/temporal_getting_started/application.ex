@@ -4,7 +4,7 @@ defmodule TemporalGettingStarted.Application do
   use Application
 
   alias Temporal.Client
-  alias TemporalGettingStarted.Greeting
+  alias TemporalGettingStarted.Workflows
 
   @impl true
   def start(_type, _args) do
@@ -13,9 +13,9 @@ defmodule TemporalGettingStarted.Application do
     children = [
        {Temporal.Worker, [
          client: client,
-         workflows: [Greeting.SayHelloWorkflow],
-         activities: [&Greeting.greet/1],
-         task_queue: "my-task-queue",
+         workflows: [Workflows.ModuleBasedWorkflow],
+         activities: [],
+         task_queue: "workflow-basics",
          server_opts: [name: TemporalGettingStarted.MyWorker]
        ]}
     ]
