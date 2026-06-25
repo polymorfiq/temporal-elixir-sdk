@@ -11,6 +11,14 @@ defmodule Temporal.Workflow.ActivityActions do
   Record.defrecord(:activity_handle, [:seq, :execution])
   @type activity_handle :: record(:activity_handle, seq: pos_integer(), execution: pid())
 
+  @spec execute_activity!(WorkflowContext.t(), ActivityName.t(), [term()], [
+    Commands.schedule_activity_opt()
+  ]) :: activity_handle()
+  def execute_activity!(ctx, name, inputs, opts \\ []) do
+    {:ok, activity_handle} = execute_activity(ctx, name, inputs, opts)
+    activity_handle
+  end
+
   @spec execute_activity(WorkflowContext.t(), ActivityName.t(), [term()], [
           Commands.schedule_activity_opt()
         ]) ::
