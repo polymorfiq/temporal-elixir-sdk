@@ -47,6 +47,28 @@ defimpl Temporal.Workflows.WorkflowName, for: Atom do
     do: WorkflowName.activities({name, :execute})
 end
 
+defimpl Temporal.Workflows.WorkflowName, for: Function do
+  def server_recognized_name(handler),
+      do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.server_recognized_name()
+
+  def workflow_module(handler),
+      do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.workflow_module()
+
+  def execution_arities(handler),
+      do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.execution_arities()
+
+  def execute_fn(handler),
+      do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.execute_fn()
+
+  def activities(_handler), do: {:ok, []}
+
+  defp tuple_for(handler) do
+    {:module, module} = Function.info(handler, :module)
+    {:name, name} = Function.info(handler, :name)
+    {module, name}
+  end
+end
+
 defimpl Temporal.Workflows.WorkflowName, for: Tuple do
   def server_recognized_name({name, execute_fn}) do
     cond do

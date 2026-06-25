@@ -1,4 +1,21 @@
 defmodule TemporalGettingStarted.Workflows.ModuleBasedWorkflow do
+  @moduledoc """
+  Using a module-based workflow can be convenient as it provides convenience options for bulk-registering activities and otherwise keeps everything organized and together.
+
+  ```
+  use Temporal.Workflow, activities: [:multiply]
+  ```
+
+  It also provides a convenient place for keeping struct-based Params:
+  ```
+  defmodule Params do
+    defstruct [:multiply_me, multiply_by: nil]
+    @type t :: %__MODULE__{multiply_me: number(), multiply_by: number() | nil}
+  end
+  ... workflow definition ...
+  ```
+  """
+
   use Temporal.Workflow, activities: [:multiply]
   alias Temporal.{Workflow, WorkflowContext}
 
@@ -41,9 +58,9 @@ defmodule TemporalGettingStarted.Workflows.ModuleBasedWorkflow do
     {:ok, "#{params.multiply_me} x 15 = #{multiplied_by_15}"}
   end
 
-  @doc """
-  Workflows can use the pattern-matching function heads and even multiple arities of the same function head, just like regular Elixir functions.
-  """
+  #
+  # Workflows can use the pattern-matching function heads and even multiple arities of the same function head, just like regular Elixir functions.
+  #
   def execute(ctx, %Params{multiply_me: a, multiply_by: b}) do
     ctx = Workflow.with_activity_opts(ctx, start_to_close_timeout: {10, :seconds})
 
@@ -51,7 +68,8 @@ defmodule TemporalGettingStarted.Workflows.ModuleBasedWorkflow do
     {:ok, "#{a} x #{b} = #{multiplied}"}
   end
 
+  @spec multiply(number(), number()) :: {:ok, number()}
   def multiply(a, b) do
-    {:ok, a, b}
+    {:ok, a * b}
   end
 end

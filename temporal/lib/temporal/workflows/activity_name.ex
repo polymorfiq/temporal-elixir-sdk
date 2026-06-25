@@ -19,6 +19,27 @@ defimpl Temporal.Workflows.ActivityName, for: BitString do
   def activity_arities(name), do: {:error, "Unknown Activity Arities: #{inspect(name)}"}
 end
 
+
+defimpl Temporal.Workflows.ActivityName, for: Function do
+  def server_recognized_name(handler),
+      do: tuple_for(handler) |> Temporal.Workflows.ActivityName.server_recognized_name()
+
+  def activity_module(handler),
+      do: tuple_for(handler) |> Temporal.Workflows.ActivityName.activity_module()
+
+  def activity_fn(handler),
+      do: tuple_for(handler) |> Temporal.Workflows.ActivityName.activity_fn()
+
+  def activity_arities(handler),
+      do: tuple_for(handler) |> Temporal.Workflows.ActivityName.activity_arities()
+
+  defp tuple_for(handler) do
+    {:module, module} = Function.info(handler, :module)
+    {:name, name} = Function.info(handler, :name)
+    {module, name}
+  end
+end
+
 defimpl Temporal.Workflows.ActivityName, for: Tuple do
   def server_recognized_name({module, activity_fn}) do
     short_name = Module.split(module) |> List.last() |> to_string()
