@@ -4,8 +4,6 @@ This is a Frontend library that, when paired through the [Temporal Engine](/temp
 
 This is in active development and this README will be updated when it is ready for general use.
 
-Here is a [project of example Workflows](/temporal_samples) for using the SDK, that will be expanded as I continue building out the features and building tests!
-
 # Installation
 
 Read the **[SDK Guides](/guides/)** for installation and usage of the SDK
