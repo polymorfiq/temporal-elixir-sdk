@@ -20,7 +20,7 @@ defmodule TestWorkflows.Queries do
       {:error, "Some error"}
     end)
 
-    {:ok, timer} = Workflow.new_timer(ctx, {5, :minutes})
+    {:ok, timer} = Workflow.new_timer(ctx, {1, :minutes})
     Workflow.get(timer)
 
     {:ok, 456}
