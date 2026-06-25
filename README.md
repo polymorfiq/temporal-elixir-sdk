@@ -8,19 +8,7 @@ Here is a [project of example Workflows](/temporal_samples) for using the SDK, t
 
 # Installation
 
-```elixir
-defp deps do
-  [
-    ...
-    {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", branch: "main", subdir: "temporal"}
-    {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", branch: "main", subdir: "temporal_engine_nif"}
-  ]
-end
-```
-
-# Glossary of Terms
-
-For learning how to interact with the Temporal Core SDK, this [Glossary of Terms](https://github.com/temporalio/sdk-rust/blob/main/ARCHITECTURE.md#glossary-of-terms) can be helpful.
+Read the **[SDK Guides](/guides/)** for installation and usage of the SDK
 
 # References (for building Lang SDKs)
 
