@@ -21,7 +21,7 @@ defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
       spawn_monitor(fn ->
         Core._create_client(runtime.core, client_opts, self())
         |> case do
-          {:ok, _} -> :ok
+          :ok -> :ok
           {:error, err} -> raise "Could initialize client from Core SDK: #{inspect(err)}"
         end
 

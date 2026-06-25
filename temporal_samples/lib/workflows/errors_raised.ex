@@ -1,6 +1,8 @@
 defmodule TemporalSamples.Workflows.ErrorsRaised do
   use Temporal.Workflow
 
+  @dialyzer {:no_return, {:exception_workflow, 1}}
+
   @doc "Workflow that raises an exception"
   def exception_workflow(_ctx) do
     raise "Crash the workflow before it finishes"

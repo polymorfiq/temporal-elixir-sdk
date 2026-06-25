@@ -103,7 +103,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
   def get_activity_results(pid, seq),
     do: GenStage.call(pid, {:get_activity_results, seq}, :infinity)
 
-  @spec wait_for_timer(pid(), seq :: pos_integer()) :: {:ok, term()} | {:error, term()}
+  @spec wait_for_timer(pid(), seq :: pos_integer()) :: :ok | {:error, term()}
   def wait_for_timer(pid, seq),
     do: GenStage.call(pid, {:wait_for_timer, seq}, :infinity)
 

@@ -8,10 +8,9 @@ defmodule Temporal.Workflow.TimerActions do
   alias TemporalEngine.Data.Duration
 
   Record.defrecord(:timer_handle, [:seq, :execution])
-  @opaque timer_handle :: record(:timer_handle, seq: pos_integer())
+  @type timer_handle :: record(:timer_handle, seq: pos_integer(), execution: pid())
 
-  @spec new_timer(WorkflowContext.workflow_context(), Duration.duration()) ::
-          {:ok, timer_handle()} | {:error, term()}
+  @spec new_timer(WorkflowContext.t(), Duration.shorthand()) :: {:ok, timer_handle()} | {:error, term()}
   def new_timer(ctx, duration) do
     workflow_context(execution: exec) = ctx
 
@@ -27,7 +26,7 @@ defmodule Temporal.Workflow.TimerActions do
   def get(timer_handle(seq: seq, execution: exec)),
     do: WorkflowExecution.wait_for_timer(exec, seq)
 
-  @spec sleep(WorkflowContext.workflow_context(), Duration.duration()) :: :ok | {:error, term()}
+  @spec sleep(WorkflowContext.t(), Duration.shorthand()) :: :ok | {:error, term()}
   def sleep(ctx, duration) do
     with {:ok, timer} <- new_timer(ctx, duration) do
       get(timer)

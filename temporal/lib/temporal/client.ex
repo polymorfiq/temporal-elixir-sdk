@@ -7,9 +7,11 @@ defmodule Temporal.Client do
 
   import TemporalEngine.Data.Queries
 
+  require TemporalEngine.Data.Queries
   require TemporalEngine.Data.Failure
   require TemporalEngine.Opts.ClientOpts
   require TemporalEngine.Opts.WorkflowOpts
+  require TemporalEngine.WorkflowHandle
 
   alias Temporal.Constants
   alias Temporal.Runtime
@@ -69,7 +71,7 @@ defmodule Temporal.Client do
           WorkflowHandle.t(),
           query_name :: atom() | String.t(),
           query_args :: [term()],
-          query_opts :: [Queries.query_options_opts()]
+          query_opts :: [Queries.query_options_opt()]
         ) :: {:ok, term()} | {:error, term()}
   def query_workflow(handle, query_name, query_args \\ [], query_opts \\ []) do
     args = Enum.map(query_args, &Payload.record_from_value/1)

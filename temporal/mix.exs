@@ -18,7 +18,7 @@ defmodule Temporal.MixProject do
       docs: [
         # The main page in the docs
         main: "Temporal Elixir SDK",
-        extras: ["README.md"]
+        extras: ["../README.md"]
       ]
     ]
   end

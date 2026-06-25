@@ -3,6 +3,8 @@ defmodule Temporal.Workflow.WorkflowContext do
 
   Record.defrecord(:workflow_context, [:execution, :task_queue, :workflow_id, :run_id])
 
+  @type t :: workflow_context()
+
   @type workflow_context ::
           record(:workflow_context,
             execution: pid(),

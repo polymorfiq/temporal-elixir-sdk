@@ -19,8 +19,7 @@ defmodule Temporal.Workflow.WorkflowComms do
     :worker,
     :exec,
     scheduled_activities: %{},
-    started_timers: %{},
-    state: nil
+    started_timers: %{}
   ])
 
   @typep comms_state ::
@@ -30,13 +29,6 @@ defmodule Temporal.Workflow.WorkflowComms do
              exec: pid(),
              scheduled_activities: %{integer() => map()},
              started_timers: %{integer() => map()},
-             state:
-               :initialized
-               | :scheduled_activities
-               | :resolved_activities
-               | :all_activities_resolved
-               | :cache_removed
-               | :completed,
              worker: Worker.t()
            )
 
@@ -55,7 +47,6 @@ defmodule Temporal.Workflow.WorkflowComms do
        run_id: run_id,
        workflow_type: workflow_type,
        worker: worker,
-       state: :initialized,
        exec: exec
      ), subscribe_to: [exec]}
   end
@@ -82,50 +73,24 @@ defmodule Temporal.Workflow.WorkflowComms do
       "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) - removing from cache (#{inspect(reason)} - #{inspect(message)})."
     )
 
-    {:stop, :normal, comms_state(state, state: :cache_removed)}
+    {:stop, :normal, state}
   end
 
   def handle_cast(activation() = activate, state) do
     job_variants = activation(activate, :jobs) |> Enum.map(&job(&1, :variant))
 
-    run_id = comms_state(state, :run_id)
-    type = comms_state(state, :workflow_type)
-
     future_state =
       Enum.reduce(job_variants, {:ok, state}, fn
         fire_timer(seq: seq), {:ok, state} ->
           started = comms_state(state, :started_timers) |> Map.delete(seq)
-
-          if Enum.any?(started) do
-            {:ok, comms_state(state, started_timers: started)}
-          else
-            Logger.debug(
-              "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) resolved all timers."
-            )
-
-            {:ok, comms_state(state, started_timers: started)}
-          end
+          {:ok, comms_state(state, started_timers: started)}
 
         resolve_activity(seq: seq), {:ok, state} ->
           scheduled = comms_state(state, :scheduled_activities) |> Map.delete(seq)
-
-          if Enum.any?(scheduled) do
-            {:ok,
-             comms_state(state, state: :resolved_activities, scheduled_activities: scheduled)}
-          else
-            Logger.debug(
-              "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) resolved all activities."
-            )
-
-            {:ok,
-             comms_state(state, state: :all_activities_resolved, scheduled_activities: scheduled)}
-          end
+          {:ok, comms_state(state, scheduled_activities: scheduled)}
 
         _, {:ok, state} ->
           {:ok, state}
-
-        _, {:error, err} ->
-          {:error, err}
       end)
 
     with {:ok, state} <- future_state do
@@ -141,71 +106,27 @@ defmodule Temporal.Workflow.WorkflowComms do
 
   @spec handle_events([ActivationCompletion.status()], {pid(), reference()}, comms_state()) ::
           {:noreply, [], comms_state()}
-  def handle_events([success(commands: [])], _, comms_state(state: :initialized) = state) do
-    Logger.error(
-      "Unexpected completion: No commands on initialization. Should have some commands."
-    )
-
-    {:stop, {:unexpected_noop, "No commands on initialization. Should have some commands."},
-     state}
-  end
 
   def handle_events([success(commands: commands) = status], _, state) do
     variants = Enum.map(commands, fn cmd -> command(cmd, :variant) end)
 
     run_id = comms_state(state, :run_id)
-    type = comms_state(state, :workflow_type)
 
     future_state =
       Enum.reduce(variants, {:ok, state}, fn
-        _, {:ok, comms_state(state: :failed)} ->
-          Logger.warning(
-            "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) tried to send command after failure."
-          )
-
-          {:error, "Tried to send command after failure."}
-
-        _, {:ok, comms_state(state: :completed)} ->
-          Logger.warning(
-            "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) tried to send command after completion."
-          )
-
-          {:error, "Tried to send command after completion."}
-
-        _, {:ok, comms_state(state: :cache_removed)} ->
-          Logger.warning(
-            "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) tried to send command after cache removal."
-          )
-
-          {:error, "Tried to send command after cache removal."}
-
-        fail_workflow_execution(), {:ok, comms_state(state: :initialized) = state} ->
-          Logger.debug(
-            "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) failed on initialization."
-          )
-
-          {:ok, comms_state(state, state: :failed)}
-
-        complete_workflow_execution(), {:ok, comms_state(state: :initialized) = state} ->
-          Logger.debug(
-            "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) completed after initialization."
-          )
-
-          {:ok, comms_state(state, state: :completed)}
-
         schedule_activity(seq: seq), {:ok, state} ->
           scheduled =
             comms_state(state, :scheduled_activities)
             |> Map.put(seq, %{scheduled: DateTime.utc_now()})
 
-          {:ok, comms_state(state, state: :scheduled_activities, scheduled_activities: scheduled)}
+          {:ok, comms_state(state, scheduled_activities: scheduled)}
 
         schedule_local_activity(seq: seq), {:ok, state} ->
           scheduled =
             comms_state(state, :scheduled_activities)
             |> Map.put(seq, %{scheduled: DateTime.utc_now()})
 
-          {:ok, comms_state(state, state: :scheduled_activities, scheduled_activities: scheduled)}
+          {:ok, comms_state(state, scheduled_activities: scheduled)}
 
         start_timer(seq: seq), {:ok, state} ->
           started_timers =
@@ -214,19 +135,8 @@ defmodule Temporal.Workflow.WorkflowComms do
 
           {:ok, comms_state(state, started_timers: started_timers)}
 
-        fail_workflow_execution(), {:ok, state} ->
-          Logger.debug("Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) failed.")
-          {:ok, comms_state(state, state: :failed)}
-
-        complete_workflow_execution(), {:ok, state} ->
-          Logger.debug("Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) completed.")
-          {:ok, comms_state(state, state: :completed)}
-
         _, {:ok, state} ->
           {:ok, state}
-
-        _, {:error, err} ->
-          {:error, err}
       end)
 
     with {:ok, new_state} <- future_state do

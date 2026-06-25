@@ -23,7 +23,7 @@ defmodule TemporalEngine.Data.Queries do
   end
 
   deftype :query_workflow_response do
-    @type query_result :: [nested!(Payload.payload())]
+    @type query_result :: [nested!(Payload.payload()) | nil]
     @type query_rejected :: nested!(Queries.query_rejected())
   end
 

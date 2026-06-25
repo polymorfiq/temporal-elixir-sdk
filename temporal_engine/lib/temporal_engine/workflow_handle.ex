@@ -18,6 +18,6 @@ defprotocol TemporalEngine.WorkflowHandle do
           query_type :: String.t(),
           args :: [Payload.payload()],
           opts :: Queries.query_options()
-        ) :: {:ok, Payload.payload()} | {:error, term()}
+        ) :: {:ok, Queries.query_workflow_response()} | {:error, term()}
   def query(handle, query_type, args, opts)
 end

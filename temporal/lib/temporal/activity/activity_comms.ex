@@ -68,7 +68,7 @@ defmodule Temporal.Activity.ActivityComms do
           {pid(), reference()},
           comms_state()
         ) ::
-          {:noreply, [], comms_state()}
+          {:noreply, [], comms_state()} | {:stop, term(), comms_state()}
   def handle_events([result], _, state) do
     worker = comms_state(state, :worker)
     task_token = comms_state(state, :task_token)

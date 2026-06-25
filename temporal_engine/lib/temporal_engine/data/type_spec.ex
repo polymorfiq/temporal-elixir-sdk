@@ -128,7 +128,7 @@ defmodule TemporalEngine.Data.TypeSpec do
       @type unquote({opt_name, [], nil}) :: unquote(opts_type_ast)
 
       @typedoc "See `t:#{unquote(name)}/0` for more details."
-      @type unquote({opts_name, [], nil}) :: [unquote(opt_name)]
+      @type unquote({opts_name, [], nil}) :: [unquote({opt_name, [], []})]
 
       @doc false
       @spec unquote(validate_opts_name)(opts :: keyword(), base_name :: String.t() | nil) ::

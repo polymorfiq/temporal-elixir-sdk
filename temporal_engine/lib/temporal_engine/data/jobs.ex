@@ -307,25 +307,7 @@ defmodule TemporalEngine.Data.Jobs do
   deftype :child_workflow_result do
     @structdoc "Used by core to resolve child workflow executions."
 
-    @type status ::
-            nested!(Jobs.child_workflow_succeeded())
-            | nested!(Jobs.child_workflow_failed())
-            | nested!(Jobs.child_workflow_cancelled())
-  end
-
-  deftype :child_workflow_succeeded do
-    @doc "Used in `child_workflow_result` to report successful completion."
-    @type result :: required :: nested!(Payload.payload())
-  end
-
-  deftype :child_workflow_failed do
-    @doc "Used in ChildWorkflowResult to report non successful outcomes such as application failures, timeouts, terminations, and cancellations."
-    @type failure :: nested!(Failure.failure())
-  end
-
-  deftype :child_workflow_cancelled do
-    @structdoc "Used in `child_workflow_result` to report cancellation. Failure should be `child_workflow_failure` with a CanceledFailure cause."
-    @type failure :: nested!(Failure.failure())
+    @type status :: {:completed, nested!(Payload.payload)} | {:failed, nested!(Failure.failure)} | {:cancelled, nested!(Failure.failure)}
   end
 
   deftype :resolve_signal_external_workflow do
@@ -397,25 +379,12 @@ defmodule TemporalEngine.Data.Jobs do
     @doc "Sequence number as provided by lang in the corresponding `schedule_nexus_operation` command"
     @type seq :: required :: pos_integer()
 
-    @type status ::
-            nested!(Jobs.nexus_operation_started_token())
-            | nested!(Jobs.nexus_operation_started_sync())
-            | nested!(Jobs.nexus_operation_start_failed())
-  end
-
-  deftype :nexus_operation_started_token do
-    @structdoc "The operation started asynchronously. Contains a token that can be used to perform operations on the started operation by, ex, clients. A `resolve_nexus_operation` job will follow at some point."
-    @type token :: required :: String.t()
-  end
-
-  deftype :nexus_operation_started_sync do
-    @structdoc "If true the operation “started” but only because it’s also already resolved. A `resolve_nexus_operation` job will be in the same activation."
-    @type started_sync :: required :: boolean()
-  end
-
-  deftype :nexus_operation_start_failed do
-    @structdoc "The operation either failed to start, was cancelled before it started, timed out, or failed synchronously. Details are included inside the message. In this case, the subsequent `resolve_nexus_operation` will never be sent."
-    @type failure :: required :: nested!(Failure.failure())
+    @doc """
+    - `{:operation_token, String.t()}` - The operation started asynchronously. Contains a token that can be used to perform operations on the started operation by, ex, clients. A `resolve_nexus_operation` job will follow at some point.
+    - `{:started_sync, boolean()}` - If true the operation “started” but only because it’s also already resolved. A `resolve_nexus_operation` job will be in the same activation.
+    - `{:failed, t:Failure.failure/0}` - The operation either failed to start, was cancelled before it started, timed out, or failed synchronously. Details are included inside the message. In this case, the subsequent `resolve_nexus_operation` will never be sent.
+    """
+    @type status :: {:operation_token, String.t()}
   end
 
   deftype :resolve_nexus_operation do

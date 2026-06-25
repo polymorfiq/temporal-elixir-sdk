@@ -949,8 +949,8 @@ impl Into<workflow_activation::resolve_nexus_operation_start::Status>
     }
 }
 
-#[derive(Debug, NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.UpdateMeta"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "update_meta"]
 pub struct SdkUpdateMeta {
     pub update_id: String,
     pub identity: String,

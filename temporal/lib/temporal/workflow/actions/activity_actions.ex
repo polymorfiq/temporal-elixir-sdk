@@ -10,9 +10,9 @@ defmodule Temporal.Workflow.ActivityActions do
   alias TemporalEngine.Data.Payload
 
   Record.defrecord(:activity_handle, [:seq, :execution])
-  @opaque activity_handle :: record(:activity_handle, seq: pos_integer())
+  @type activity_handle :: record(:activity_handle, seq: pos_integer(), execution: pid())
 
-  @spec execute_activity(WorkflowContext.workflow_context(), ActivityName.t(), [term()], [
+  @spec execute_activity(WorkflowContext.t(), ActivityName.t(), [term()], [
           Commands.schedule_activity_opt()
         ]) ::
           {:ok, activity_handle()} | {:error, term()}
@@ -46,7 +46,7 @@ defmodule Temporal.Workflow.ActivityActions do
     end
   end
 
-  @spec execute_local_activity(WorkflowContext.workflow_context(), ActivityName.t(), [term()], [
+  @spec execute_local_activity(WorkflowContext.t(), ActivityName.t(), [term()], [
           Commands.schedule_local_activity_opt()
         ]) :: {:ok, activity_handle()} | {:error, term()}
   def execute_local_activity(ctx, name, inputs, opts \\ []) do

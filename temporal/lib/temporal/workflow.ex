@@ -17,21 +17,21 @@ defmodule Temporal.Workflow do
   defdelegate new_timer(ctx, duration), to: TimerActions
   defdelegate sleep(ctx, duration), to: TimerActions
 
+  @spec get(ActivityActions.activity_handle() | TimerActions.timer_handle()) :: {:ok, term()} | {:error, term()}
   def get(ActivityActions.activity_handle() = handle),
     do: ActivityActions.get(handle)
 
   def get(TimerActions.timer_handle() = handle),
     do: TimerActions.get(handle)
 
+  @spec get(WorkflowContext.t(), ActivityActions.activity_handle() | TimerActions.timer_handle()) :: {:ok, term()} | {:error, term()}
   def get(_ctx, ActivityActions.activity_handle() = handle),
     do: ActivityActions.get(handle)
 
   def get(_ctx, TimerActions.timer_handle() = handle),
     do: TimerActions.get(handle)
 
-  @spec set_query_handler(WorkflowContext.workflow_context(), name :: atom() | String.t(),
-          handler: fun()
-        ) :: :ok
+  @spec set_query_handler(WorkflowContext.t(), name :: atom() | String.t(), handler :: fun()) :: :ok
   def set_query_handler(ctx, name, handler) do
     exec = WorkflowContext.workflow_context(ctx, :execution)
     WorkflowExecution.set_query_handler(exec, "#{name}", handler)
@@ -94,6 +94,8 @@ defmodule Temporal.Workflow do
   end
 
   defmacro __using__(opts) do
+    require Temporal.Workflow.WorkflowContext
+
     activities = Keyword.get(opts, :activities)
 
     imports =

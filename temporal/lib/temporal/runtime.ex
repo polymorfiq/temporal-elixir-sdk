@@ -25,7 +25,7 @@ defmodule Temporal.Runtime do
   end
 
   @doc "Provides the default, global runtime for Temporal Clients"
-  @spec with_id(id :: String.t(), opts :: [{:engine, TemporalEngine.Engine.t()}]) ::
+  @spec with_id(id :: String.t(), opts :: [{:engine, module()}]) ::
           TemporalEngine.Runtime.t()
   def with_id(id, opts \\ []) do
     case :ets.lookup(Temporal.Storage.global_store(), {:runtime, id}) do

@@ -10,7 +10,7 @@ use crate::core_workflows::{
     SdkWorkflowStartOptions,
 };
 use crate::data::common::SdkWorkflowArguments;
-use rustler::{Atom, LocalPid, NifResult, OwnedEnv, ResourceArc};
+use rustler::{Atom, Error, LocalPid, NifResult, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
@@ -84,7 +84,7 @@ fn _create_client(
     runtime: ResourceArc<ElixirRuntime>,
     options: crate::core_client::SdkConnectionOpts,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
+) -> NifResult<Atom> {
     let parsed_host = Url::parse(
         format!(
             "{}://{}",
@@ -100,7 +100,7 @@ fn _create_client(
 
     let host_url = match parsed_host {
         Ok(host) => host,
-        Err(err) => return Err(format!("Failed parsing host: {}", err)),
+        Err(err) => return Err(Error::Term(Box::new(format!("Failed parsing host: {}", err)))),
     };
 
     let has_http_connect_settings = options.http_connect_proxy.is_some();
@@ -158,7 +158,7 @@ fn _create_client(
         };
     });
 
-    Ok(true)
+    Ok(atoms::ok())
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -167,7 +167,7 @@ fn _create_worker(
     client: ResourceArc<ElixirClient>,
     options: core_worker::SdkWorkerConfig,
     resp_pid: LocalPid,
-) -> Result<bool, String> {
+) -> NifResult<Atom> {
     let config = WorkerConfig::builder()
         .namespace(options.namespace)
         .task_queue(options.task_queue)
@@ -285,17 +285,18 @@ fn _create_worker(
                     });
             });
 
-            Ok(true)
+            Ok(atoms::ok())
         }
 
-        Err(err) => Err(String::from(format!(
-            "Error creating worker.ex opts: {}",
-            err
-        ))),
+        Err(err) => {
+            Err(Error::Term(Box::new(
+                format!("Error creating worker.ex opts: {}", err),
+            )))
+        }
     }
 }
 
-fn build_tuner(options: crate::core_worker::SdkWorkerTunerOpts) -> Result<TunerHolder, String> {
+fn build_tuner(options: crate::core_worker::SdkWorkerTunerOpts) -> Result<TunerHolder, Error> {
     let (workflow_slot_options, resource_slot_options) =
         build_tuner_slot_options(options.workflow_slot_supplier, None)?;
     let (activity_slot_options, resource_slot_options) =
@@ -314,27 +315,27 @@ fn build_tuner(options: crate::core_worker::SdkWorkerTunerOpts) -> Result<TunerH
         Ok(tuner_holder_opts) => tuner_holder_opts.build_tuner_holder(),
 
         Err(err) => {
-            return Err(String::from(format!(
+            return Err(Error::Term(Box::new(format!(
                 "Failed building tuner holder opts: {}",
                 err
-            )));
+            ))));
         }
     };
 
     match tuner_holder_results {
         Ok(tuner_holder) => Ok(tuner_holder),
 
-        Err(err) => Err(String::from(format!(
+        Err(err) => Err(Error::Term(Box::new(format!(
             "Failed building tuner holder: {}",
             err
-        ))),
+        )))),
     }
 }
 
 fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
     options: crate::core_worker::SdkWorkerSlotSupplierOpts,
     prev_slots_options: Option<ResourceBasedSlotsOptions>,
-) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), String> {
+) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), Error> {
     match options {
         crate::core_worker::SdkWorkerSlotSupplierOpts::FixedSize(slots) => Ok((
             SlotSupplierOptions::FixedSize {
@@ -351,7 +352,7 @@ fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
 fn build_tuner_resource_options<SK: SlotKind>(
     options: crate::core_worker::SdkWorkerTunerResourceOpts,
     prev_slots_options: Option<ResourceBasedSlotsOptions>,
-) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), String> {
+) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), Error> {
     let slots_options = ResourceBasedSlotsOptions::builder()
         .target_mem_usage(options.target_mem_usage)
         .target_cpu_usage(options.target_cpu_usage)
@@ -362,9 +363,9 @@ fn build_tuner_resource_options<SK: SlotKind>(
             if slots_options.target_cpu_usage != prev_slots_opts.target_cpu_usage
                 || slots_options.target_mem_usage != prev_slots_opts.target_mem_usage
             {
-                return Err(String::from(
+                return Err(Error::Term(Box::new(
                     "All resource-based slot suppliers must have the same resource-based tuner options"
-                ));
+                )));
             }
         }
 

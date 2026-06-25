@@ -28,7 +28,7 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
       spawn_monitor(fn ->
         Core._create_worker(client.runtime.core, client.core, config, self())
         |> case do
-          {:ok, _} -> :ok
+          :ok -> :ok
           {:error, err} -> raise "Could initialize worker from Core SDK: #{inspect(err)}"
         end
 
