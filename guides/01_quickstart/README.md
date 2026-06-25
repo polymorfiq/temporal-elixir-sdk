@@ -1,6 +1,6 @@
 # TemporalGettingStarted
 
-Example application for the [Getting Started Guide (01_quickstart)](/guides/01_getting_started.md)
+Example application for the [Getting Started Guide (01_quickstart)](/guides/01_quickstart.md)
 
 ## Usage
 
