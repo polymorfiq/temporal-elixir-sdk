@@ -320,6 +320,7 @@ defmodule Temporal.Worker do
         activity_task(variant: cancel_activity(), task_token: task_token), state ->
           case Registry.lookup(Temporal.TemporalRegistry, {:activity, task_token}) do
             [{comms, _info}] ->
+              Process.exit(comms, :normal)
               activities = worker_state(state, :activities) |> Map.delete(comms)
               worker_state(state, activities: activities)
 
