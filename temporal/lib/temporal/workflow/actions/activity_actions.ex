@@ -12,8 +12,8 @@ defmodule Temporal.Workflow.ActivityActions do
   @type activity_handle :: record(:activity_handle, seq: pos_integer(), execution: pid())
 
   @spec execute_activity!(WorkflowContext.t(), ActivityName.t(), [term()], [
-    Commands.schedule_activity_opt()
-  ]) :: activity_handle()
+          Commands.schedule_activity_opt()
+        ]) :: activity_handle()
   def execute_activity!(ctx, name, inputs, opts \\ []) do
     {:ok, activity_handle} = execute_activity(ctx, name, inputs, opts)
     activity_handle
@@ -57,8 +57,8 @@ defmodule Temporal.Workflow.ActivityActions do
   end
 
   @spec execute_local_activity!(WorkflowContext.t(), ActivityName.t(), [term()], [
-    Commands.schedule_local_activity_opt()
-  ]) :: activity_handle()
+          Commands.schedule_local_activity_opt()
+        ]) :: activity_handle()
   def execute_local_activity!(ctx, name, inputs, opts \\ []) do
     {:ok, handle} = execute_local_activity(ctx, name, inputs, opts)
     handle

@@ -49,16 +49,16 @@ end
 
 defimpl Temporal.Workflows.WorkflowName, for: Function do
   def server_recognized_name(handler),
-      do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.server_recognized_name()
+    do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.server_recognized_name()
 
   def workflow_module(handler),
-      do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.workflow_module()
+    do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.workflow_module()
 
   def execution_arities(handler),
-      do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.execution_arities()
+    do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.execution_arities()
 
   def execute_fn(handler),
-      do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.execute_fn()
+    do: tuple_for(handler) |> Temporal.Workflows.WorkflowName.execute_fn()
 
   def activities(_handler), do: {:ok, []}
 
@@ -70,6 +70,14 @@ defimpl Temporal.Workflows.WorkflowName, for: Function do
 end
 
 defimpl Temporal.Workflows.WorkflowName, for: Tuple do
+  def server_recognized_name({name, execute_fn, opts}) do
+    if opt_name = Keyword.get(opts, :name) do
+      {:ok, opt_name}
+    else
+      server_recognized_name({name, execute_fn})
+    end
+  end
+
   def server_recognized_name({name, execute_fn}) do
     cond do
       execute_fn == :execute && is_module?(name) &&
@@ -87,11 +95,15 @@ defimpl Temporal.Workflows.WorkflowName, for: Tuple do
     end
   end
 
+  def workflow_module({name, execute_fn, _}), do: workflow_module({name, execute_fn})
+
   def workflow_module({name, _execute_fn}) do
     if is_module?(name),
       do: {:ok, name},
       else: {:error, "Unknown workflow module: #{inspect(name)}"}
   end
+
+  def execution_arities({name, execute_fn, _}), do: execution_arities({name, execute_fn})
 
   def execution_arities({name, execute_fn}) do
     if is_module?(name) do
@@ -101,7 +113,11 @@ defimpl Temporal.Workflows.WorkflowName, for: Tuple do
     end
   end
 
+  def execute_fn({name, execute_fn, _}), do: execute_fn({name, execute_fn})
+
   def execute_fn({_name, execute_fn}), do: {:ok, execute_fn}
+
+  def activities({name, execute_fn, _}), do: activities({name, execute_fn})
 
   def activities({name, _execute_fn}) do
     cond do

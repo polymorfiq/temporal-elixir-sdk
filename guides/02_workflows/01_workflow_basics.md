@@ -12,130 +12,74 @@ Below is an example of a basic Workflow Definition.
 
 ---
 
-If you'd like, you can [view the code](/guides/02_workflows/01_workflow_basics) in context of an actual codebase.
+If you'd like, you can [view this code](/guides/02_workflows/01_workflow_basics/lib/temporal_getting_started/workflows/function_based_workflow.ex) in context of an actual codebase.
 
 ---
-```go
-package yourapp
+```elixir
+defmodule TemporalGettingStarted.Workflows.FunctionBasedWorkflow do
+  # ...
 
-import (
-    "time"
-
-    "go.temporal.io/sdk/workflow"
-)
-// ...
-
-// YourSimpleWorkflowDefinition is the most basic Workflow Definition.
-func YourSimpleWorkflowDefinition(ctx workflow.Context) error {
-    // ...
-    return nil
-}
+  def function_based_workflow(ctx, ...) do
+    # ...
+    {:ok, nil}
+  end
+  
+  # ...
+end
 ```
 
 ### How to define Workflow parameters
 
 Temporal Workflows may have any number of custom parameters.
-However, we strongly recommend that objects are used as parameters, so that the object's individual fields may be altered without breaking the signature of the Workflow.
-All Workflow Definition parameters must be serializable.
+However, we strongly recommend that structs are used as parameters, so that the structs's individual fields may be altered without breaking the signature of the Workflow.
 
-The first parameter of a Go-based Workflow Definition must be of the [`workflow.Context`](https://pkg.go.dev/go.temporal.io/sdk/workflow#Context) type.
-It is used by the Temporal Go SDK to pass around Workflow Execution context, and virtually all the Go SDK APIs that are callable from the Workflow require it.
-It is acquired from the [`go.temporal.io/sdk/workflow`](https://pkg.go.dev/go.temporal.io/sdk/workflow) package.
-
-The `workflow.Context` entity operates similarly to the standard `context.Context` entity provided by Go.
-The only difference between `workflow.Context` and `context.Context` is that the `Done()` function, provided by `workflow.Context`, returns `workflow.Channel` instead of the standard Go `chan`.
+The first parameter of an Elixir-based Workflow Definition must be of the [`Temporal.WorkflowContext.t()`](/temporal/lib/temporal/workflow_context.ex) type.
+It is used by the Temporal Elixir SDK to pass around Workflow Execution context, and virtually all the SDK APIs that are callable from the Workflow require it.
 
 Additional parameters can be passed to the Workflow when it is invoked.
 A Workflow Definition may support multiple custom parameters, or none.
-These parameters can be regular type variables or safe pointers.
-However, the best practice is to pass a single parameter that is of a `struct` type, so there can be some backward compatibility if new parameters are added.
+The best practice is to pass a single parameter that is of a `struct` type, so there can be some backward compatibility if new parameters are added.
 
-All Workflow Definition parameters must be serializable and can't be channels, functions, variadic, or unsafe pointers.
+---
 
-<div className="copycode-notice-container">
-  <a href="https://github.com/temporalio/documentation/blob/main/sample-apps/go/yourapp/your_workflow_definition_dacx.go">
-    View the source code
-  </a>{' '}
-  in the context of the rest of the application code.
-</div>
+If you'd like, you can [view this code](/guides/02_workflows/01_workflow_basics/lib/temporal_getting_started/workflows/module_based_workflow.ex) in context of an actual codebase.
 
-```go
-package yourapp
+---
 
-import (
-    "time"
+```elixir
+defmodule TemporalGettingStarted.Workflows.ModuleBasedWorkflow do
+  use Temporal.Workflow, activities: [:multiply]
+  alias Temporal.{Workflow, WorkflowContext}
 
-    "go.temporal.io/sdk/workflow"
-)
-
-// YourWorkflowParam is the object passed to the Workflow.
-type YourWorkflowParam struct {
-    WorkflowParamX string
-    WorkflowParamY int
-}
-// ...
-// YourWorkflowDefinition is your custom Workflow Definition.
-func YourWorkflowDefinition(ctx workflow.Context, param YourWorkflowParam) (*YourWorkflowResultObject, error) {
-// ...
-}
+  defmodule Params do
+    defstruct [:multiply_me, multiply_by: nil]
+    @type t :: %__MODULE__{multiply_me: number(), multiply_by: number() | nil}
+  end
+  
+  @spec execute(WorkflowContext.t(), Params.t()) :: {:ok, number()} | {:error, number()}
+  def execute(ctx, %Params{} = params) do
+    # ...
+  end
+  
+  # ...
+end
 ```
 
 ### How to define Workflow return parameters
 
-Workflow return values must also be serializable.
 Returning results, returning errors, or throwing exceptions is fairly idiomatic in each language that is supported.
-However, Temporal APIs that must be used to get the result of a Workflow Execution will only ever receive one of either the result or the error.
 
-A Go-based Workflow Definition can return either just an `error` or a `customValue, error` combination.
-Again, the best practice here is to use a `struct` type to hold all custom values.
-A Workflow Definition written in Go can return both a custom value and an error.
-However, it's not possible to receive both a custom value and an error in the calling process, as is normal in Go.
-The caller will receive either one or the other.
-Returning a non-nil `error` from a Workflow indicates that an error was encountered during its execution and the Workflow Execution should be terminated, and any custom return values will be ignored by the system.
+An Elixir-based Workflow Definition can return either `{:ok, ...}` or `{:error, ...}`.
 
-<div className="copycode-notice-container">
-  <a href="https://github.com/temporalio/documentation/blob/main/sample-apps/go/yourapp/your_workflow_definition_dacx.go">
-    View the source code
-  </a>{' '}
-  in the context of the rest of the application code.
-</div>
+The best practice here is to use a `struct` type to hold all custom values to allow for more easily writing backwards-compatible code.
 
-```go
-package yourapp
+Returning an `{:error, ...}` indicates that the workflow encountered an error during execution and should be considered as having failed.
 
-import (
-    "time"
+### How to customize Workflow Type in Elixir
 
-    "go.temporal.io/sdk/workflow"
-)
-// ...
+In Elixir, by default, the Workflow Type name is the same as `TopLevelModule` in the case of Module-based workflows, and `TopLevelModule.workflow_fn` in the case of function-based workflows.
 
-// YourWorkflowResultObject is the object returned by the Workflow.
-type YourWorkflowResultObject struct {
-    WFResultFieldX string
-    WFResultFieldY int
-}
-// ...
-// YourWorkflowDefinition is your custom Workflow Definition.
-func YourWorkflowDefinition(ctx workflow.Context, param YourWorkflowParam) (*YourWorkflowResultObject, error) {
-// ...
-    if err != nil {
-        return nil, err
-    }
-    // Make the results of the Workflow Execution available.
-    workflowResult := &YourWorkflowResultObject{
-        WFResultFieldX: activityResult.ResultFieldX,
-        WFResultFieldY: activityResult.ResultFieldY,
-    }
-    return workflowResult, nil
-}
-```
-
-### How to customize Workflow Type in Go
-
-In Go, by default, the Workflow Type name is the same as the function name.
-
-To customize the Workflow Type, set the `Name` parameter with `RegisterOptions` when registering your Workflow with a Worker.
+To customize the Workflow Type, set the `name` parameter with `opts` when registering your Workflow with a Worker.
 
 <div className="copycode-notice-container">
   <a href="https://github.com/temporalio/documentation/blob/main/sample-apps/go/yourapp/worker/main_dacx.go">

@@ -22,6 +22,7 @@ defmodule TemporalGettingStarted.Application do
          client: client,
          workflows: [
            Workflows.ModuleBasedWorkflow,
+           {Workflows.ModuleBasedWorkflow, :execute, [name: "custom_workflow_name"]},
            &Workflows.FunctionBasedWorkflow.function_based_workflow/2,
            {Workflows.FunctionBasedWorkflow, :another_function_based_workflow}
          ],
