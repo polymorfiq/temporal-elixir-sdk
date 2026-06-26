@@ -97,9 +97,7 @@ defmodule TemporalGettingStarted.Application do
          client: client,
          workflows: [
            {Workflows.FunctionBasedWorkflow, :function_based_workflow, [name: "my_custom_workflow_type"]}
-           # ...
          ],
-         # ...
        ]}
     ]
     
