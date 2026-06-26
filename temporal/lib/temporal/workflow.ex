@@ -26,6 +26,12 @@ defmodule Temporal.Workflow do
     WorkflowContext.workflow_context(ctx, activity_options: existing_opts ++ opts)
   end
 
+  @spec utc_now(WorkflowContext.t()) :: DateTime.t()
+  def utc_now(ctx) do
+    exec = WorkflowContext.workflow_context(ctx, :execution)
+    WorkflowExecution.get_current_timestamp(exec)
+  end
+
   @spec get(WorkflowContext.t(), ActivityActions.activity_handle() | TimerActions.timer_handle()) ::
           {:ok, term()} | {:error, term()}
   def get(_ctx, ActivityActions.activity_handle() = handle),

@@ -53,7 +53,8 @@ defmodule WorkflowHelpers do
         Worker.register_workflows(worker, [
           TestWorkflows.ActivitiesWithAwait,
           TestWorkflows.TimerWithAwait,
-          TestWorkflows.Queries
+          TestWorkflows.Queries,
+          TestWorkflows.Determinism
         ])
 
       :ok =

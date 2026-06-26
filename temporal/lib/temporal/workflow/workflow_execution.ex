@@ -11,6 +11,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
   alias TemporalEngine.Data.Commands
   alias TemporalEngine.Data.Jobs
   alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Data.Timestamp
 
   require Logger
   require Record
@@ -23,6 +24,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
     :task_queue,
     :module,
     :exec_fn,
+    :timestamp,
     query_handlers: %{},
     awaiting_activity: %{},
     activity_results: %{},
@@ -44,6 +46,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
              task_queue: String.t(),
              module: module(),
              exec_fn: atom(),
+             timestamp: DateTime.t(),
              query_handlers: %{String.t() => fun()},
              awaiting_activity: %{integer() => [pid()]},
              activity_results: %{integer() => term()},
@@ -75,7 +78,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
        workflow_id: initialize_workflow(config, :workflow_id),
        task_queue: task_queue,
        module: module,
-       exec_fn: exec_fn
+       exec_fn: exec_fn,
+       timestamp: initialize_workflow(config, :start_time) |> Timestamp.to_native()
      )}
   end
 
@@ -88,6 +92,15 @@ defmodule Temporal.Workflow.WorkflowExecution do
       {:ok, List.first(cmds)}
     end
   end
+
+  @spec set_is_replaying(pid(), boolean()) :: :ok
+  def set_is_replaying(pid, replaying), do: GenStage.cast(pid, {:set_is_replaying, replaying})
+
+  @spec set_current_timestamp(pid(), DateTime.t()) :: :ok
+  def set_current_timestamp(pid, ts), do: GenStage.cast(pid, {:set_current_timestamp, ts})
+
+  @spec get_current_timestamp(pid()) :: :ok
+  def get_current_timestamp(pid), do: GenStage.call(pid, :get_current_timestamp, :infinity)
 
   @spec set_query_handler(pid(), name :: String.t(), handler :: fun()) :: :ok
   def set_query_handler(pid, name, handler) do
@@ -143,6 +156,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
     wrapped = Enum.map(commands, &command(variant: &1))
 
     {:noreply, [], workflow_state(state, seq: seq, queued_commands: queued ++ wrapped)}
+  end
+
+  def handle_call(:get_current_timestamp, _from, state) do
+    {:reply, workflow_state(state, :timestamp), [], state}
   end
 
   def handle_call({:get_activity_results, seq}, from, state) do
@@ -322,6 +339,15 @@ defmodule Temporal.Workflow.WorkflowExecution do
       )
 
     {:noreply, [status], state}
+  end
+
+  def handle_cast({:set_is_replaying, replaying}, state) do
+    if replaying, do: Logger.disable(self()), else: Logger.enable(self())
+    {:noreply, [], state}
+  end
+
+  def handle_cast({:set_current_timestamp, ts}, state) do
+    {:noreply, [], workflow_state(state, timestamp: ts)}
   end
 
   def handle_cast({:set_query_handler, name, handler}, state) do

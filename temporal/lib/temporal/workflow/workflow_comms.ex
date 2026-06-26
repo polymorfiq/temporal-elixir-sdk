@@ -11,6 +11,7 @@ defmodule Temporal.Workflow.WorkflowComms do
   alias Temporal.Workflow.WorkflowExecution
   alias TemporalEngine.Data.Activation
   alias TemporalEngine.Data.ActivationCompletion
+  alias TemporalEngine.Data.Timestamp
   alias TemporalEngine.Worker
 
   Record.defrecordp(:comms_state, [
@@ -18,6 +19,7 @@ defmodule Temporal.Workflow.WorkflowComms do
     :workflow_type,
     :worker,
     :exec,
+    replaying: false,
     scheduled_activities: %{},
     started_timers: %{}
   ])
@@ -27,6 +29,7 @@ defmodule Temporal.Workflow.WorkflowComms do
              run_id: String.t(),
              workflow_type: String.t(),
              exec: pid(),
+             replaying: boolean(),
              scheduled_activities: %{integer() => map()},
              started_timers: %{integer() => map()},
              worker: Worker.t()
@@ -95,9 +98,17 @@ defmodule Temporal.Workflow.WorkflowComms do
 
     with {:ok, state} <- future_state do
       exec = comms_state(state, :exec)
+      ts = activation(activate, :timestamp)
+      WorkflowExecution.set_current_timestamp(exec, Timestamp.to_native(ts))
+
+      is_replaying? = activation(activate, :is_replaying)
+      if is_replaying? != comms_state(state, :replaying)  do
+        WorkflowExecution.set_is_replaying(exec, is_replaying?)
+      end
+
       activation(activate, :jobs) |> Enum.each(&WorkflowExecution.process_job(exec, &1))
 
-      {:noreply, [], state}
+      {:noreply, [], comms_state(state, replaying: is_replaying?)}
     else
       {:error, err} ->
         {:stop, err, state}

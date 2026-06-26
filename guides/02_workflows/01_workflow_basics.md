@@ -79,49 +79,43 @@ Returning an `{:error, ...}` indicates that the workflow encountered an error du
 
 In Elixir, by default, the Workflow Type name is the same as `TopLevelModule` in the case of Module-based workflows, and `TopLevelModule.workflow_fn` in the case of function-based workflows.
 
-To customize the Workflow Type, set the `name` parameter with `opts` when registering your Workflow with a Worker.
+To customize the Workflow Type, set the `name` parameter with `opts`, via a 3-element tuple when registering your Workflow with a Worker.
 
-<div className="copycode-notice-container">
-  <a href="https://github.com/temporalio/documentation/blob/main/sample-apps/go/yourapp/worker/main_dacx.go">
-    View the source code
-  </a>{' '}
-  in the context of the rest of the application code.
-</div>
+---
 
-```go
-package main
+If you'd like, you can [view this code](/guides/02_workflows/01_workflow_basics/lib/temporal_getting_started/application.ex) in context of an actual codebase.
 
-import (
-    "log"
+---
+```elixir
+defmodule TemporalGettingStarted.Application do
+  # ...
+  def start(_type, _args) do
+    client = Client.new!("localhost:7233", engine: TemporalEngineNif.Engine)
 
-    "go.temporal.io/sdk/activity"
-    "go.temporal.io/sdk/client"
-    "go.temporal.io/sdk/worker"
-    "go.temporal.io/sdk/workflow"
+    children = [
+       {Temporal.Worker, [
+         client: client,
+         workflows: [
+           {Workflows.FunctionBasedWorkflow, :function_based_workflow, [name: "my_custom_workflow_type"]}
+           # ...
+         ],
+         # ...
+       ]}
+    ]
+    
+    # ...
+  end
+end
 
-    "documentation-samples-go/yourapp"
-)
-// ...
-func main() {
-// ...
-    yourWorker := worker.New(temporalClient, "your-custom-task-queue-name", worker.Options{})
-// ...
-    // Use RegisterOptions to set the name of the Workflow Type for example.
-    registerWFOptions := workflow.RegisterOptions{
-        Name: "JustAnotherWorkflow",
-    }
-    yourWorker.RegisterWorkflowWithOptions(yourapp.YourSimpleWorkflowDefinition, registerWFOptions)
-// ...
-}
 ```
 
 ### How to develop Workflow logic
 
-Workflow logic is constrained by [deterministic execution requirements](/workflow-definition#deterministic-constraints). Each Temporal SDK provides a set of APIs that can be used inside your Workflow to interact with application code outside the Workflow.
+Workflow logic is constrained by [deterministic execution requirements](https://docs.temporal.io/workflow-definition#deterministic-constraints). Each Temporal SDK provides a set of APIs that can be used inside your Workflow to interact with application code outside the Workflow.
 
-In Go, Workflow Definition code cannot directly do the following:
+In Elixir, Workflow Definition code cannot directly do the following:
 
-- Iterate over maps using `range`, because with `range` the order of the map's iteration is randomized.
+- Iterate over Maps because the order of the map's iteration is randomized.
   Instead you can collect the keys of the map, sort them, and then iterate over the sorted keys to access the map.
   This technique provides deterministic results.
   You can also use a Side Effect or an Activity to process the map instead.
@@ -129,13 +123,5 @@ In Go, Workflow Definition code cannot directly do the following:
 
 The Temporal Go SDK has APIs to handle equivalent Go constructs:
 
-- `workflow.Now()` This is a replacement for `time.Now()`.
-- `workflow.Sleep()` This is a replacement for `time.Sleep()`.
-- `workflow.GetLogger()` This ensures that the provided logger does not duplicate logs during a replay.
-- `workflow.Go()` This is a replacement for the `go` statement.
-- `workflow.Channel` This is a replacement for the native `chan` type.
-  Temporal provides support for both buffered and unbuffered channels.
-- `workflow.Selector` This is a replacement for the `select` statement.
-  Learn more on the [Go SDK Selectors](https://legacy-documentation-sdks.temporal.io/go/selectors) page.
-- `workflow.Context` This is a replacement for `context.Context`.
-  See [Tracing](/develop/go/platform/observability#tracing) for more information about context propagation.
+- `Workflow.utc_now(ctx)` This is a replacement for `&DateTime.utc_now/1`.
+- `Workflow.sleep(ctx, ...)` This is a replacement for `&Process.sleep/1`.

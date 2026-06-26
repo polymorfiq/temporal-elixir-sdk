@@ -17,6 +17,9 @@ Workflow result: 5 x 30 = 150
 
 $> mix start.function_workflow 5 20
 Workflow result: 5 x 20 = 100
+
+$> mix start.custom_name_workflow 3
+Workflow result: 90
 ```
 
 ### Interesting files
