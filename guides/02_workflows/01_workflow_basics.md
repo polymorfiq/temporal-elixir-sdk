@@ -121,7 +121,7 @@ In Elixir, Workflow Definition code cannot directly do the following:
   You can also use a Side Effect or an Activity to process the map instead.
 - Call an external API, conduct a file I/O operation, talk to another service, etc. (Use an Activity for these.)
 
-The Temporal Go SDK has APIs to handle equivalent Go constructs:
+The Temporal Elixir SDK has APIs to handle equivalent Elixir constructs:
 
 - `Workflow.utc_now(ctx)` This is a replacement for `&DateTime.utc_now/1`.
 - `Workflow.sleep(ctx, ...)` This is a replacement for `&Process.sleep/1`.
