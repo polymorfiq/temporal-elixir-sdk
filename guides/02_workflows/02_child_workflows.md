@@ -2,11 +2,6 @@
 
 > Use the Elixir SDK to start a Child Workflow Execution and set a Parent Close Policy, including details on Workflow Options and future management.
 
-This page shows how to do the following:
-
-- [Start a Child Workflow Execution](#child-workflows)
-- [Set a Parent Close Policy](#parent-close-policy)
-
 ## Start a Child Workflow Execution
 
 A [Child Workflow Execution](https://docs.temporal.io/child-workflows) is a Workflow Execution that is scheduled from within another Workflow using a Child Workflow API.
