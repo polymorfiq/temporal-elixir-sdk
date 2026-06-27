@@ -217,10 +217,11 @@ defmodule TemporalEngine.Data.Commands do
     @structdoc "Start a child workflow execution"
 
     @doc "Lang’s incremental sequence number, used as the operation identifier"
-    @type seq :: required :: pos_integer()
+    @default :not_specified
+    @type seq :: required :: pos_integer() | :not_specified
 
     @type namespace :: required :: String.t()
-    @type workflow_id :: required :: String.t()
+    @type id :: required :: String.t()
     @type workflow_type :: required :: String.t()
     @type task_queue :: required :: String.t()
 
@@ -295,7 +296,9 @@ defmodule TemporalEngine.Data.Commands do
     - `:wait_cancellation_completed` - Wait for child cancellation completion.
     - `:wait_cancellation_requested` - Request cancellation of the child and wait for confirmation that the request was received.
     """
+    @default :wait_cancellation_completed
     @type cancellation_type ::
+            required ::
             :abandon | :try_cancel | :wait_cancellation_completed | :wait_cancellation_requested
 
     @doc """

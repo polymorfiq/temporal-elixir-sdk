@@ -22,14 +22,20 @@ defmodule Temporal.Workflow.WorkflowExecution do
     :run_id,
     :workflow_id,
     :task_queue,
+    :namespace,
     :module,
     :exec_fn,
     :timestamp,
+    unlocked_in_activation: 0,
     query_handlers: %{},
     awaiting_activity: %{},
     activity_results: %{},
     awaiting_timer: %{},
     fired_timers: %{},
+    awaiting_child_workflow_starts: %{},
+    child_workflow_starts: %{},
+    awaiting_child_workflows: %{},
+    child_workflow_results: %{},
     exec_ref: nil,
     exec_pid: nil,
     queued_commands: [],
@@ -44,14 +50,18 @@ defmodule Temporal.Workflow.WorkflowExecution do
              run_id: String.t(),
              workflow_id: String.t(),
              task_queue: String.t(),
+             namespace: String.t(),
              module: module(),
              exec_fn: atom(),
              timestamp: DateTime.t(),
+             unlocked_in_activation: non_neg_integer(),
              query_handlers: %{String.t() => fun()},
              awaiting_activity: %{integer() => [pid()]},
              activity_results: %{integer() => term()},
              awaiting_timer: %{integer() => [pid()]},
              fired_timers: %{integer() => boolean()},
+             awaiting_child_workflow_starts: %{integer() => [pid()]},
+             child_workflow_starts: %{integer() => {:ok, String.t()} | {:error, term()}},
              exec_ref: reference() | nil,
              exec_pid: pid() | nil,
              activity_results: %{integer() => term()},
@@ -63,10 +73,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
   def start_link(init_args), do: GenStage.start_link(__MODULE__, init_args)
 
   @spec init(
-          {run_id :: String.t(), task_queue :: String.t(), module :: module(), exec_fn :: atom(),
-           config :: Jobs.initialize_workflow()}
+          {run_id :: String.t(), task_queue :: String.t(), namespace :: String.t(),
+           module :: module(), exec_fn :: atom(), config :: Jobs.initialize_workflow()}
         ) :: {:producer, workflow_state()}
-  def init({run_id, task_queue, module, exec_fn, config}) do
+  def init({run_id, task_queue, namespace, module, exec_fn, config}) do
     Process.set_label({:workflow, run_id})
 
     {:producer,
@@ -77,6 +87,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
        run_id: run_id,
        workflow_id: initialize_workflow(config, :workflow_id),
        task_queue: task_queue,
+       namespace: namespace,
        module: module,
        exec_fn: exec_fn,
        timestamp: initialize_workflow(config, :start_time) |> Timestamp.to_native()
@@ -85,6 +96,12 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
   @spec process_job(pid(), Jobs.job()) :: :ok
   def process_job(pid, job), do: GenStage.cast(pid, job)
+
+  @spec activation_started(pid()) :: :ok
+  def activation_started(pid), do: GenStage.cast(pid, :activation_started)
+
+  @spec activation_completed(pid()) :: :ok
+  def activation_completed(pid), do: GenStage.cast(pid, :activation_completed)
 
   @spec queue_commands(pid(), Commands.command()) :: {:ok, Commands.command()} | {:error, term()}
   def queue_command(pid, command) do
@@ -99,7 +116,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
   @spec set_current_timestamp(pid(), DateTime.t()) :: :ok
   def set_current_timestamp(pid, ts), do: GenStage.cast(pid, {:set_current_timestamp, ts})
 
-  @spec get_current_timestamp(pid()) :: :ok
+  @spec get_current_timestamp(pid()) :: DateTime.t()
   def get_current_timestamp(pid), do: GenStage.call(pid, :get_current_timestamp, :infinity)
 
   @spec set_query_handler(pid(), name :: String.t(), handler :: fun()) :: :ok
@@ -113,8 +130,17 @@ defmodule Temporal.Workflow.WorkflowExecution do
     do: GenStage.call(pid, {:queue_commands, commands}, :infinity)
 
   @spec get_activity_results(pid(), seq :: pos_integer()) :: {:ok, term()} | {:error, term()}
-  def get_activity_results(pid, seq),
-    do: GenStage.call(pid, {:get_activity_results, seq}, :infinity)
+  def get_activity_results(pid, seq) do
+    GenStage.call(pid, {:get_activity_results, seq}, :infinity)
+  end
+
+  @spec get_child_workflow_result(pid(), seq :: pos_integer()) :: {:ok, term()} | {:error, term()}
+  def get_child_workflow_result(pid, seq),
+    do: GenStage.call(pid, {:get_child_workflow_result, seq}, :infinity)
+
+  @spec get_child_workflow(pid(), seq :: pos_integer()) :: {:ok, term()} | {:error, term()}
+  def get_child_workflow(pid, seq),
+    do: GenStage.call(pid, {:get_child_workflow, seq}, :infinity)
 
   @spec wait_for_timer(pid(), seq :: pos_integer()) :: :ok | {:error, term()}
   def wait_for_timer(pid, seq),
@@ -146,6 +172,9 @@ defmodule Temporal.Workflow.WorkflowExecution do
         schedule_local_activity() = cmd, {cmds, seq} ->
           {cmds ++ [schedule_local_activity(cmd, seq: seq, activity_id: "#{seq}")], seq + 1}
 
+        start_child_workflow_execution() = cmd, {cmds, seq} ->
+          {cmds ++ [start_child_workflow_execution(cmd, seq: seq)], seq + 1}
+
         other, {cmds, seq} ->
           {cmds ++ [other], seq}
       end)
@@ -171,20 +200,49 @@ defmodule Temporal.Workflow.WorkflowExecution do
     else
       all_awaiting = workflow_state(state, :awaiting_activity)
       awaiting = Map.get(all_awaiting, seq, [])
-      queued_commands = workflow_state(state, :queued_commands)
 
-      # If we're waiting to schedule events or something, let's tell Temporal Server.
-      # If we're not, don't send an update to Temporal Server.
-      events =
-        if Enum.any?(queued_commands),
-          do: [success(commands: queued_commands)],
-          else: []
+      send(self(), :flush_queued_commands)
 
-      {:noreply, events,
+      {:noreply, [],
+       workflow_state(state, awaiting_activity: Map.put(all_awaiting, seq, [from | awaiting]))}
+    end
+  end
+
+  def handle_call({:get_child_workflow, seq}, from, state) do
+    starts = workflow_state(state, :child_workflow_starts)
+
+    if Map.has_key?(starts, seq) do
+      GenStage.reply(from, Map.fetch!(starts, seq))
+      {:noreply, [], state}
+    else
+      all_awaiting = workflow_state(state, :awaiting_child_workflow_starts)
+      awaiting = Map.get(all_awaiting, seq, [])
+
+      send(self(), :flush_queued_commands)
+
+      {:noreply, [],
        workflow_state(state,
-         queued_commands: [],
-         awaiting_activity: Map.put(all_awaiting, seq, [from | awaiting])
-       ), :hibernate}
+         awaiting_child_workflow_starts: Map.put(all_awaiting, seq, [from | awaiting])
+       )}
+    end
+  end
+
+  def handle_call({:get_child_workflow_result, seq}, from, state) do
+    results = workflow_state(state, :child_workflow_results)
+
+    if Map.has_key?(results, seq) do
+      GenStage.reply(from, Map.fetch!(results, seq))
+      {:noreply, [], state}
+    else
+      all_awaiting = workflow_state(state, :awaiting_child_workflows)
+      awaiting = Map.get(all_awaiting, seq, [])
+
+      send(self(), :flush_queued_commands)
+
+      {:noreply, [],
+       workflow_state(state,
+         awaiting_child_workflows: Map.put(all_awaiting, seq, [from | awaiting])
+       )}
     end
   end
 
@@ -197,13 +255,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
     else
       all_awaiting = workflow_state(state, :awaiting_timer)
       awaiting = Map.get(all_awaiting, seq, [])
-      queued_commands = workflow_state(state, :queued_commands)
+      send(self(), :flush_queued_commands)
 
-      {:noreply, [success(commands: queued_commands)],
-       workflow_state(state,
-         queued_commands: [],
-         awaiting_timer: Map.put(all_awaiting, seq, [from | awaiting])
-       ), :hibernate}
+      {:noreply, [],
+       workflow_state(state, awaiting_timer: Map.put(all_awaiting, seq, [from | awaiting]))}
     end
   end
 
@@ -233,8 +288,11 @@ defmodule Temporal.Workflow.WorkflowExecution do
     results = workflow_state(state, :activity_results)
     results = Map.put(results, seq, result)
 
+    unlocked = workflow_state(state, :unlocked_in_activation) + Enum.count(awaiting_this)
+
     {:noreply, [],
      workflow_state(state,
+       unlocked_in_activation: unlocked,
        activity_results: results,
        awaiting_activity: Map.delete(all_awaiting, seq)
      )}
@@ -251,8 +309,81 @@ defmodule Temporal.Workflow.WorkflowExecution do
     fired = workflow_state(state, :fired_timers)
     fired = Map.put(fired, seq, true)
 
+    unlocked = workflow_state(state, :unlocked_in_activation) + Enum.count(awaiting_this)
+
     {:noreply, [],
-     workflow_state(state, fired_timers: fired, awaiting_timer: Map.delete(all_awaiting, seq))}
+     workflow_state(state,
+       unlocked_in_activation: unlocked,
+       fired_timers: fired,
+       awaiting_timer: Map.delete(all_awaiting, seq)
+     )}
+  end
+
+  def handle_cast(
+        job(variant: resolve_child_workflow_execution_start(seq: seq, status: status)),
+        state
+      ) do
+    all_awaiting = workflow_state(state, :awaiting_child_workflow_starts)
+    awaiting_this = Map.get(all_awaiting, seq, [])
+
+    resp =
+      case status do
+        child_workflow_start_succeeded(run_id: run_id) ->
+          {:ok, run_id}
+
+        child_workflow_start_failed(cause: cause) ->
+          {:error, cause}
+
+        child_workflow_start_cancelled(failure: failure) ->
+          {:error, Failure.to_map(failure)}
+      end
+
+    Enum.each(awaiting_this, fn awaiter ->
+      GenStage.reply(awaiter, resp)
+    end)
+
+    starts = workflow_state(state, :child_workflow_starts)
+    starts = Map.put(starts, seq, resp)
+    unlocked = workflow_state(state, :unlocked_in_activation) + Enum.count(awaiting_this)
+
+    {:noreply, [],
+     workflow_state(state,
+       unlocked_in_activation: unlocked,
+       child_workflow_starts: starts,
+       awaiting_child_workflow_starts: Map.delete(all_awaiting, seq)
+     )}
+  end
+
+  def handle_cast(job(variant: resolve_child_workflow_execution(seq: seq, status: status)), state) do
+    all_awaiting = workflow_state(state, :awaiting_child_workflows)
+    awaiting_this = Map.get(all_awaiting, seq, [])
+
+    resp =
+      case status do
+        child_workflow_result(status: child_workflow_completed(result: result)) ->
+          {:ok, Payload.value_from_record(result)}
+
+        child_workflow_result(status: child_workflow_failed(failure: failure)) ->
+          {:error, Failure.to_map(failure)}
+
+        child_workflow_result(status: child_workflow_cancelled(failure: failure)) ->
+          {:error, Failure.to_map(failure)}
+      end
+
+    Enum.each(awaiting_this, fn awaiter ->
+      GenStage.reply(awaiter, resp)
+    end)
+
+    results = workflow_state(state, :child_workflow_results)
+    results = Map.put(results, seq, resp)
+    unlocked = workflow_state(state, :unlocked_in_activation) + Enum.count(awaiting_this)
+
+    {:noreply, [],
+     workflow_state(state,
+       unlocked_in_activation: unlocked,
+       child_workflow_results: results,
+       awaiting_child_workflows: Map.delete(all_awaiting, seq)
+     )}
   end
 
   def handle_cast(
@@ -341,6 +472,20 @@ defmodule Temporal.Workflow.WorkflowExecution do
     {:noreply, [status], state}
   end
 
+  def handle_cast(:activation_started, state) do
+    {:noreply, [], workflow_state(state, unlocked_in_activation: 0)}
+  end
+
+  def handle_cast(:activation_completed, state) do
+    unlocked = workflow_state(state, :unlocked_in_activation)
+
+    if unlocked == 0 && awaiting_process_count(state) > 0 do
+      send(self(), :flush_queued_commands)
+    end
+
+    {:noreply, [], state}
+  end
+
   def handle_cast({:set_is_replaying, replaying}, state) do
     if replaying, do: Logger.disable(self()), else: Logger.enable(self())
     {:noreply, [], state}
@@ -421,6 +566,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
       workflow_context(
         execution: self(),
         task_queue: workflow_state(state, :task_queue),
+        namespace: workflow_state(state, :namespace),
         run_id: workflow_state(state, :run_id),
         workflow_id: workflow_state(state, :workflow_id)
       )
@@ -441,6 +587,15 @@ defmodule Temporal.Workflow.WorkflowExecution do
       end)
 
     {:noreply, [], workflow_state(state, exec_pid: exec_pid, exec_ref: exec_ref)}
+  end
+
+  def handle_info(:flush_queued_commands, state) do
+    queued_commands = workflow_state(state, :queued_commands)
+
+    {:noreply,
+     [
+       success(commands: queued_commands)
+     ], workflow_state(state, queued_commands: []), :hibernate}
   end
 
   def handle_info(
@@ -472,5 +627,25 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
     status = success(commands: [command(variant: fail_workflow_execution(failure: failure))])
     {:noreply, [status], workflow_state(state, exec_pid: nil, exec_ref: nil)}
+  end
+
+  defp awaiting_process_count(state) do
+    awaiting_activities =
+      workflow_state(state, :awaiting_activity)
+      |> Enum.flat_map(fn {_seq, awaiting} -> awaiting end)
+
+    awaiting_timers =
+      workflow_state(state, :awaiting_timer) |> Enum.flat_map(fn {_seq, awaiting} -> awaiting end)
+
+    awaiting_child_starts =
+      workflow_state(state, :awaiting_child_workflow_starts)
+      |> Enum.flat_map(fn {_seq, awaiting} -> awaiting end)
+
+    awaiting_children =
+      workflow_state(state, :awaiting_child_workflows)
+      |> Enum.flat_map(fn {_seq, awaiting} -> awaiting end)
+
+    Enum.count(awaiting_activities) + Enum.count(awaiting_timers) +
+      Enum.count(awaiting_child_starts) + Enum.count(awaiting_children)
   end
 end

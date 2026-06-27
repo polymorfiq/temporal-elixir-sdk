@@ -281,7 +281,6 @@ defmodule TemporalEngine.Data.Jobs do
   deftype :child_workflow_start_failed do
     @doc "Lang should have this information but it’s more convenient to pass it back for error construction on the lang side."
     @type workflow_id :: required :: String.t()
-
     @type workflow_type :: required :: String.t()
     @type cause :: required :: :unspecified | :workflow_already_exists
   end
@@ -311,6 +310,18 @@ defmodule TemporalEngine.Data.Jobs do
             {:completed, nested!(Payload.payload())}
             | {:failed, nested!(Failure.failure())}
             | {:cancelled, nested!(Failure.failure())}
+  end
+
+  deftype :child_workflow_completed do
+    @type result :: nested!(Payload.payload)
+  end
+
+  deftype :child_workflow_failed do
+    @type failure :: nested!(Failure.failure)
+  end
+
+  deftype :child_workflow_cancelled do
+    @type failure :: nested!(Failure.failure)
   end
 
   deftype :resolve_signal_external_workflow do

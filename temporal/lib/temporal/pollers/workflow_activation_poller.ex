@@ -48,7 +48,8 @@ defmodule Temporal.Pollers.WorkflowActivationPoller do
         worker = poll_state(state, :worker)
         Logger.debug("Polling workflow activations... (#{TemporalEngine.Worker.id(worker)})")
 
-        with {:ok, activation} <- Worker.poll_workflow_activation(worker) do
+        with {:ok, activation} <-
+               Worker.poll_workflow_activation(worker) do
           send(poller, {self(), {:ok, activation}})
         else
           {:error, "core_shutdown"} ->

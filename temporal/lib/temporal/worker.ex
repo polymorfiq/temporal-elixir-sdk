@@ -36,6 +36,7 @@ defmodule Temporal.Worker do
     :task_queue,
     :client,
     :worker,
+    :namespace,
     :activation_poller,
     :activity_poller,
     :nexus_poller,
@@ -50,6 +51,7 @@ defmodule Temporal.Worker do
              task_queue: String.t(),
              client: Client.t(),
              worker: EngineWorker.t(),
+             namespace: String.t(),
              activation_poller: pid(),
              activity_poller: pid(),
              nexus_poller: pid(),
@@ -207,6 +209,7 @@ defmodule Temporal.Worker do
           task_queue: worker_config(config, :task_queue),
           client: client,
           worker: worker,
+          namespace: worker_config(config, :namespace),
           activation_poller: activation_poller,
           activity_poller: activity_poller,
           nexus_poller: nexus_poller
@@ -252,10 +255,13 @@ defmodule Temporal.Worker do
           task_queue = worker_state(state, :task_queue)
 
           with {:ok, {wf_module, wf_exec_fn}} <- found,
-               exec_args <- {run_id, task_queue, wf_module, wf_exec_fn, init},
+               exec_args <-
+                 {run_id, task_queue, worker_state(state, :namespace), wf_module, wf_exec_fn,
+                  init},
                {:ok, comms} <-
                  WorkflowComms.start_link(
-                   {run_id, workflow_type, worker_state(state, :worker), exec_args}
+                   {run_id, workflow_type, worker_state(state, :namespace),
+                    worker_state(state, :worker), exec_args}
                  ) do
             workflows = worker_state(state, :workflows) |> Map.put(comms, run_id)
             worker_state(state, workflows: workflows)

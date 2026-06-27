@@ -19,6 +19,9 @@ defmodule Temporal.Workflow.WorkflowComms do
     :workflow_type,
     :worker,
     :exec,
+    :namespace,
+    activations_received: 1,
+    completions_sent: 0,
     replaying: false,
     scheduled_activities: %{},
     started_timers: %{}
@@ -29,7 +32,10 @@ defmodule Temporal.Workflow.WorkflowComms do
              run_id: String.t(),
              workflow_type: String.t(),
              exec: pid(),
+             namespace: String.t(),
              replaying: boolean(),
+             activations_received: non_neg_integer(),
+             completions_sent: non_neg_integer(),
              scheduled_activities: %{integer() => map()},
              started_timers: %{integer() => map()},
              worker: Worker.t()
@@ -39,9 +45,12 @@ defmodule Temporal.Workflow.WorkflowComms do
   def start_link(init_args), do: GenStage.start_link(__MODULE__, init_args)
 
   @doc false
-  @spec init({run_id :: String.t(), workflow_type :: String.t(), Worker.t(), exec_args :: term()}) ::
+  @spec init(
+          {run_id :: String.t(), workflow_type :: String.t(), namespace :: String.t(), Worker.t(),
+           exec_args :: term()}
+        ) ::
           {:consumer, comms_state(), keyword()}
-  def init({run_id, workflow_type, worker, exec_args}) do
+  def init({run_id, workflow_type, namespace, worker, exec_args}) do
     Process.set_label({:workflow_comms, workflow_type, run_id})
     {:ok, exec} = WorkflowExecution.start_link(exec_args)
 
@@ -50,6 +59,7 @@ defmodule Temporal.Workflow.WorkflowComms do
        run_id: run_id,
        workflow_type: workflow_type,
        worker: worker,
+       namespace: namespace,
        exec: exec
      ), subscribe_to: [exec]}
   end
@@ -76,7 +86,7 @@ defmodule Temporal.Workflow.WorkflowComms do
       "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) - removing from cache (#{inspect(reason)} - #{inspect(message)})."
     )
 
-    {:stop, :normal, state}
+    {:stop, :normal, inc_activations(state)}
   end
 
   def handle_cast(activation() = activate, state) do
@@ -102,16 +112,19 @@ defmodule Temporal.Workflow.WorkflowComms do
       WorkflowExecution.set_current_timestamp(exec, Timestamp.to_native(ts))
 
       is_replaying? = activation(activate, :is_replaying)
-      if is_replaying? != comms_state(state, :replaying)  do
+
+      if is_replaying? != comms_state(state, :replaying) do
         WorkflowExecution.set_is_replaying(exec, is_replaying?)
       end
 
+      WorkflowExecution.activation_started(exec)
       activation(activate, :jobs) |> Enum.each(&WorkflowExecution.process_job(exec, &1))
+      WorkflowExecution.activation_completed(exec)
 
-      {:noreply, [], comms_state(state, replaying: is_replaying?)}
+      {:noreply, [], state |> inc_activations() |> comms_state(replaying: is_replaying?)}
     else
       {:error, err} ->
-        {:stop, err, state}
+        {:stop, err, inc_activations(state)}
     end
   end
 
@@ -156,10 +169,18 @@ defmodule Temporal.Workflow.WorkflowComms do
       :ok =
         Worker.complete_workflow_activation(worker, completion(run_id: run_id, status: status))
 
-      {:noreply, [], new_state}
+      {:noreply, [], inc_completions(new_state)}
     else
       {:error, err} ->
-        {:stop, {:unexpected_command, err}}
+        {:stop, {:unexpected_command, err}, inc_completions(state)}
     end
+  end
+
+  defp inc_activations(state) do
+    comms_state(state, activations_received: comms_state(state, :activations_received) + 1)
+  end
+
+  defp inc_completions(state) do
+    comms_state(state, completions_sent: comms_state(state, :completions_sent) + 1)
   end
 end

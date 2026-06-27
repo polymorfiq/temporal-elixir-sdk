@@ -974,8 +974,8 @@ impl Into<temporal_api::update::v1::Meta> for SdkUpdateMeta {
     }
 }
 
-#[derive(Debug, NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkflowChildResult"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "child_workflow_result"]
 pub struct SdkWorkflowChildResult {
     pub status: Option<SdkWorkflowChildExecutionStatus>,
 }
@@ -1002,7 +1002,7 @@ impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::ChildWorkflowR
     }
 }
 
-#[derive(Debug, NifTaggedEnum, Clone)]
+#[derive(Debug, NifUntaggedEnum, Clone)]
 pub enum SdkWorkflowChildExecutionStatus {
     Completed(SdkWorkflowChildExecutionCompletedStatus),
     Failed(SdkWorkflowChildExecutionFailedStatus),
@@ -1029,8 +1029,8 @@ impl Into<ChildWorkflowStatus> for SdkWorkflowChildExecutionStatus {
     }
 }
 
-#[derive(Debug, NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkflowChildExecutionCompletedStatus"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "child_workflow_completed"]
 pub struct SdkWorkflowChildExecutionCompletedStatus {
     pub result: Option<SdkPayload>,
 }
@@ -1055,8 +1055,8 @@ impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Success>
     }
 }
 
-#[derive(Debug, NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkflowChildExecutionFailedStatus"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "child_workflow_failed"]
 pub struct SdkWorkflowChildExecutionFailedStatus {
     pub failure: Option<SdkWorkflowFailure>,
 }
@@ -1081,8 +1081,8 @@ impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Failure>
     }
 }
 
-#[derive(Debug, NifStruct, Clone)]
-#[module = "TemporalEngineNif.Data.WorkflowChildExecutionCancelledStatus"]
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "child_workflow_cancelled"]
 pub struct SdkWorkflowChildExecutionCancelledStatus {
     pub failure: Option<SdkWorkflowFailure>,
 }
@@ -1111,9 +1111,9 @@ impl Into<temporalio_sdk_common::protos::coresdk::child_workflow::Cancellation>
 
 #[derive(Debug, NifTaggedEnum, Clone)]
 pub enum SdkWorkflowChildExecutionStartStatus {
-    Succeeded(SdkWorkflowChildExecutionStartSucceededStatus),
-    Failed(SdkWorkflowChildExecutionStartFailedStatus),
-    Cancelled(SdkWorkflowChildExecutionStartCancelledStatus),
+    ChildWorkflowStartSucceeded(SdkWorkflowChildExecutionStartSucceededStatus),
+    ChildWorkflowStartFailed(SdkWorkflowChildExecutionStartFailedStatus),
+    ChildWorkflowStartCancelled(SdkWorkflowChildExecutionStartCancelledStatus),
 }
 
 impl From<workflow_activation::resolve_child_workflow_execution_start::Status>
@@ -1123,13 +1123,13 @@ impl From<workflow_activation::resolve_child_workflow_execution_start::Status>
         match external {
             workflow_activation::resolve_child_workflow_execution_start::Status::Succeeded(
                 status,
-            ) => Self::Succeeded(status.into()),
+            ) => Self::ChildWorkflowStartSucceeded(status.into()),
             workflow_activation::resolve_child_workflow_execution_start::Status::Failed(status) => {
-                Self::Failed(status.into())
+                Self::ChildWorkflowStartFailed(status.into())
             }
             workflow_activation::resolve_child_workflow_execution_start::Status::Cancelled(
                 status,
-            ) => Self::Cancelled(status.into()),
+            ) => Self::ChildWorkflowStartCancelled(status.into()),
         }
     }
 }
@@ -1139,17 +1139,17 @@ impl Into<workflow_activation::resolve_child_workflow_execution_start::Status>
 {
     fn into(self) -> workflow_activation::resolve_child_workflow_execution_start::Status {
         match self {
-            Self::Succeeded(status) => {
+            Self::ChildWorkflowStartSucceeded(status) => {
                 workflow_activation::resolve_child_workflow_execution_start::Status::Succeeded(
                     status.into(),
                 )
             }
-            Self::Failed(status) => {
+            Self::ChildWorkflowStartFailed(status) => {
                 workflow_activation::resolve_child_workflow_execution_start::Status::Failed(
                     status.into(),
                 )
             }
-            Self::Cancelled(status) => {
+            Self::ChildWorkflowStartCancelled(status) => {
                 workflow_activation::resolve_child_workflow_execution_start::Status::Cancelled(
                     status.into(),
                 )

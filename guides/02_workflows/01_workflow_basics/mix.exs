@@ -22,9 +22,9 @@ defmodule TemporalGettingStarted.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:temporal, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal", ref: "7443d38"},
-      {:temporal_engine, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine", ref: "7443d38", override: true},
-      {:temporal_engine_nif, "~> 0.1.0", github: "polymorfiq/temporal-elixir-sdk", subdir: "temporal_engine_nif", ref: "7443d38"},
+      {:temporal, "~> 0.1.0", path: "../../../temporal"},
+      {:temporal_engine, "~> 0.1.0", path: "../../../temporal_engine"},
+      {:temporal_engine_nif, "~> 0.1.0", path: "../../../temporal_engine_nif"},
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
