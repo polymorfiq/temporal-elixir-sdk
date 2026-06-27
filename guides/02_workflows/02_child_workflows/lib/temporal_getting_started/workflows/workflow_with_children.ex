@@ -5,8 +5,7 @@ defmodule TemporalGettingStarted.Workflows.WorkflowWithChildren do
     ctx =
       Workflow.with_child_workflow_opts(ctx,
         workflow_execution_timeout: {10, :minutes},
-        workflow_task_timeout: {1, :minutes},
-        parent_close_policy: :abandon
+        workflow_task_timeout: {1, :minutes}
       )
 
     child1 =
