@@ -4030,7 +4030,7 @@ impl HasWorkflowDefinition for SdkWorkflowDefinition {
 }
 
 #[derive(Debug, NifRecord, Clone)]
-#[tag = "get_workflow_result_opts"]
+#[tag = "get_workflow_result"]
 pub struct SdkWorkflowGetResultOptions {
     pub follow_runs: bool,
     pub timeout: Option<SdkDuration>,

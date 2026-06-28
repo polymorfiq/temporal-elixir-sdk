@@ -11,25 +11,27 @@ defmodule Temporal.WorkflowContext do
   @type t :: workflow_context()
 
   Record.defrecord(:workflow_context, [
-    :context,
-    :execution,
     :task_queue,
     :workflow_id,
     :namespace,
     :run_id,
     :initialize_config,
+    :context,
+    :execution,
+    :runtime,
     activity_options: [],
     child_workflow_options: []
   ])
 
   @type workflow_context ::
           record(:workflow_context,
-            context: pid(),
-            execution: pid(),
             task_queue: String.t(),
             workflow_id: String.t(),
             namespace: String.t(),
             run_id: String.t(),
+            context: pid(),
+            execution: pid(),
+            runtime: pid(),
             initialize_config: Jobs.initialize_workflow(),
             activity_options: Commands.schedule_activity_opts(),
             child_workflow_options: Commands.start_child_workflow_execution_opts()

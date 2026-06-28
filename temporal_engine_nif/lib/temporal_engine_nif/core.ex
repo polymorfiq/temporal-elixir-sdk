@@ -151,7 +151,7 @@ defmodule TemporalEngineNif.Core do
   @spec _workflow_handle_get_result(
           runtime :: term(),
           workflow_handle :: term(),
-          opts :: HandleOpts.get_workflow_result_opts(),
+          opts :: HandleOpts.get_workflow_result(),
           resp_pid :: pid()
         ) :: :ok | {:error, term()}
   def _workflow_handle_get_result(_runtime, _workflow_handle, _opts, _resp_pid),

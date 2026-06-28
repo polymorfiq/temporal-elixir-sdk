@@ -1,6 +1,7 @@
 defmodule Temporal.Workflow.AwaitActions do
   import Temporal.WorkflowContext
 
+  alias Temporal.Workflow.WorkflowRuntime
   alias Temporal.Workflow.WorkflowExecution
   alias Temporal.WorkflowContext
 
@@ -11,5 +12,8 @@ defmodule Temporal.Workflow.AwaitActions do
   end
 
   @spec all_handlers_finished?(WorkflowContext.t()) :: boolean()
-  def all_handlers_finished?(ctx), do: WorkflowContext.all_handlers_finished?(ctx)
+  def all_handlers_finished?(ctx) do
+    workflow_context(runtime: runtime) = ctx
+    WorkflowRuntime.all_handlers_finished?(runtime)
+  end
 end

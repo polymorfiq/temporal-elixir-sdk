@@ -3,7 +3,7 @@ defmodule TemporalEngine.Opts.HandleOpts do
 
   alias TemporalEngine.Data.Duration
 
-  deftype :get_workflow_result_opts do
+  deftype :get_workflow_result do
     @doc "If true (the default), follows to the next workflow run in the execution chain while retrieving results."
     @default true
     @type follow_runs :: boolean()

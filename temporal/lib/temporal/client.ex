@@ -135,7 +135,7 @@ defmodule Temporal.Client do
 
         {:ok,
          workflow_update_response(outcome: update_outcome(value: [result]), stage: :completed)} ->
-          val = if(result, do: Payload.value_from_record(result), else: nil)
+          val = Payload.value_from_record(result)
 
           case val do
             {:error, Failure.failure() = failure} ->
