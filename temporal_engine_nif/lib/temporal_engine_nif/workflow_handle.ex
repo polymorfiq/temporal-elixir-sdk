@@ -15,6 +15,8 @@ end
 defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
   require TemporalEngine.Data.Failure
   import TemporalEngine.Data.Queries
+  import TemporalEngine.Data.Updates
+  import TemporalEngine.Data.Signals
   import TemporalEngine.Data.Payload
   import TemporalEngine.Opts.HandleOpts
 
@@ -116,7 +118,84 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
         )
         |> case do
           :ok -> :ok
-          {:error, err} -> raise "Could not start workflow via Core SDK: #{inspect(err)}"
+          {:error, err} -> raise "Could not query workflow via Core SDK: #{inspect(err)}"
+        end
+
+        receive do
+          {:ok, response} ->
+            send(parent, {self(), {:ok, response}})
+
+          {:error, err} ->
+            send(parent, {self(), {:error, err}})
+        end
+      end)
+
+    receive do
+      {^pid, response} ->
+        response
+
+      {:DOWN, ^ref, :process, ^pid, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @impl true
+  def update(handle, update_name, args, opts) do
+    parent = self()
+
+    update = workflow_update(name: update_name, args: args, header: update_options(opts, :header))
+    wait_policy = update_options(opts, :wait_policy)
+
+    {pid, ref} =
+      spawn_monitor(fn ->
+        Core._handle_update_workflow(
+          handle.client.runtime.core,
+          handle.core,
+          update_options(opts, :id),
+          update,
+          wait_policy,
+          self()
+        )
+        |> case do
+          :ok -> :ok
+          {:error, err} -> raise "Could not update workflow via Core SDK: #{inspect(err)}"
+        end
+
+        receive do
+          {:ok, response} ->
+            send(parent, {self(), {:ok, response}})
+
+          {:error, err} ->
+            send(parent, {self(), {:error, err}})
+        end
+      end)
+
+    receive do
+      {^pid, response} ->
+        response
+
+      {:DOWN, ^ref, :process, ^pid, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @impl true
+  def signal(handle, signal_name, args, opts) do
+    signal = signal_workflow_request(opts, signal_name: signal_name, input: args)
+
+    parent = self()
+
+    {pid, ref} =
+      spawn_monitor(fn ->
+        Core._handle_signal_workflow(
+          handle.client.runtime.core,
+          handle.core,
+          signal,
+          self()
+        )
+        |> case do
+          :ok -> :ok
+          {:error, err} -> raise "Could not signal workflow via Core SDK: #{inspect(err)}"
         end
 
         receive do

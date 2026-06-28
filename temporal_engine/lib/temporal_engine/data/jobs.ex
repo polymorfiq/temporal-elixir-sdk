@@ -65,7 +65,7 @@ defmodule TemporalEngine.Data.Jobs do
     @doc "Timeout of a single workflow task."
     @type workflow_task_timeout :: nested!(Duration.duration())
 
-    @doc "Run id of the previous workflow which continued-as-new or retired or cron executed into this workflow, if any."
+    @doc "Run id of the previous workflow which continued-as-new or retried or cron executed into this workflow, if any."
     @type continued_from_execution_run_id :: required :: String.t()
 
     @doc "If this workflow was a continuation, indicates the type of continuation."
@@ -105,7 +105,7 @@ defmodule TemporalEngine.Data.Jobs do
     @type search_attributes :: nested!(Jobs.search_attribs())
 
     @doc "When the workflow execution started event was first written"
-    @type start_time :: nested!(Timestamp.timestamp())
+    @type start_time :: required :: nested!(Timestamp.timestamp())
 
     @doc """
     Contains information about the root workflow execution.
@@ -313,15 +313,15 @@ defmodule TemporalEngine.Data.Jobs do
   end
 
   deftype :child_workflow_completed do
-    @type result :: nested!(Payload.payload)
+    @type result :: nested!(Payload.payload())
   end
 
   deftype :child_workflow_failed do
-    @type failure :: nested!(Failure.failure)
+    @type failure :: nested!(Failure.failure())
   end
 
   deftype :child_workflow_cancelled do
-    @type failure :: nested!(Failure.failure)
+    @type failure :: nested!(Failure.failure())
   end
 
   deftype :resolve_signal_external_workflow do

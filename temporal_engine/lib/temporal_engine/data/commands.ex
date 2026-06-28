@@ -476,6 +476,9 @@ defmodule TemporalEngine.Data.Commands do
 
   deftype :update_accepted do
     @structdoc "Must be sent if the update’s validator has passed (or lang was not asked to run it, and thus should be considered already-accepted, allowing lang to always send the same sequence on replay)."
+
+    @default {}
+    @type response :: tuple()
   end
 
   deftype :update_rejected do

@@ -3,9 +3,11 @@ defprotocol TemporalEngine.WorkflowHandle do
 
   require TemporalEngine.Opts.HandleOpts
   require TemporalEngine.Data.Queries
+  require TemporalEngine.Data.Updates
 
   alias TemporalEngine.Data.Queries
   alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Data.Updates
   alias TemporalEngine.Opts.HandleOpts
 
   @spec get_result(t(), HandleOpts.get_workflow_result_opts_opts()) ::
@@ -19,5 +21,23 @@ defprotocol TemporalEngine.WorkflowHandle do
           args :: [Payload.payload()],
           opts :: Queries.query_options()
         ) :: {:ok, Queries.query_workflow_response()} | {:error, term()}
-  def query(handle, query_type, args, opts)
+  def query(handle, query_type, args \\ [], opts \\ [])
+
+  @doc "Send an Update message to a workflow and get the response"
+  @spec update(
+          t(),
+          update_name :: String.t(),
+          args :: [Payload.payload()],
+          opts :: Updates.update_options()
+        ) :: {:ok, Updates.workflow_update_response()} | {:error, term()}
+  def update(handle, update_name, args \\ [], opts \\ [])
+
+  @doc "Send an Signal message to a workflow and get the response"
+  @spec signal(
+          t(),
+          signal_name :: String.t(),
+          args :: [Payload.payload()],
+          opts :: Updates.signal_workflow_request_opts()
+        ) :: {:ok, Updates.signal_workflow_response()} | {:error, term()}
+  def signal(handle, update_name, args \\ [], opts \\ [])
 end

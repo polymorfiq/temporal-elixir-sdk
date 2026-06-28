@@ -6,6 +6,7 @@ defmodule TemporalEngineNif.Core do
   require TemporalEngine.Data.ActivationCompletion
   require TemporalEngine.Data.ActivityTaskCompletion
   require TemporalEngine.Data.Payload
+  require TemporalEngine.Data.Updates
   require TemporalEngine.Config
   require TemporalEngine.Opts.ClientOpts
   require TemporalEngine.Opts.HandleOpts
@@ -16,6 +17,7 @@ defmodule TemporalEngineNif.Core do
   alias TemporalEngine.Data.ActivationCompletion
   alias TemporalEngine.Data.ActivityTaskCompletion
   alias TemporalEngine.Data.Queries
+  alias TemporalEngine.Data.Updates
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Opts.ClientOpts
   alias TemporalEngine.Opts.HandleOpts
@@ -107,6 +109,40 @@ defmodule TemporalEngineNif.Core do
         _handle,
         _query,
         _query_reject_condition,
+        _resp_pid
+      ),
+      do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _handle_update_workflow(
+          runtime :: term(),
+          handle :: WorkflowHandle.t(),
+          update_id :: String.t(),
+          request :: Updates.workflow_update(),
+          wait_policy :: Updates.update_wait_policy(),
+          resp_pid :: pid()
+        ) :: :ok | {:error, term()}
+  def _handle_update_workflow(
+        _runtime,
+        _handle,
+        _update_id,
+        _request,
+        _wait_policy,
+        _resp_pid
+      ),
+      do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _handle_signal_workflow(
+          runtime :: term(),
+          handle :: WorkflowHandle.t(),
+          signal :: Updates.workflow_update(),
+          resp_pid :: pid()
+        ) :: :ok | {:error, term()}
+  def _handle_signal_workflow(
+        _runtime,
+        _handle,
+        _signal,
         _resp_pid
       ),
       do: :erlang.nif_error(:nif_not_loaded)

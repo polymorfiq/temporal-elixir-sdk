@@ -27,7 +27,14 @@ use temporalio_sdk_common::protos::temporal::api::enums::v1::{
 use temporalio_sdk_common::protos::temporal::api::failure::v1::failure::FailureInfo;
 use temporalio_sdk_common::protos::temporal::api::query::v1::{QueryRejected, WorkflowQuery};
 use temporalio_sdk_common::protos::temporal::api::sdk::v1::UserMetadata;
-use temporalio_sdk_common::protos::temporal::api::workflowservice::v1::QueryWorkflowResponse;
+use temporalio_sdk_common::protos::temporal::api::update::v1::outcome::Value;
+use temporalio_sdk_common::protos::temporal::api::update::v1::{
+    Input, Outcome, UpdateRef, WaitPolicy,
+};
+use temporalio_sdk_common::protos::temporal::api::workflowservice::v1::{
+    QueryWorkflowResponse, SignalWorkflowExecutionRequest, SignalWorkflowExecutionResponse,
+    UpdateWorkflowExecutionResponse,
+};
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::{HasWorkflowDefinition, WorkflowDefinition};
 
@@ -117,7 +124,7 @@ impl From<i32> for SdkContinueAsNewReason {
 #[derive(Debug, NifRecord, Clone)]
 #[tag = "job"]
 pub struct SdkWorkflowActivationJob {
-    variant: Option<SdkWorkflowActivationJobVariant>,
+    pub variant: Option<SdkWorkflowActivationJobVariant>,
 }
 
 impl From<workflow_activation::WorkflowActivationJob> for SdkWorkflowActivationJob {
@@ -3623,20 +3630,20 @@ impl Into<workflow_commands::UpdateResponse> for SdkWorkflowCommandUpdateRespons
 
 #[derive(Debug, NifTaggedEnum, Clone)]
 pub enum SdkWorkflowCommandUpdateResponseStatus {
-    Accepted(()),
-    Rejected(SdkWorkflowFailure),
-    Completed(SdkPayload),
+    UpdateAccepted(()),
+    UpdateRejected(SdkWorkflowFailure),
+    UpdateCompleted(SdkPayload),
 }
 
 impl From<workflow_commands::update_response::Response> for SdkWorkflowCommandUpdateResponseStatus {
     fn from(external: workflow_commands::update_response::Response) -> Self {
         match external {
-            workflow_commands::update_response::Response::Accepted(()) => Self::Accepted(()),
+            workflow_commands::update_response::Response::Accepted(()) => Self::UpdateAccepted(()),
             workflow_commands::update_response::Response::Rejected(status) => {
-                Self::Rejected(status.into())
+                Self::UpdateRejected(status.into())
             }
             workflow_commands::update_response::Response::Completed(payload) => {
-                Self::Completed(payload.into())
+                Self::UpdateCompleted(payload.into())
             }
         }
     }
@@ -3645,11 +3652,11 @@ impl From<workflow_commands::update_response::Response> for SdkWorkflowCommandUp
 impl Into<workflow_commands::update_response::Response> for SdkWorkflowCommandUpdateResponseStatus {
     fn into(self) -> workflow_commands::update_response::Response {
         match self {
-            Self::Accepted(()) => workflow_commands::update_response::Response::Accepted(()),
-            Self::Rejected(status) => {
+            Self::UpdateAccepted(()) => workflow_commands::update_response::Response::Accepted(()),
+            Self::UpdateRejected(status) => {
                 workflow_commands::update_response::Response::Rejected(status.into())
             }
-            Self::Completed(payload) => {
+            Self::UpdateCompleted(payload) => {
                 workflow_commands::update_response::Response::Completed(payload.into())
             }
         }
@@ -4166,6 +4173,283 @@ impl Into<QueryRejected> for SdkQueryRejected {
     fn into(self) -> QueryRejected {
         QueryRejected {
             status: self.status.into(),
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "signal_workflow_request"]
+pub struct SdkSignalWorkflowRequest {
+    pub namespace: String,
+    pub workflow_execution: Option<SdkWorkflowExecution>,
+    pub signal_name: String,
+    pub input: Vec<SdkPayload>,
+    pub identity: String,
+    pub request_id: String,
+    pub control: String,
+    pub header: Option<SdkHeader>,
+    pub links: Vec<SdkLink>,
+}
+
+impl From<SignalWorkflowExecutionRequest> for SdkSignalWorkflowRequest {
+    fn from(external: SignalWorkflowExecutionRequest) -> Self {
+        Self {
+            namespace: external.namespace,
+            workflow_execution: external.workflow_execution.try_into_or_none(),
+            signal_name: external.signal_name,
+            input: match external.input {
+                None => vec![],
+                Some(p) => p.payloads.iter().map(|val| val.into()).collect(),
+            },
+            identity: external.identity,
+            request_id: external.request_id,
+            #[allow(deprecated)]
+            control: external.control,
+            header: external.header.try_into_or_none(),
+            links: external
+                .links
+                .iter()
+                .map(|val| val.clone().into())
+                .collect(),
+        }
+    }
+}
+
+impl Into<SignalWorkflowExecutionRequest> for SdkSignalWorkflowRequest {
+    fn into(self) -> SignalWorkflowExecutionRequest {
+        SignalWorkflowExecutionRequest {
+            namespace: self.namespace,
+            workflow_execution: self.workflow_execution.try_into_or_none(),
+            signal_name: self.signal_name,
+            input: if self.input.len() == 0 {
+                None
+            } else {
+                Some(Payloads {
+                    payloads: self.input.iter().map(|val| val.clone().into()).collect(),
+                })
+            },
+            identity: self.identity,
+            request_id: self.request_id,
+            #[allow(deprecated)]
+            control: self.control,
+            header: self.header.try_into_or_none(),
+            links: self.links.iter().map(|val| val.clone().into()).collect(),
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "signal_workflow_response"]
+pub struct SdkSignalWorkflowResponse {
+    pub link: Option<SdkLink>,
+}
+
+impl From<SignalWorkflowExecutionResponse> for SdkSignalWorkflowResponse {
+    fn from(external: SignalWorkflowExecutionResponse) -> Self {
+        Self {
+            link: external.link.try_into_or_none(),
+        }
+    }
+}
+
+impl Into<SignalWorkflowExecutionResponse> for SdkSignalWorkflowResponse {
+    fn into(self) -> SignalWorkflowExecutionResponse {
+        SignalWorkflowExecutionResponse {
+            link: self.link.try_into_or_none(),
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "workflow_update"]
+pub struct SdkWorkflowUpdate {
+    pub name: String,
+    pub args: Vec<SdkPayload>,
+    pub header: Option<SdkHeader>,
+}
+
+impl From<Input> for SdkWorkflowUpdate {
+    fn from(external: Input) -> Self {
+        Self {
+            name: external.name,
+            args: match external.args {
+                None => vec![],
+                Some(p) => p.payloads.iter().map(|val| val.clone().into()).collect(),
+            },
+            header: external.header.try_into_or_none(),
+        }
+    }
+}
+
+impl Into<Input> for SdkWorkflowUpdate {
+    fn into(self) -> Input {
+        Input {
+            name: self.name,
+            args: if self.args.len() > 0 {
+                Some(Payloads {
+                    payloads: self.args.iter().map(|val| val.into()).collect(),
+                })
+            } else {
+                None
+            },
+            header: self.header.try_into_or_none(),
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "workflow_update_response"]
+pub struct SdkWorkflowUpdateResponse {
+    pub update_ref: Option<SdkUpdateRef>,
+    pub outcome: Option<SdkUpdateOutcome>,
+    pub stage: SdkUpdateLifecycleStage,
+}
+
+impl From<UpdateWorkflowExecutionResponse> for SdkWorkflowUpdateResponse {
+    fn from(external: UpdateWorkflowExecutionResponse) -> Self {
+        Self {
+            update_ref: external.update_ref.try_into_or_none(),
+            outcome: external.outcome.try_into_or_none(),
+            stage: external.stage.into(),
+        }
+    }
+}
+
+impl Into<UpdateWorkflowExecutionResponse> for SdkWorkflowUpdateResponse {
+    fn into(self) -> UpdateWorkflowExecutionResponse {
+        UpdateWorkflowExecutionResponse {
+            update_ref: self.update_ref.try_into_or_none(),
+            outcome: self.outcome.try_into_or_none(),
+            stage: self.stage.into(),
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "update_ref"]
+pub struct SdkUpdateRef {
+    pub workflow_execution: Option<SdkWorkflowExecution>,
+    pub update_id: String,
+}
+
+impl From<UpdateRef> for SdkUpdateRef {
+    fn from(external: UpdateRef) -> Self {
+        Self {
+            workflow_execution: external.workflow_execution.try_into_or_none(),
+            update_id: external.update_id,
+        }
+    }
+}
+
+impl Into<UpdateRef> for SdkUpdateRef {
+    fn into(self) -> UpdateRef {
+        UpdateRef {
+            workflow_execution: self.workflow_execution.try_into_or_none(),
+            update_id: self.update_id,
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "update_outcome"]
+pub struct SdkUpdateOutcome {
+    pub value: Option<SdkUpdateValue>,
+}
+
+impl From<Outcome> for SdkUpdateOutcome {
+    fn from(external: Outcome) -> Self {
+        Self {
+            value: external.value.try_into_or_none(),
+        }
+    }
+}
+
+impl Into<Outcome> for SdkUpdateOutcome {
+    fn into(self) -> Outcome {
+        Outcome {
+            value: self.value.try_into_or_none(),
+        }
+    }
+}
+
+#[derive(Debug, NifUntaggedEnum, Clone)]
+pub enum SdkUpdateValue {
+    Success(Vec<SdkPayload>),
+    Failure(SdkWorkflowFailure),
+}
+
+impl From<Value> for SdkUpdateValue {
+    fn from(external: Value) -> Self {
+        match external {
+            Value::Success(payloads) => {
+                Self::Success(payloads.payloads.iter().map(|val| val.into()).collect())
+            }
+            Value::Failure(failure) => Self::Failure(failure.into()),
+        }
+    }
+}
+
+impl Into<Value> for SdkUpdateValue {
+    fn into(self) -> Value {
+        match self {
+            Self::Success(payloads) => Value::Success(Payloads {
+                payloads: payloads.iter().map(|val| val.into()).collect(),
+            }),
+            Self::Failure(failure) => Value::Failure(failure.into()),
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "update_wait_policy"]
+pub struct SdkUpdateWaitPolicy {
+    pub lifecycle_stage: SdkUpdateLifecycleStage,
+}
+
+impl From<WaitPolicy> for SdkUpdateWaitPolicy {
+    fn from(external: WaitPolicy) -> Self {
+        Self {
+            lifecycle_stage: external.lifecycle_stage.into(),
+        }
+    }
+}
+
+impl Into<WaitPolicy> for SdkUpdateWaitPolicy {
+    fn into(self) -> WaitPolicy {
+        WaitPolicy {
+            lifecycle_stage: self.lifecycle_stage.into(),
+        }
+    }
+}
+
+#[repr(i32)]
+#[derive(Debug, NifUnitEnum, Clone)]
+pub enum SdkUpdateLifecycleStage {
+    Unspecified = 0,
+    Admitted = 1,
+    Accepted = 2,
+    Completed = 3,
+}
+
+impl Into<i32> for SdkUpdateLifecycleStage {
+    fn into(self) -> i32 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Admitted => 1,
+            Self::Accepted => 2,
+            Self::Completed => 3,
+        }
+    }
+}
+
+impl From<i32> for SdkUpdateLifecycleStage {
+    fn from(intent: i32) -> SdkUpdateLifecycleStage {
+        match intent {
+            0 => Self::Unspecified,
+            1 => Self::Admitted,
+            2 => Self::Accepted,
+            3 => Self::Completed,
+            _ => Self::Unspecified,
         }
     }
 }

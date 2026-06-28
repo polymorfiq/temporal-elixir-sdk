@@ -1,20 +1,26 @@
 defmodule Temporal.Workflow.WorkflowExecution do
   use GenStage
 
+  require TemporalEngine.Data.Activation
   require TemporalEngine.Data.Failure
   import Temporal.WorkflowContext
   import TemporalEngine.Data.Jobs
   import TemporalEngine.Data.Commands
   import TemporalEngine.Data.ActivationCompletion
 
+  alias Temporal.WorkflowContext
+  alias TemporalEngine.Data.Activation
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Commands
   alias TemporalEngine.Data.Jobs
   alias TemporalEngine.Data.Payload
-  alias TemporalEngine.Data.Timestamp
 
   require Logger
   require Record
+
+  @await_check_delay 300
+
+  @type update_handler_opts :: [{:validator, (... -> :ok | {:error, term()})}]
 
   Record.defrecordp(:workflow_state, [
     :workflow_type,
@@ -25,9 +31,14 @@ defmodule Temporal.Workflow.WorkflowExecution do
     :namespace,
     :module,
     :exec_fn,
-    :timestamp,
+    :initialize_config,
+    :context,
+    current_task_metadata: nil,
     unlocked_in_activation: 0,
     query_handlers: %{},
+    update_handlers: %{},
+    signal_handlers: %{},
+    awaiting_checks: %{},
     awaiting_activity: %{},
     activity_results: %{},
     awaiting_timer: %{},
@@ -36,6 +47,9 @@ defmodule Temporal.Workflow.WorkflowExecution do
     child_workflow_starts: %{},
     awaiting_child_workflows: %{},
     child_workflow_results: %{},
+    running_query_handlers: %{},
+    running_update_handlers: %{},
+    running_signal_handlers: %{},
     exec_ref: nil,
     exec_pid: nil,
     queued_commands: [],
@@ -53,9 +67,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
              namespace: String.t(),
              module: module(),
              exec_fn: atom(),
-             timestamp: DateTime.t(),
+             context: WorkflowContext.workflow_context(),
+             initialize_config: Jobs.initialize_workflow(),
              unlocked_in_activation: non_neg_integer(),
              query_handlers: %{String.t() => fun()},
+             update_handlers: %{String.t() => %{handler: fun(), validator: fun() | nil}},
+             signal_handlers: %{String.t() => fun()},
+             awaiting_checks: %{pid() => (-> boolean())},
              awaiting_activity: %{integer() => [pid()]},
              activity_results: %{integer() => term()},
              awaiting_timer: %{integer() => [pid()]},
@@ -65,6 +83,9 @@ defmodule Temporal.Workflow.WorkflowExecution do
              exec_ref: reference() | nil,
              exec_pid: pid() | nil,
              activity_results: %{integer() => term()},
+             running_query_handlers: %{pid() => reference()},
+             running_update_handlers: %{pid() => reference()},
+             running_signal_handlers: %{pid() => reference()},
              queued_commands: [Commands.command()],
              demand: integer(),
              seq: integer()
@@ -74,10 +95,24 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
   @spec init(
           {run_id :: String.t(), task_queue :: String.t(), namespace :: String.t(),
-           module :: module(), exec_fn :: atom(), config :: Jobs.initialize_workflow()}
+           module :: module(), exec_fn :: atom(), config :: Jobs.initialize_workflow(),
+           Activation.activation()}
         ) :: {:producer, workflow_state()}
-  def init({run_id, task_queue, namespace, module, exec_fn, config}) do
+  def init({run_id, task_queue, namespace, module, exec_fn, config, activate}) do
     Process.set_label({:workflow, run_id})
+
+    {:ok, ctx_pid} = GenServer.start_link(WorkflowContext, activate)
+
+    context =
+      workflow_context(
+        execution: self(),
+        context: ctx_pid,
+        task_queue: task_queue,
+        namespace: namespace,
+        run_id: run_id,
+        workflow_id: initialize_workflow(config, :workflow_id),
+        initialize_config: config
+      )
 
     {:producer,
      workflow_state(
@@ -85,20 +120,22 @@ defmodule Temporal.Workflow.WorkflowExecution do
        arguments:
          initialize_workflow(config, :arguments) |> Enum.map(&Payload.value_from_record/1),
        run_id: run_id,
+       context: context,
        workflow_id: initialize_workflow(config, :workflow_id),
        task_queue: task_queue,
        namespace: namespace,
        module: module,
        exec_fn: exec_fn,
-       timestamp: initialize_workflow(config, :start_time) |> Timestamp.to_native()
+       initialize_config: config
      )}
   end
 
   @spec process_job(pid(), Jobs.job()) :: :ok
   def process_job(pid, job), do: GenStage.cast(pid, job)
 
-  @spec activation_started(pid()) :: :ok
-  def activation_started(pid), do: GenStage.cast(pid, :activation_started)
+  @spec activation_started(pid(), Activation.activation()) :: :ok
+  def activation_started(pid, activation),
+    do: GenStage.cast(pid, {:activation_started, activation})
 
   @spec activation_completed(pid()) :: :ok
   def activation_completed(pid), do: GenStage.cast(pid, :activation_completed)
@@ -110,18 +147,29 @@ defmodule Temporal.Workflow.WorkflowExecution do
     end
   end
 
-  @spec set_is_replaying(pid(), boolean()) :: :ok
-  def set_is_replaying(pid, replaying), do: GenStage.cast(pid, {:set_is_replaying, replaying})
+  @spec await(pid(), (-> boolean())) :: :ok
+  def await(pid, await_check) do
+    GenStage.call(pid, {:await, await_check}, :infinity)
+  end
 
-  @spec set_current_timestamp(pid(), DateTime.t()) :: :ok
-  def set_current_timestamp(pid, ts), do: GenStage.cast(pid, {:set_current_timestamp, ts})
-
-  @spec get_current_timestamp(pid()) :: DateTime.t()
-  def get_current_timestamp(pid), do: GenStage.call(pid, :get_current_timestamp, :infinity)
+  @spec set_current_task_metadata(pid(), map()) :: :ok
+  def set_current_task_metadata(pid, metadata),
+    do: GenStage.cast(pid, {:set_current_task_metadata, metadata})
 
   @spec set_query_handler(pid(), name :: String.t(), handler :: fun()) :: :ok
   def set_query_handler(pid, name, handler) do
     GenStage.cast(pid, {:set_query_handler, name, handler})
+  end
+
+  @spec set_update_handler(pid(), name :: String.t(), handler :: fun(), update_handler_opts()) ::
+          :ok
+  def set_update_handler(pid, name, handler, opts) do
+    GenStage.cast(pid, {:set_update_handler, name, handler, opts})
+  end
+
+  @spec set_signal_handler(pid(), name :: String.t(), handler :: fun()) :: :ok
+  def set_signal_handler(pid, name, handler) do
+    GenStage.cast(pid, {:set_signal_handler, name, handler})
   end
 
   @spec queue_commands(pid(), [Commands.command()]) ::
@@ -158,6 +206,30 @@ defmodule Temporal.Workflow.WorkflowExecution do
   @doc false
   @spec handle_call(term(), {pid(), term()}, workflow_state()) ::
           {:noreply, list(), workflow_state()}
+
+  def handle_call({:await, await_check}, from, state) do
+    awaiting = workflow_state(state, :awaiting_checks)
+
+    cond do
+      await_check.() ->
+        GenStage.reply(from, :ok)
+        {:noreply, [], state}
+
+      Enum.any?(awaiting) ->
+        send(self(), :flush_queued_commands)
+
+        {:noreply, [],
+         workflow_state(state, awaiting_checks: Map.put(awaiting, from, await_check))}
+
+      true ->
+        send(self(), :flush_queued_commands)
+        Process.send_after(self(), :perform_await_checks, @await_check_delay)
+
+        {:noreply, [],
+         workflow_state(state, awaiting_checks: Map.put(awaiting, from, await_check))}
+    end
+  end
+
   def handle_call({:queue_commands, commands}, from, state) do
     seq = workflow_state(state, :seq)
 
@@ -185,10 +257,6 @@ defmodule Temporal.Workflow.WorkflowExecution do
     wrapped = Enum.map(commands, &command(variant: &1))
 
     {:noreply, [], workflow_state(state, seq: seq, queued_commands: queued ++ wrapped)}
-  end
-
-  def handle_call(:get_current_timestamp, _from, state) do
-    {:reply, workflow_state(state, :timestamp), [], state}
   end
 
   def handle_call({:get_activity_results, seq}, from, state) do
@@ -393,106 +461,391 @@ defmodule Temporal.Workflow.WorkflowExecution do
     args = Enum.map(args, &Payload.value_from_record/1)
     handlers = workflow_state(state, :query_handlers)
 
-    resp =
-      if handler = Map.get(handlers, {"#{query_type}", Enum.count(args)}) do
-        try do
-          apply(handler, args)
-        rescue
-          err ->
-            {:error, {:exception, err, __STACKTRACE__}}
-        end
-      else
-        {:error, :handler_not_found}
-      end
+    WorkflowContext.handler_started(workflow_state(state, :context))
+    parent = self()
 
-    variant =
-      with {:ok, result} <- resp do
-        query_success(response: Payload.record_from_value(result))
-      else
-        {:error, :handler_not_found} ->
-          Failure.failure(
-            message: "Query handler (#{inspect(query_type)}/#{Enum.count(args)}) not found.",
-            source: "elixir-sdk",
-            stack_trace: "",
-            failure_info:
-              Failure.application(failure_type: "HandlerNotFound", non_retryable: true)
-          )
+    {query_pid, query_ref} =
+      spawn_monitor(fn ->
+        resp =
+          if handler = Map.get(handlers, {"#{query_type}", Enum.count(args)}) do
+            try do
+              apply(handler, args)
+            rescue
+              err ->
+                {:error, {:exception, err, __STACKTRACE__}}
+            end
+          else
+            {:error, :handler_not_found}
+          end
 
-        {:error, Failure.application() = app_error} ->
-          query_success(
-            response:
-              Payload.record_from_value(
-                {:error,
-                 Failure.failure(
-                   message: Failure.application(app_error, :failure_type),
-                   source: "elixir-sdk",
-                   stack_trace: "",
-                   failure_info: app_error
-                 )}
+        variant =
+          with {:ok, result} <- resp do
+            query_success(response: Payload.record_from_value(result))
+          else
+            {:error, :handler_not_found} ->
+              Failure.failure(
+                message: "Query handler (#{inspect(query_type)}/#{Enum.count(args)}) not found.",
+                source: "elixir-sdk",
+                stack_trace: "",
+                failure_info:
+                  Failure.application(failure_type: "HandlerNotFound", non_retryable: true)
               )
-          )
 
-        {:error, {:exception, Failure.application() = app_error, stacktrace}} ->
-          query_success(
-            response:
-              Payload.record_from_value(
-                {:error,
-                 Failure.failure(
-                   message: Failure.application(app_error, :failure_type),
-                   source: "elixir-sdk",
-                   stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
-                   failure_info: app_error
-                 )}
+            {:error, Failure.application() = app_error} ->
+              query_success(
+                response:
+                  Payload.record_from_value(
+                    {:error,
+                     Failure.failure(
+                       message: Failure.application(app_error, :failure_type),
+                       source: "elixir-sdk",
+                       stack_trace: "",
+                       failure_info: app_error
+                     )}
+                  )
               )
-          )
 
-        {:error, {:exception, %ex_type{} = exception, stacktrace}} ->
-          query_success(
-            response:
-              Payload.record_from_value(
-                {:error,
-                 Failure.failure(
-                   message: inspect(exception),
-                   source: "elixir-sdk",
-                   stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
-                   failure_info: Failure.application(failure_type: "#{ex_type}")
-                 )}
+            {:error, {:exception, Failure.application() = app_error, stacktrace}} ->
+              query_success(
+                response:
+                  Payload.record_from_value(
+                    {:error,
+                     Failure.failure(
+                       message: Failure.application(app_error, :failure_type),
+                       source: "elixir-sdk",
+                       stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                       failure_info: app_error
+                     )}
+                  )
               )
-          )
 
-        {:error, err} ->
-          query_success(response: Payload.record_from_value({:error, err}))
-      end
+            {:error, {:exception, %ex_type{} = exception, stacktrace}} ->
+              query_success(
+                response:
+                  Payload.record_from_value(
+                    {:error,
+                     Failure.failure(
+                       message: inspect(exception),
+                       source: "elixir-sdk",
+                       stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                       failure_info: Failure.application(failure_type: "#{ex_type}")
+                     )}
+                  )
+              )
 
-    status =
-      success(
-        commands: [command(variant: respond_to_query(query_id: query_id, variant: variant))]
-      )
+            {:error, err} ->
+              query_success(response: Payload.record_from_value({:error, err}))
+          end
 
-    {:noreply, [status], state}
+        GenStage.cast(
+          parent,
+          {:query_response, self(),
+           [command(variant: respond_to_query(query_id: query_id, variant: variant))]}
+        )
+      end)
+
+    running = workflow_state(state, :running_query_handlers)
+    unlocked = workflow_state(state, :unlocked_in_activation) + 1
+
+    {:noreply, [],
+     workflow_state(state,
+       unlocked_in_activation: unlocked,
+       running_query_handlers: Map.put(running, query_pid, query_ref)
+     )}
   end
 
-  def handle_cast(:activation_started, state) do
+  def handle_cast(job(variant: signal_workflow(signal_name: signal_name, input: args)), state) do
+    args = Enum.map(args, &Payload.value_from_record/1)
+    handlers = workflow_state(state, :signal_handlers)
+    ctx = workflow_state(state, :context)
+
+    WorkflowContext.handler_started(workflow_state(state, :context))
+
+    parent = self()
+
+    {signal_pid, signal_ref} =
+      spawn_monitor(fn ->
+        resp =
+          if handler = Map.get(handlers, {"#{signal_name}", Enum.count(args) + 1}) do
+            try do
+              apply(handler, [ctx | args])
+            rescue
+              err ->
+                {:error, {:exception, err, __STACKTRACE__}}
+            end
+          else
+            {:error, :handler_not_found}
+          end
+
+        with :ok <- resp do
+          GenStage.cast(parent, {:signal_response, self(), :ok})
+        else
+          {:error, err} ->
+            Logger.warning("Error when processing signal: #{inspect(err)}")
+            GenStage.cast(parent, {:signal_response, self(), {:error, err}})
+
+          other ->
+            Logger.warning(
+              "Unexpected response when processing signal: '#{inspect(other)}' - Expected ':ok'"
+            )
+
+            GenStage.cast(parent, {:signal_response, self(), {:error, {:unexpected, other}}})
+        end
+      end)
+
+    running = workflow_state(state, :running_signal_handlers)
+    unlocked = workflow_state(state, :unlocked_in_activation) + 1
+
+    {:noreply, [],
+     workflow_state(state,
+       unlocked_in_activation: unlocked,
+       running_signal_handlers: Map.put(running, signal_pid, signal_ref)
+     )}
+  end
+
+  def handle_cast(
+        job(
+          variant:
+            do_update(
+              protocol_instance_id: protocol_id,
+              name: update_name,
+              input: args,
+              run_validator: validate?
+            )
+        ),
+        state
+      ) do
+    args = Enum.map(args, &Payload.value_from_record/1)
+    handlers = workflow_state(state, :update_handlers)
+    ctx = workflow_state(state, :context)
+
+    WorkflowContext.handler_started(workflow_state(state, :context))
+
+    parent = self()
+
+    {update_pid, update_ref} =
+      spawn_monitor(fn ->
+        resp =
+          if details = Map.get(handlers, {"#{update_name}", Enum.count(args) + 1}) do
+            try do
+              if validate? && details.validator do
+                apply(details.validator, [ctx | args])
+              else
+                :ok
+              end
+            rescue
+              err ->
+                {:error, {:exception, err, __STACKTRACE__}}
+            end
+          else
+            {:error, :handler_not_found}
+          end
+
+        validator_resp =
+          with :ok <- resp do
+            update_accepted()
+          else
+            {:error, :handler_not_found} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message:
+                      "Update handler (#{inspect(update_name)}/#{Enum.count(args) + 1}) not found.",
+                    source: "elixir-sdk",
+                    stack_trace: "",
+                    failure_info:
+                      Failure.application(failure_type: "HandlerNotFound", non_retryable: true)
+                  )
+              )
+
+            {:error, Failure.application() = app_error} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message: Failure.application(app_error, :failure_type),
+                    source: "elixir-sdk",
+                    stack_trace: "",
+                    failure_info: app_error
+                  )
+              )
+
+            {:error, {:exception, Failure.application() = app_error, stacktrace}} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message: Failure.application(app_error, :failure_type),
+                    source: "elixir-sdk",
+                    stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                    failure_info: app_error
+                  )
+              )
+
+            {:error, {:exception, %ex_type{} = exception, stacktrace}} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message: inspect(exception),
+                    source: "elixir-sdk",
+                    stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                    failure_info: Failure.application(failure_type: "#{ex_type}")
+                  )
+              )
+
+            {:error, err} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message: "{:error, #{inspect(err)}}",
+                    source: "elixir-sdk",
+                    stack_trace: "",
+                    failure_info:
+                      Failure.application(
+                        failure_type: "ValidationReturnedError",
+                        non_retryable: true
+                      )
+                  )
+              )
+          end
+
+        handler_resp =
+          case validator_resp do
+            update_accepted() ->
+              if details = Map.get(handlers, {"#{update_name}", Enum.count(args) + 1}) do
+                try do
+                  apply(details.handler, [ctx | args])
+                rescue
+                  err ->
+                    {:error, {:exception, err, __STACKTRACE__}}
+                end
+              else
+                {:error, :handler_not_found}
+              end
+
+            _ ->
+              {:error, :failed_validation}
+          end
+
+        update_resp =
+          with {:ok, result} <- handler_resp do
+            update_completed(payload: Payload.record_from_value(result))
+          else
+            {:error, :failed_validation} ->
+              nil
+
+            {:error, :handler_not_found} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message:
+                      "Update handler (#{inspect(update_name)}/#{Enum.count(args) + 1}) not found.",
+                    source: "elixir-sdk",
+                    stack_trace: "",
+                    failure_info:
+                      Failure.application(failure_type: "HandlerNotFound", non_retryable: true)
+                  )
+              )
+
+            {:error, Failure.application() = app_error} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message: Failure.application(app_error, :failure_type),
+                    source: "elixir-sdk",
+                    stack_trace: "",
+                    failure_info: app_error
+                  )
+              )
+
+            {:error, {:exception, Failure.application() = app_error, stacktrace}} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message: Failure.application(app_error, :failure_type),
+                    source: "elixir-sdk",
+                    stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                    failure_info: app_error
+                  )
+              )
+
+            {:error, {:exception, %ex_type{} = exception, stacktrace}} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message: inspect(exception),
+                    source: "elixir-sdk",
+                    stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                    failure_info: Failure.application(failure_type: "#{ex_type}")
+                  )
+              )
+
+            {:error, err} ->
+              update_rejected(
+                failure:
+                  Failure.failure(
+                    message: "{:error, #{inspect(err)}}",
+                    source: "elixir-sdk",
+                    stack_trace: "",
+                    failure_info:
+                      Failure.application(
+                        failure_type: "ValidationReturnedError",
+                        non_retryable: true
+                      )
+                  )
+              )
+          end
+
+        commands =
+          if update_resp do
+            [
+              command(
+                variant:
+                  update_response(protocol_instance_id: protocol_id, response: validator_resp)
+              ),
+              command(
+                variant: update_response(protocol_instance_id: protocol_id, response: update_resp)
+              )
+            ]
+          else
+            command(
+              variant:
+                update_response(protocol_instance_id: protocol_id, response: validator_resp)
+            )
+          end
+
+        GenStage.cast(parent, {:update_response, self(), commands})
+      end)
+
+    running = workflow_state(state, :running_update_handlers)
+    unlocked = workflow_state(state, :unlocked_in_activation) + 1
+
+    {:noreply, [],
+     workflow_state(state,
+       unlocked_in_activation: unlocked,
+       running_update_handlers: Map.put(running, update_pid, update_ref)
+     )}
+  end
+
+  def handle_cast({:activation_started, activate}, state) do
+    ctx = workflow_state(state, :context)
+    WorkflowContext.update_for_activation(ctx, activate)
+
     {:noreply, [], workflow_state(state, unlocked_in_activation: 0)}
   end
 
   def handle_cast(:activation_completed, state) do
     unlocked = workflow_state(state, :unlocked_in_activation)
 
-    if unlocked == 0 && awaiting_process_count(state) > 0 do
+    if unlocked == 0 && awaiting_process_count(state) >= running_threads(state) do
       send(self(), :flush_queued_commands)
     end
 
     {:noreply, [], state}
   end
 
-  def handle_cast({:set_is_replaying, replaying}, state) do
-    if replaying, do: Logger.disable(self()), else: Logger.enable(self())
-    {:noreply, [], state}
-  end
+  def handle_cast({:set_current_task_metadata, metadata}, state) do
+    if metadata[:is_replaying], do: Logger.disable(self()), else: Logger.enable(self())
 
-  def handle_cast({:set_current_timestamp, ts}, state) do
-    {:noreply, [], workflow_state(state, timestamp: ts)}
+    {:noreply, [], workflow_state(state, current_task_metadata: metadata)}
   end
 
   def handle_cast({:set_query_handler, name, handler}, state) do
@@ -503,7 +856,53 @@ defmodule Temporal.Workflow.WorkflowExecution do
     {:noreply, [], workflow_state(state, query_handlers: handlers)}
   end
 
+  def handle_cast({:set_update_handler, name, handler, opts}, state) do
+    handlers = workflow_state(state, :update_handlers)
+    {:arity, arity} = Function.info(handler, :arity)
+
+    validator =
+      if validator = Keyword.get(opts, :validator) do
+        {:arity, validator_arity} = Function.info(validator, :arity)
+
+        if validator_arity != arity,
+          do:
+            "Invalid Update Handler Validator (#{inspect(name)}) - Expected arity (#{arity}) but got arity (#{validator_arity})"
+
+        validator
+      end
+
+    handlers = Map.put(handlers, {"#{name}", arity}, %{handler: handler, validator: validator})
+    {:noreply, [], workflow_state(state, update_handlers: handlers)}
+  end
+
+  def handle_cast({:set_signal_handler, name, handler}, state) do
+    handlers = workflow_state(state, :signal_handlers)
+    {:arity, arity} = Function.info(handler, :arity)
+
+    handlers = Map.put(handlers, {"#{name}", arity}, handler)
+    {:noreply, [], workflow_state(state, signal_handlers: handlers)}
+  end
+
+  def handle_cast({:query_response, _pid, cmds}, state) do
+    {:noreply, [success(commands: cmds)], state}
+  end
+
+  def handle_cast({:update_response, _pid, cmds}, state) do
+    {:noreply, [success(commands: cmds)], state}
+  end
+
+  def handle_cast({:signal_response, _pid, _resp}, state) do
+    send(self(), :flush_queued_commands)
+    {:noreply, [], state}
+  end
+
   def handle_cast({:workflow_completed, resp}, state) do
+    resp =
+      case resp do
+        :ok -> {:ok, nil}
+        other -> other
+      end
+
     with {:ok, result} <- resp do
       status =
         success(
@@ -528,6 +927,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
         status = success(commands: [command(variant: fail_workflow_execution(failure: failure))])
         {:noreply, [status], state}
 
+      {:error, Commands.continue_as_new_workflow_execution() = continue_as_new} ->
+        status = success(commands: [command(variant: continue_as_new)])
+        {:noreply, [status], state}
+
       {:error, err} ->
         failure =
           Failure.failure(
@@ -538,6 +941,23 @@ defmodule Temporal.Workflow.WorkflowExecution do
               Failure.application(
                 failure_type: "ReturnedError",
                 details: [Payload.record_from_value(err)]
+              )
+          )
+
+        status = success(commands: [command(variant: fail_workflow_execution(failure: failure))])
+        {:noreply, [status], state}
+
+      other ->
+        failure =
+          Failure.failure(
+            message:
+              "Unexpected response: '#{inspect(other)}' - expected {:ok, ...} or {:error, ...}",
+            source: "elixir-sdk",
+            stack_trace: "",
+            failure_info:
+              Failure.application(
+                failure_type: "InvalidReturnError",
+                details: [Payload.record_from_value(other)]
               )
           )
 
@@ -562,15 +982,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
     exec_fn = workflow_state(state, :exec_fn)
     arguments = workflow_state(state, :arguments)
 
-    ctx =
-      workflow_context(
-        execution: self(),
-        task_queue: workflow_state(state, :task_queue),
-        namespace: workflow_state(state, :namespace),
-        run_id: workflow_state(state, :run_id),
-        workflow_id: workflow_state(state, :workflow_id)
-      )
-
+    ctx = workflow_state(state, :context)
     parent = self()
 
     {exec_pid, exec_ref} =
@@ -596,6 +1008,61 @@ defmodule Temporal.Workflow.WorkflowExecution do
      [
        success(commands: queued_commands)
      ], workflow_state(state, queued_commands: []), :hibernate}
+  end
+
+  def handle_info(:perform_await_checks, state) do
+    new_awaiting =
+      workflow_state(state, :awaiting_checks)
+      |> Enum.reduce(%{}, fn {from, await_check}, acc ->
+        if await_check.() do
+          GenStage.reply(from, :ok)
+          acc
+        else
+          Map.put(acc, from, await_check)
+        end
+      end)
+
+    if Enum.any?(new_awaiting),
+      do: Process.send_after(self(), :perform_await_checks, @await_check_delay)
+
+    {:noreply, [], workflow_state(state, awaiting_checks: new_awaiting)}
+  end
+
+  def handle_info(
+        {:DOWN, _, :process, query_pid, :normal},
+        workflow_state(running_query_handlers: handlers) = state
+      )
+      when is_map_key(handlers, query_pid) do
+    WorkflowContext.handler_finished(workflow_state(state, :context))
+
+    running = workflow_state(state, :running_query_handlers)
+    {:noreply, [], workflow_state(state, running_query_handlers: Map.delete(running, query_pid))}
+  end
+
+  def handle_info(
+        {:DOWN, _, :process, update_pid, :normal},
+        workflow_state(running_update_handlers: handlers) = state
+      )
+      when is_map_key(handlers, update_pid) do
+    WorkflowContext.handler_finished(workflow_state(state, :context))
+
+    running = workflow_state(state, :running_update_handlers)
+
+    {:noreply, [],
+     workflow_state(state, running_update_handlers: Map.delete(running, update_pid))}
+  end
+
+  def handle_info(
+        {:DOWN, _, :process, signal_pid, :normal},
+        workflow_state(running_signal_handlers: handlers) = state
+      )
+      when is_map_key(handlers, signal_pid) do
+    WorkflowContext.handler_finished(workflow_state(state, :context))
+
+    running = workflow_state(state, :running_signal_handlers)
+
+    {:noreply, [],
+     workflow_state(state, running_signal_handlers: Map.delete(running, signal_pid))}
   end
 
   def handle_info(
@@ -647,5 +1114,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
     Enum.count(awaiting_activities) + Enum.count(awaiting_timers) +
       Enum.count(awaiting_child_starts) + Enum.count(awaiting_children)
+  end
+
+  defp running_threads(state) do
+    query_threads = workflow_state(state, :running_query_handlers)
+    update_threads = workflow_state(state, :running_update_handlers)
+    signal_threads = workflow_state(state, :running_signal_handlers)
+
+    1 + Enum.count(query_threads) + Enum.count(update_threads) + Enum.count(signal_threads)
   end
 end

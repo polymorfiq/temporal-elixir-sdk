@@ -4,10 +4,11 @@ use crate::core_nexus::SdkNexusTask;
 use crate::core_runtime::{ElixirRuntime, SdkRuntimeOpts};
 use crate::core_worker::ElixirWorker;
 use crate::core_workflows::{
-    ElixirWorkflowHandle, SdkQueryRejectCondition, SdkQueryWorkflowResponse, SdkWorkflowActivation,
-    SdkWorkflowActivationCompletion, SdkWorkflowDefinition, SdkWorkflowExecution,
-    SdkWorkflowGetResultError, SdkWorkflowGetResultOptions, SdkWorkflowQuery,
-    SdkWorkflowStartOptions,
+    ElixirWorkflowHandle, SdkQueryRejectCondition, SdkQueryWorkflowResponse,
+    SdkSignalWorkflowRequest, SdkSignalWorkflowResponse, SdkUpdateWaitPolicy,
+    SdkWorkflowActivation, SdkWorkflowActivationCompletion, SdkWorkflowDefinition,
+    SdkWorkflowExecution, SdkWorkflowGetResultError, SdkWorkflowGetResultOptions, SdkWorkflowQuery,
+    SdkWorkflowStartOptions, SdkWorkflowUpdate, SdkWorkflowUpdateResponse,
 };
 use crate::data::common::SdkWorkflowArguments;
 use rustler::{Atom, Error, LocalPid, NifResult, OwnedEnv, ResourceArc};
@@ -20,8 +21,12 @@ use temporalio_sdk_client::tonic::Request;
 use temporalio_sdk_client::{
     Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient,
 };
+use temporalio_sdk_common::protos::temporal::api::update;
+use temporalio_sdk_common::protos::temporal::api::update::v1::Meta;
 use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
-use temporalio_sdk_common::protos::temporal::api::workflowservice::v1::QueryWorkflowRequest;
+use temporalio_sdk_common::protos::temporal::api::workflowservice::v1::{
+    QueryWorkflowRequest, UpdateWorkflowExecutionRequest,
+};
 use temporalio_sdk_common::protos::utilities::TryIntoOrNone;
 use temporalio_sdk_common::worker::{
     WorkerDeploymentOptions, WorkerDeploymentVersion, WorkerTaskTypes,
@@ -100,7 +105,12 @@ fn _create_client(
 
     let host_url = match parsed_host {
         Ok(host) => host,
-        Err(err) => return Err(Error::Term(Box::new(format!("Failed parsing host: {}", err)))),
+        Err(err) => {
+            return Err(Error::Term(Box::new(format!(
+                "Failed parsing host: {}",
+                err
+            ))))
+        }
     };
 
     let has_http_connect_settings = options.http_connect_proxy.is_some();
@@ -288,15 +298,14 @@ fn _create_worker(
             Ok(atoms::ok())
         }
 
-        Err(err) => {
-            Err(Error::Term(Box::new(
-                format!("Error creating worker.ex opts: {}", err),
-            )))
-        }
+        Err(err) => Err(Error::Term(Box::new(format!(
+            "Error creating worker.ex opts: {}",
+            err
+        )))),
     }
 }
 
-fn build_tuner(options: crate::core_worker::SdkWorkerTunerOpts) -> Result<TunerHolder, Error> {
+pub fn build_tuner(options: crate::core_worker::SdkWorkerTunerOpts) -> Result<TunerHolder, Error> {
     let (workflow_slot_options, resource_slot_options) =
         build_tuner_slot_options(options.workflow_slot_supplier, None)?;
     let (activity_slot_options, resource_slot_options) =
@@ -332,7 +341,7 @@ fn build_tuner(options: crate::core_worker::SdkWorkerTunerOpts) -> Result<TunerH
     }
 }
 
-fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
+pub fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
     options: crate::core_worker::SdkWorkerSlotSupplierOpts,
     prev_slots_options: Option<ResourceBasedSlotsOptions>,
 ) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), Error> {
@@ -349,7 +358,7 @@ fn build_tuner_slot_options<SK: SlotKind + Send + Sync + 'static>(
     }
 }
 
-fn build_tuner_resource_options<SK: SlotKind>(
+pub fn build_tuner_resource_options<SK: SlotKind>(
     options: crate::core_worker::SdkWorkerTunerResourceOpts,
     prev_slots_options: Option<ResourceBasedSlotsOptions>,
 ) -> Result<(SlotSupplierOptions<SK>, Option<ResourceBasedSlotsOptions>), Error> {
@@ -671,6 +680,108 @@ fn _handle_query_workflow(
             .await;
 
         let msg: Result<SdkQueryWorkflowResponse, String> = match query_resp {
+            Ok(resp) => Ok(resp.into_inner().into()),
+            Err(error) => Err(format!("Error starting workflow - {}", error)),
+        };
+
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+    });
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
+fn _handle_update_workflow(
+    runtime: ResourceArc<ElixirRuntime>,
+    wf_handle: ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>,
+    update_id: String,
+    request: SdkWorkflowUpdate,
+    wait_policy: Option<SdkUpdateWaitPolicy>,
+    resp_pid: LocalPid,
+) -> NifResult<Atom> {
+    let wf_handle_ref = wf_handle
+        .handle
+        .read()
+        .expect("Could not unwrap Workflow Handle");
+    let mut client = wf_handle_ref.client().clone();
+    let wf_info = wf_handle_ref.info();
+    let exec = SdkWorkflowExecution {
+        workflow_id: wf_info.workflow_id.clone(),
+        run_id: wf_info.run_id.clone().unwrap(),
+    };
+
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
+
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        let query_resp = client
+            .update_workflow_execution(Request::new(UpdateWorkflowExecutionRequest {
+                namespace: client.namespace(),
+                workflow_execution: Some(exec.clone().into()),
+                first_execution_run_id: exec.run_id,
+                wait_policy: wait_policy.try_into_or_none(),
+                request: Some(update::v1::Request {
+                    meta: Some(Meta {
+                        update_id: update_id,
+                        identity: client.identity(),
+                    }),
+                    input: Some(request.into()),
+                }),
+            }))
+            .await;
+
+        let msg: Result<SdkWorkflowUpdateResponse, String> = match query_resp {
+            Ok(resp) => Ok(resp.into_inner().into()),
+            Err(error) => Err(format!("Error starting workflow - {}", error)),
+        };
+
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+    });
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
+fn _handle_signal_workflow(
+    runtime: ResourceArc<ElixirRuntime>,
+    wf_handle: ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>,
+    signal: SdkSignalWorkflowRequest,
+    resp_pid: LocalPid,
+) -> NifResult<Atom> {
+    let wf_handle_ref = wf_handle
+        .handle
+        .read()
+        .expect("Could not unwrap Workflow Handle");
+    let mut client = wf_handle_ref.client().clone();
+    let wf_info = wf_handle_ref.info();
+
+    let mut signal_req = signal.clone();
+
+    signal_req.namespace = client.namespace();
+    signal_req.identity = client.identity();
+
+    signal_req.workflow_execution = Some(SdkWorkflowExecution {
+        workflow_id: wf_info.workflow_id.clone(),
+        run_id: wf_info.run_id.clone().unwrap(),
+    });
+
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
+
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        let query_resp = client
+            .signal_workflow_execution(Request::new(signal_req.into()))
+            .await;
+
+        let msg: Result<SdkSignalWorkflowResponse, String> = match query_resp {
             Ok(resp) => Ok(resp.into_inner().into()),
             Err(error) => Err(format!("Error starting workflow - {}", error)),
         };

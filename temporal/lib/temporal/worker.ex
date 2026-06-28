@@ -237,7 +237,9 @@ defmodule Temporal.Worker do
       ) do
     state =
       Enum.reduce(activations, state, fn
-        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init)]), state ->
+        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init)]) =
+            activation,
+        state ->
           worker_id = worker_state(state, :id)
           workflow_type = initialize_workflow(init, :workflow_type)
           arity = Enum.count(initialize_workflow(init, :arguments)) + 1
@@ -257,7 +259,7 @@ defmodule Temporal.Worker do
           with {:ok, {wf_module, wf_exec_fn}} <- found,
                exec_args <-
                  {run_id, task_queue, worker_state(state, :namespace), wf_module, wf_exec_fn,
-                  init},
+                  init, activation},
                {:ok, comms} <-
                  WorkflowComms.start_link(
                    {run_id, workflow_type, worker_state(state, :namespace),
