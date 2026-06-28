@@ -509,16 +509,28 @@ defmodule Temporal.Workflow.WorkflowExecution do
             )
           ]
       end,
-      on_complete: fn response ->
-        [
-          command(
-            variant:
-              respond_to_query(
-                query_id: query_id,
-                variant: query_success(response: Payload.record_from_value(response))
-              )
-          )
-        ]
+      on_complete: fn
+        {:ok, result} ->
+          [
+            command(
+              variant:
+                respond_to_query(
+                  query_id: query_id,
+                  variant: query_success(response: Payload.record_from_value(result))
+                )
+            )
+          ]
+
+        {:error, err} ->
+          [
+            command(
+              variant:
+                respond_to_query(
+                  query_id: query_id,
+                  variant: query_success(response: Payload.record_from_value({:error, err}))
+                )
+            )
+          ]
       end
     )
 
@@ -651,7 +663,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
                     update_rejected(
                       failure:
                         Failure.failure(
-                          message: inspect(exception),
+                          message: Exception.message(exception),
                           source: "elixir-sdk",
                           stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
                           failure_info:
@@ -681,7 +693,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
                           failure_info:
                             Failure.application(
                               failure_type: "ValidationReturnedError",
-                              details: Payload.record_from_value({:error, err}),
+                              details: [Payload.record_from_value({:error, err})],
                               non_retryable: true
                             )
                         )
@@ -710,7 +722,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
                           failure_info:
                             Failure.application(
                               failure_type: "UpdateReturnedError",
-                              details: Payload.record_from_value({:error, err})
+                              details: [Payload.record_from_value({:error, err})]
                             )
                         )
                     )
@@ -826,13 +838,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
         %ex_type{} = exception, stacktrace ->
           failure =
             Failure.failure(
-              message: inspect(exception),
+              message: Exception.message(exception),
               source: "elixir-sdk",
               stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
               failure_info:
                 Failure.application(
                   failure_type: "#{ex_type}",
-                  details: Payload.record_from_value(exception)
+                  details: [Payload.record_from_value(exception)]
                 )
             )
 
@@ -848,6 +860,18 @@ defmodule Temporal.Workflow.WorkflowExecution do
               variant: complete_workflow_execution(result: Payload.record_from_value(result))
             )
           ]
+
+        {:error, Failure.application() = app_failure} ->
+          failure =
+            Failure.failure(
+              message: "{:error, #{inspect(app_failure)}}",
+              source: "elixir-sdk",
+              stack_trace: "",
+              failure_info: app_failure
+            )
+
+          GenStage.async_info(execution, :execution_complete)
+          [command(variant: fail_workflow_execution(failure: failure))]
 
         {:error, err} ->
           failure =
