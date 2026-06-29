@@ -57,7 +57,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
         :infinity
       end
 
-    receive do
+    resp = receive do
       {^pid, {:ok, args}} ->
         {:ok, workflow_arguments(args, :args) |> List.first()}
 
@@ -97,6 +97,10 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
       timeout ->
         {:error, :timeout}
     end
+
+    Process.demonitor(ref)
+
+    resp
   end
 
   @impl true
@@ -130,6 +134,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
 
     receive do
       {^pid, response} ->
+        Process.demonitor(ref)
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->
@@ -170,6 +175,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
 
     receive do
       {^pid, response} ->
+        Process.demonitor(ref)
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->
@@ -207,6 +213,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
 
     receive do
       {^pid, response} ->
+        Process.demonitor(ref)
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->

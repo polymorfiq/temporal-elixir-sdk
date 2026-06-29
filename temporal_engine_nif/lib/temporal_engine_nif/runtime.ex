@@ -46,6 +46,7 @@ defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
 
     receive do
       {^pid, response} ->
+        Process.demonitor(ref)
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->

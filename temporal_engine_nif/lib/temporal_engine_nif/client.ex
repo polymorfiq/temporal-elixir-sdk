@@ -58,6 +58,7 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
 
     receive do
       {^pid, response} ->
+        Process.demonitor(ref)
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->
@@ -89,6 +90,7 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
     validate_resp =
       receive do
         {^pid, response} ->
+          Process.demonitor(ref)
           response
 
         {:DOWN, ^ref, :process, ^pid, reason} ->
@@ -144,6 +146,7 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
 
     receive do
       {^pid, response} ->
+        Process.demonitor(ref)
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->
