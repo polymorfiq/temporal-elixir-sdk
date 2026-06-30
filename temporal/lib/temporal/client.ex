@@ -128,10 +128,10 @@ defmodule Temporal.Client do
           {:error, failure}
 
         {:ok, workflow_update_response(stage: :admitted)} ->
-          {:ok, {:status, :admitted}}
+          {:error, {:status, :admitted}}
 
         {:ok, workflow_update_response(stage: :accepted)} ->
-          {:ok, {:status, :accepted}}
+          {:error, {:status, :accepted}}
 
         {:ok,
          workflow_update_response(outcome: update_outcome(value: [result]), stage: :completed)} ->
