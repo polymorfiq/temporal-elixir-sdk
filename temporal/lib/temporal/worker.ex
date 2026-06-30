@@ -274,9 +274,11 @@ defmodule Temporal.Worker do
           end
 
         activation(run_id: run_id) = activate, state ->
-          {workflow, _} =
-            worker_state(state, :workflows)
-            |> Enum.find(fn {_, wf_run_id} -> wf_run_id == run_id end)
+          workflows = worker_state(state, :workflows)
+          workflow = case Enum.find(workflows, fn {_, wf_run_id} -> wf_run_id == run_id end) do
+            {workflow, _} -> workflow
+            nil -> nil
+          end
 
           if workflow do
             WorkflowComms.activate(workflow, activate)

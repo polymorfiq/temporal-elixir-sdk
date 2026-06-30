@@ -165,6 +165,11 @@ defmodule Temporal.Workflow.WorkflowRuntime do
     {:noreply, [], state(state, threads: Map.delete(threads, pid))}
   end
 
+  def handle_info({:DOWN, _, :process, pid, :killed}, state) do
+    threads = state(state, :threads)
+    {:noreply, [], state(state, threads: Map.delete(threads, pid))}
+  end
+
   @doc false
   @spec handle_demand(integer(), state()) :: {:noreply, list(), state()}
   def handle_demand(demand, state) when demand > 0 do
