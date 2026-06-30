@@ -98,7 +98,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
         {:error, :timeout}
     end
 
-    Process.demonitor(ref)
+    Process.demonitor(ref, [:flush])
 
     resp
   end
@@ -134,7 +134,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
 
     receive do
       {^pid, response} ->
-        Process.demonitor(ref)
+        Process.demonitor(ref, [:flush])
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->
@@ -175,7 +175,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
 
     receive do
       {^pid, response} ->
-        Process.demonitor(ref)
+        Process.demonitor(ref, [:flush])
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->
@@ -213,7 +213,7 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
 
     receive do
       {^pid, response} ->
-        Process.demonitor(ref)
+        Process.demonitor(ref, [:flush])
         response
 
       {:DOWN, ^ref, :process, ^pid, reason} ->
