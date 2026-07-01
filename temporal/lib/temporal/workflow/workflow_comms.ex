@@ -11,6 +11,7 @@ defmodule Temporal.Workflow.WorkflowComms do
   alias Temporal.Workflow.WorkflowExecution
   alias TemporalEngine.Data.Activation
   alias TemporalEngine.Data.ActivationCompletion
+  alias TemporalEngine.Data.Jobs
   alias TemporalEngine.Worker
 
   Record.defrecordp(:comms_state, [
@@ -19,6 +20,7 @@ defmodule Temporal.Workflow.WorkflowComms do
     :worker,
     :exec,
     :namespace,
+    :init,
     activations_received: 1,
     completions_sent: 0,
     scheduled_activities: %{},
@@ -35,7 +37,8 @@ defmodule Temporal.Workflow.WorkflowComms do
              completions_sent: non_neg_integer(),
              scheduled_activities: %{integer() => map()},
              started_timers: %{integer() => map()},
-             worker: Worker.t()
+             worker: Worker.t(),
+             init: Jobs.initialize_workflow()
            )
 
   @doc false
@@ -44,10 +47,10 @@ defmodule Temporal.Workflow.WorkflowComms do
   @doc false
   @spec init(
           {run_id :: String.t(), workflow_type :: String.t(), namespace :: String.t(), Worker.t(),
-           exec_args :: term()}
+           Jobs.initialize_workflow(), exec_args :: term()}
         ) ::
           {:consumer, comms_state(), keyword()}
-  def init({run_id, workflow_type, namespace, worker, exec_args}) do
+  def init({run_id, workflow_type, namespace, worker, init, exec_args}) do
     Process.set_label({:workflow_comms, workflow_type, run_id})
     {:ok, exec} = WorkflowExecution.start_link(exec_args)
 
@@ -57,6 +60,7 @@ defmodule Temporal.Workflow.WorkflowComms do
        workflow_type: workflow_type,
        worker: worker,
        namespace: namespace,
+       init: init,
        exec: exec
      ), subscribe_to: [exec]}
   end
@@ -82,6 +86,16 @@ defmodule Temporal.Workflow.WorkflowComms do
     Logger.debug(
       "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) - removing from cache (#{inspect(reason)} - #{inspect(message)})."
     )
+
+    init = comms_state(state, :init)
+
+    :telemetry.execute([:temporalio, :workflow, :removed_from_cache], %{}, %{
+      workflow_type: comms_state(state, :workflow_type),
+      namespace: comms_state(state, :namespace),
+      run_id: comms_state(state, :run_id),
+      workflow_id: initialize_workflow(init, :workflow_id),
+      arguments: initialize_workflow(init, :arguments)
+    })
 
     {:stop, :normal, inc_activations(state)}
   end

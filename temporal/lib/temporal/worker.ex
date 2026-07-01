@@ -263,8 +263,20 @@ defmodule Temporal.Worker do
                {:ok, comms} <-
                  WorkflowComms.start_link(
                    {run_id, workflow_type, worker_state(state, :namespace),
-                    worker_state(state, :worker), exec_args}
+                    worker_state(state, :worker), init, exec_args}
                  ) do
+            :telemetry.execute([:temporalio, :workflow, :initialized], %{}, %{
+              workflow_type: workflow_type,
+              namespace: worker_state(state, :namespace),
+              run_id: run_id,
+              workflow_id: initialize_workflow(init, :workflow_id),
+              task_queue: task_queue,
+              module: wf_module,
+              exec_fn: wf_exec_fn,
+              worker_id: worker_id,
+              arguments: initialize_workflow(init, :arguments)
+            })
+
             workflows = worker_state(state, :workflows) |> Map.put(comms, run_id)
             worker_state(state, workflows: workflows)
           else
@@ -275,10 +287,12 @@ defmodule Temporal.Worker do
 
         activation(run_id: run_id) = activate, state ->
           workflows = worker_state(state, :workflows)
-          workflow = case Enum.find(workflows, fn {_, wf_run_id} -> wf_run_id == run_id end) do
-            {workflow, _} -> workflow
-            nil -> nil
-          end
+
+          workflow =
+            case Enum.find(workflows, fn {_, wf_run_id} -> wf_run_id == run_id end) do
+              {workflow, _} -> workflow
+              nil -> nil
+            end
 
           if workflow do
             WorkflowComms.activate(workflow, activate)
