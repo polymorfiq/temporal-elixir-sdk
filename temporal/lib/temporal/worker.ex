@@ -7,6 +7,8 @@ defmodule Temporal.Worker do
   When new work is received, the worker performs the work while informing the Temporal Server of progress and needed resources.
   """
 
+  require TemporalEngine.Config
+
   import TemporalEngine.Config
   import TemporalEngine.Data.Activation
   import TemporalEngine.Data.ActivityTask
@@ -40,6 +42,7 @@ defmodule Temporal.Worker do
     :activation_poller,
     :activity_poller,
     :nexus_poller,
+    :config,
     workflows: %{},
     activities: %{},
     pollers_shutdown: []
@@ -57,7 +60,8 @@ defmodule Temporal.Worker do
              nexus_poller: pid(),
              workflows: %{pid() => String.t()},
              activities: %{pid() => {String.t(), String.t()}},
-             pollers_shutdown: [atom()]
+             pollers_shutdown: [atom()],
+             config: Config.worker_config()
            )
 
   @opaque t() :: record(:worker, id: String.t(), pid: pid() | nil)
@@ -203,6 +207,13 @@ defmodule Temporal.Worker do
       {:ok, activity_poller} = ActivityTaskPoller.start_link(worker)
       {:ok, nexus_poller} = NexusTaskPoller.start_link(worker)
 
+      :telemetry.execute([:temporalio, :worker, :started], %{}, %{
+        id: worker_config(config, :id),
+        task_queue: worker_config(config, :task_queue),
+        identity: worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+        namespace: worker_config(config, :namespace)
+      })
+
       state =
         worker_state(
           id: worker_config(config, :id),
@@ -212,7 +223,8 @@ defmodule Temporal.Worker do
           namespace: worker_config(config, :namespace),
           activation_poller: activation_poller,
           activity_poller: activity_poller,
-          nexus_poller: nexus_poller
+          nexus_poller: nexus_poller,
+          config: config
         )
 
       {:consumer, state,
@@ -365,7 +377,21 @@ defmodule Temporal.Worker do
 
   def handle_cast(:shutdown, state) do
     worker = worker_state(state, :worker)
-    TemporalEngine.Worker.initiate_shutdown(worker)
+
+    {time_in_microseconds, _ret_val} = :timer.tc(fn ->
+      :ok = TemporalEngine.Worker.initiate_shutdown(worker)
+    end)
+
+    config = worker_state(state, :config)
+    client = worker_state(state, :client)
+    :telemetry.execute([:temporalio, :worker, :shutdown_initiated], %{
+      duration_microsecs: time_in_microseconds,
+    }, %{
+      id: worker_config(config, :id),
+      task_queue: worker_config(config, :task_queue),
+      identity: worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+      namespace: worker_config(config, :namespace)
+    })
 
     {:noreply, [], state}
   end
@@ -445,8 +471,20 @@ defmodule Temporal.Worker do
         "All pollers shutdown for Worker (#{inspect(worker_state(state, :id))}). Shutting down..."
       )
 
-      worker_state(state, :worker)
-      |> TemporalEngine.Worker.finalize_shutdown()
+      {time_in_microseconds, _ret_val} = :timer.tc(fn ->
+        :ok = TemporalEngine.Worker.finalize_shutdown(worker_state(state, :worker))
+      end)
+
+      config = worker_state(state, :config)
+      client = worker_state(state, :client)
+      :telemetry.execute([:temporalio, :worker, :shutdown_finalized], %{
+        duration_microsecs: time_in_microseconds,
+      }, %{
+        id: worker_config(config, :id),
+        task_queue: worker_config(config, :task_queue),
+        identity: worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+        namespace: worker_config(config, :namespace)
+      })
 
       {:stop, :normal, state}
     else
