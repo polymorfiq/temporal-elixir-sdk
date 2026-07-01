@@ -93,8 +93,7 @@ defmodule Temporal.Workflow.WorkflowComms do
       workflow_type: comms_state(state, :workflow_type),
       namespace: comms_state(state, :namespace),
       run_id: comms_state(state, :run_id),
-      workflow_id: initialize_workflow(init, :workflow_id),
-      arguments: initialize_workflow(init, :arguments)
+      workflow_id: initialize_workflow(init, :workflow_id)
     })
 
     {:stop, :normal, inc_activations(state)}

@@ -24,6 +24,7 @@ defmodule Temporal.Worker do
   alias Temporal.Workflow.WorkflowComms
   alias Temporal.Workflows.{ActivityName, WorkflowName}
   alias TemporalEngine.Config
+  alias TemporalEngine.Data.Payload
   alias TemporalEngine.Worker, as: EngineWorker
 
   @global_store Temporal.Storage.global_store()
@@ -159,6 +160,14 @@ defmodule Temporal.Worker do
           workflow_id = {:workflow, worker_id, name, arity}
           workflow_def = {module, execute_fn}
           :ets.insert(@global_store, {workflow_id, workflow_def})
+
+          :telemetry.execute([:temporalio, :worker, :register_workflow], %{}, %{
+            worker_id: worker_id,
+            type: name,
+            arity: arity,
+            module: module,
+            func: execute_fn
+          })
         end)
       end)
 
@@ -185,6 +194,14 @@ defmodule Temporal.Worker do
           activity_id = {:activity, worker_id, name, arity}
           activity_def = {activity_module, activity_fn}
           :ets.insert(@global_store, {activity_id, activity_def})
+
+          :telemetry.execute([:temporalio, :worker, :register_activity], %{}, %{
+            worker_id: worker_id,
+            type: name,
+            arity: arity,
+            module: activity_module,
+            func: activity_fn
+          })
         end)
       end)
 
@@ -286,7 +303,7 @@ defmodule Temporal.Worker do
               module: wf_module,
               exec_fn: wf_exec_fn,
               worker_id: worker_id,
-              arguments: initialize_workflow(init, :arguments)
+              arguments: initialize_workflow(init, :arguments) |> Enum.map(&Payload.value_from_record/1)
             })
 
             workflows = worker_state(state, :workflows) |> Map.put(comms, run_id)
