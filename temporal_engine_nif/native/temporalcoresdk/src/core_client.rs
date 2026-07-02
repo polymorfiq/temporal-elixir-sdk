@@ -58,6 +58,7 @@ impl Into<TlsOptions> for SdkTlsOpts {
             server_root_ca_cert: self.server_root_ca_cert.try_into_or_none(),
             domain: self.domain.try_into_or_none(),
             client_tls_options: self.client_tls_options.try_into_or_none(),
+            server_cert_verifier: None,
         }
     }
 }

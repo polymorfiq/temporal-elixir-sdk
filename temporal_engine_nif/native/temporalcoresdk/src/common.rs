@@ -243,6 +243,7 @@ impl Into<api_common::v1::Link> for SdkLink {
 
 #[derive(Debug, NifTaggedEnum, Clone)]
 pub enum SdkLinkVariant {
+    Workflow(SdkLinkWorkflow),
     WorkflowEvent(SdkLinkWorkflowEvent),
     BatchJob(SdkLinkBatchJob),
     Activity(SdkLinkActivity),
@@ -252,6 +253,7 @@ pub enum SdkLinkVariant {
 impl From<api_common::v1::link::Variant> for SdkLinkVariant {
     fn from(external: api_common::v1::link::Variant) -> Self {
         match external {
+            api_common::v1::link::Variant::Workflow(variant) => Self::Workflow(variant.into()),
             api_common::v1::link::Variant::WorkflowEvent(variant) => {
                 Self::WorkflowEvent(variant.into())
             }
@@ -267,6 +269,7 @@ impl From<api_common::v1::link::Variant> for SdkLinkVariant {
 impl Into<api_common::v1::link::Variant> for SdkLinkVariant {
     fn into(self) -> api_common::v1::link::Variant {
         match self {
+            Self::Workflow(variant) => api_common::v1::link::Variant::Workflow(variant.into()),
             Self::WorkflowEvent(variant) => {
                 api_common::v1::link::Variant::WorkflowEvent(variant.into())
             }
@@ -306,6 +309,37 @@ impl Into<api_common::v1::link::WorkflowEvent> for SdkLinkWorkflowEvent {
             workflow_id: self.workflow_id,
             run_id: self.run_id,
             reference: self.reference.try_into_or_none(),
+        }
+    }
+}
+
+#[derive(Debug, NifRecord, Clone)]
+#[tag = "link_workflow"]
+pub struct SdkLinkWorkflow {
+    namespace: String,
+    workflow_id: String,
+    run_id: String,
+    reason: String,
+}
+
+impl From<api_common::v1::link::Workflow> for SdkLinkWorkflow {
+    fn from(external: api_common::v1::link::Workflow) -> Self {
+        Self {
+            namespace: external.namespace,
+            workflow_id: external.workflow_id,
+            run_id: external.run_id,
+            reason: external.reason,
+        }
+    }
+}
+
+impl Into<api_common::v1::link::Workflow> for SdkLinkWorkflow {
+    fn into(self) -> api_common::v1::link::Workflow {
+        api_common::v1::link::Workflow {
+            namespace: self.namespace,
+            workflow_id: self.workflow_id,
+            run_id: self.run_id,
+            reason: self.reason,
         }
     }
 }

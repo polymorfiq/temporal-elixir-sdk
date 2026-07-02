@@ -188,6 +188,9 @@ defmodule TemporalEngine.Data.Commands do
     @default :unspecified
     @type initial_versioning_behavior ::
             required :: :unspecified | :auto_upgrade | :use_ramping_version
+
+    @doc "Delay before the first workflow task of the continued run is scheduled."
+    @type backoff_start_interval :: nested!(Duration.duration)
   end
 
   deftype :cancel_workflow_execution do

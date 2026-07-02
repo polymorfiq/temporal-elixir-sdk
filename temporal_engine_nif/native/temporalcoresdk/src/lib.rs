@@ -39,6 +39,7 @@ use temporalio_sdk_core::{
 use tokio::runtime::Runtime;
 use tracing::{error, warn};
 use url::Url;
+use uuid::Uuid;
 
 mod common;
 mod core_activities;
@@ -725,6 +726,9 @@ fn _handle_update_workflow(
                 first_execution_run_id: exec.run_id,
                 wait_policy: wait_policy.try_into_or_none(),
                 request: Some(update::v1::Request {
+                    request_id: Uuid::new_v4().to_string(),
+                    completion_callbacks: vec![],
+                    links: vec![],
                     meta: Some(Meta {
                         update_id: update_id,
                         identity: client.identity(),

@@ -2920,6 +2920,7 @@ pub struct SdkWorkflowCommandContinueAsNewWorkflowExecution {
     pub retry_policy: Option<SdkRetryPolicy>,
     pub versioning_intent: SdkVersioningIntent,
     pub initial_versioning_behavior: SdkContinueAsNewVersioningBehavior,
+    pub backoff_start_interval: Option<SdkDuration>,
 }
 
 #[repr(i32)]
@@ -2979,6 +2980,7 @@ impl From<workflow_commands::ContinueAsNewWorkflowExecution>
             retry_policy: external.retry_policy.try_into_or_none(),
             versioning_intent: external.versioning_intent.into(),
             initial_versioning_behavior: external.initial_versioning_behavior.into(),
+            backoff_start_interval: external.backoff_start_interval.try_into_or_none(),
         }
     }
 }
@@ -3011,6 +3013,7 @@ impl Into<workflow_commands::ContinueAsNewWorkflowExecution>
             retry_policy: self.retry_policy.try_into_or_none(),
             versioning_intent: self.versioning_intent.into(),
             initial_versioning_behavior: self.initial_versioning_behavior.into(),
+            backoff_start_interval: self.backoff_start_interval.try_into_or_none(),
         }
     }
 }
@@ -4303,6 +4306,7 @@ pub struct SdkWorkflowUpdateResponse {
     pub update_ref: Option<SdkUpdateRef>,
     pub outcome: Option<SdkUpdateOutcome>,
     pub stage: SdkUpdateLifecycleStage,
+    pub link: Option<SdkLink>,
 }
 
 impl From<UpdateWorkflowExecutionResponse> for SdkWorkflowUpdateResponse {
@@ -4311,6 +4315,7 @@ impl From<UpdateWorkflowExecutionResponse> for SdkWorkflowUpdateResponse {
             update_ref: external.update_ref.try_into_or_none(),
             outcome: external.outcome.try_into_or_none(),
             stage: external.stage.into(),
+            link: external.link.try_into_or_none(),
         }
     }
 }
@@ -4321,6 +4326,7 @@ impl Into<UpdateWorkflowExecutionResponse> for SdkWorkflowUpdateResponse {
             update_ref: self.update_ref.try_into_or_none(),
             outcome: self.outcome.try_into_or_none(),
             stage: self.stage.into(),
+            link: self.link.try_into_or_none(),
         }
     }
 }

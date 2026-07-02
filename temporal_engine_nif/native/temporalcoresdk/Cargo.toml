@@ -9,9 +9,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rustler = { version = "0.38.0", features = ["serde"]}
-temporalio_sdk_core = { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.4.0", package="temporalio-sdk-core" }
-temporalio_sdk_common =  { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.4.0", package="temporalio-common" }
-temporalio_sdk_client =  { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.4.0", package="temporalio-client" }
+temporalio_sdk_core = { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.5.0", package="temporalio-sdk-core" }
+temporalio_sdk_common =  { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.5.0", package="temporalio-common" }
+temporalio_sdk_client =  { git = "https://github.com/temporalio/sdk-rust.git", tag = "v0.5.0", package="temporalio-client" }
 url = "2.5.8"
 tracing = "0.1.44"
 tokio = "1.52.3"

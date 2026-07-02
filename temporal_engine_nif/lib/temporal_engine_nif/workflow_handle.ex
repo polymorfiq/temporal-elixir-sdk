@@ -57,46 +57,47 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
         :infinity
       end
 
-    resp = receive do
-      {^pid, {:ok, args}} ->
-        {:ok, workflow_arguments(args, :args) |> List.first()}
+    resp =
+      receive do
+        {^pid, {:ok, args}} ->
+          {:ok, workflow_arguments(args, :args) |> List.first()}
 
-      {^pid, {:error, {:failed, failure}}} ->
-        {:error, Failure.workflow_failed(failure: failure)}
+        {^pid, {:error, {:failed, failure}}} ->
+          {:error, Failure.workflow_failed(failure: failure)}
 
-      {^pid, {:error, {:cancelled, details}}} ->
-        {:error, Failure.workflow_cancelled(details: details)}
+        {^pid, {:error, {:cancelled, details}}} ->
+          {:error, Failure.workflow_cancelled(details: details)}
 
-      {^pid, {:error, {:terminated, details}}} ->
-        {:error, Failure.workflow_terminated(details: details)}
+        {^pid, {:error, {:terminated, details}}} ->
+          {:error, Failure.workflow_terminated(details: details)}
 
-      {^pid, {:error, :timed_out}} ->
-        {:error, Failure.workflow_timed_out()}
+        {^pid, {:error, :timed_out}} ->
+          {:error, Failure.workflow_timed_out()}
 
-      {^pid, {:error, :continued_as_new}} ->
-        {:error, Failure.workflow_continued_as_new()}
+        {^pid, {:error, :continued_as_new}} ->
+          {:error, Failure.workflow_continued_as_new()}
 
-      {^pid, {:error, :not_found}} ->
-        {:error, Failure.workflow_not_found()}
+        {^pid, {:error, :not_found}} ->
+          {:error, Failure.workflow_not_found()}
 
-      {^pid, {:error, {:payload_conversion, message}}} ->
-        {:error, Failure.workflow_payload_conversion(message)}
+        {^pid, {:error, {:payload_conversion, message}}} ->
+          {:error, Failure.workflow_payload_conversion(message)}
 
-      {^pid, {:error, {:rpc, message}}} ->
-        {:error, Failure.workflow_rpc_error(message)}
+        {^pid, {:error, {:rpc, message}}} ->
+          {:error, Failure.workflow_rpc_error(message)}
 
-      {^pid, {:error, {:other, message}}} ->
-        {:error, message}
+        {^pid, {:error, {:other, message}}} ->
+          {:error, message}
 
-      {^pid, {:error, err}} ->
-        {:error, err}
+        {^pid, {:error, err}} ->
+          {:error, err}
 
-      {:DOWN, ^ref, :process, ^pid, %RuntimeError{} = rt_err} ->
-        {:error, rt_err}
-    after
-      timeout ->
-        {:error, :timeout}
-    end
+        {:DOWN, ^ref, :process, ^pid, %RuntimeError{} = rt_err} ->
+          {:error, rt_err}
+      after
+        timeout ->
+          {:error, :timeout}
+      end
 
     Process.demonitor(ref, [:flush])
 
