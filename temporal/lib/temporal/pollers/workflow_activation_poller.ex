@@ -46,7 +46,11 @@ defmodule Temporal.Pollers.WorkflowActivationPoller do
     {poll_pid, poll_ref} =
       spawn_monitor(fn ->
         worker = poll_state(state, :worker)
-        Logger.debug("Polling workflow activations... (#{TemporalEngine.Worker.id(worker)})")
+
+        :telemetry.execute([:temporalio, :worker, :polling], %{}, %{
+          worker_id: TemporalEngine.Worker.id(worker),
+          poller: :activations
+        })
 
         with {:ok, activation} <- Worker.poll_workflow_activation(worker) do
           send(poller, {self(), {:ok, activation}})
@@ -77,7 +81,11 @@ defmodule Temporal.Pollers.WorkflowActivationPoller do
   end
 
   def handle_info(:shutdown_requested, state) do
-    Logger.debug("Shutdown requested for Workflow Activation Poller... Exiting...")
+    :telemetry.execute([:temporalio, :worker, :poller_shutdown_requested], %{}, %{
+      worker_id: TemporalEngine.Worker.id(poll_state(state, :worker)),
+      poller: :activations
+    })
+
     {:stop, :normal, state}
   end
 
@@ -85,9 +93,10 @@ defmodule Temporal.Pollers.WorkflowActivationPoller do
     if poll_state(state, :demand) > 0,
       do: GenStage.async_info(self(), :poll_if_not_already)
 
-    Logger.debug(
-      "Workflow Activation poll finished! Starting over! (Demand: #{poll_state(state, :demand)})"
-    )
+    :telemetry.execute([:temporalio, :worker, :polled], %{}, %{
+      worker_id: TemporalEngine.Worker.id(poll_state(state, :worker)),
+      poller: :activations
+    })
 
     {:noreply, [], poll_state(state, poll_pid: nil, poll_ref: nil)}
   end

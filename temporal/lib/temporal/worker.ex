@@ -88,8 +88,10 @@ defmodule Temporal.Worker do
     identity = opts[:client_identity_override] || TemporalEngine.Client.id(client)
     {_, config_opts} = Keyword.split(opts, [:workflows, :activities])
 
-    config_opts = Keyword.put_new_lazy(config_opts, :namespace, fn -> TemporalEngine.Client.namespace(client) end)
-
+    config_opts =
+      Keyword.put_new_lazy(config_opts, :namespace, fn ->
+        TemporalEngine.Client.namespace(client)
+      end)
 
     with {:ok, config} <- worker_config_from_opts(config_opts),
          id <- "#{identity}_#{worker_config(config, :namespace)}" do
@@ -118,7 +120,8 @@ defmodule Temporal.Worker do
     activities = Keyword.get(extra_opts, :activities, [])
     identity = opts[:client_identity_override] || TemporalEngine.Client.id(client)
 
-    opts = Keyword.put_new_lazy(opts, :namespace, fn -> TemporalEngine.Client.namespace(client) end)
+    opts =
+      Keyword.put_new_lazy(opts, :namespace, fn -> TemporalEngine.Client.namespace(client) end)
 
     with {:ok, config} <- worker_config_from_opts(opts),
          id <- "#{identity}_#{worker_config(config, :namespace)}",
@@ -232,7 +235,8 @@ defmodule Temporal.Worker do
       :telemetry.execute([:temporalio, :worker, :started], %{}, %{
         id: worker_config(config, :id),
         task_queue: worker_config(config, :task_queue),
-        identity: worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+        identity:
+          worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
         namespace: worker_config(config, :namespace)
       })
 
@@ -308,7 +312,8 @@ defmodule Temporal.Worker do
               module: wf_module,
               exec_fn: wf_exec_fn,
               worker_id: worker_id,
-              arguments: initialize_workflow(init, :arguments) |> Enum.map(&Payload.value_from_record/1)
+              arguments:
+                initialize_workflow(init, :arguments) |> Enum.map(&Payload.value_from_record/1)
             })
 
             workflows = worker_state(state, :workflows) |> Map.put(comms, run_id)
@@ -400,20 +405,27 @@ defmodule Temporal.Worker do
   def handle_cast(:shutdown, state) do
     worker = worker_state(state, :worker)
 
-    {time_in_microseconds, _ret_val} = :timer.tc(fn ->
-      :ok = TemporalEngine.Worker.initiate_shutdown(worker)
-    end)
+    {time_in_microseconds, _ret_val} =
+      :timer.tc(fn ->
+        :ok = TemporalEngine.Worker.initiate_shutdown(worker)
+      end)
 
     config = worker_state(state, :config)
     client = worker_state(state, :client)
-    :telemetry.execute([:temporalio, :worker, :shutdown_initiated], %{
-      duration_microsecs: time_in_microseconds,
-    }, %{
-      id: worker_config(config, :id),
-      task_queue: worker_config(config, :task_queue),
-      identity: worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
-      namespace: worker_config(config, :namespace)
-    })
+
+    :telemetry.execute(
+      [:temporalio, :worker, :shutdown_initiated],
+      %{
+        duration_microsecs: time_in_microseconds
+      },
+      %{
+        id: worker_config(config, :id),
+        task_queue: worker_config(config, :task_queue),
+        identity:
+          worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+        namespace: worker_config(config, :namespace)
+      }
+    )
 
     {:noreply, [], state}
   end
@@ -489,24 +501,31 @@ defmodule Temporal.Worker do
 
     if Enum.member?(pollers_shutdown, :activity) && Enum.member?(pollers_shutdown, :activation) &&
          Enum.member?(pollers_shutdown, :nexus) do
-      Logger.debug(
-        "All pollers shutdown for Worker (#{inspect(worker_state(state, :id))}). Shutting down..."
-      )
+      :telemetry.execute([:temporalio, :worker, :all_pollers_shutdown], %{}, %{
+        worker_id: worker_state(state, :id)
+      })
 
-      {time_in_microseconds, _ret_val} = :timer.tc(fn ->
-        :ok = TemporalEngine.Worker.finalize_shutdown(worker_state(state, :worker))
-      end)
+      {time_in_microseconds, _ret_val} =
+        :timer.tc(fn ->
+          :ok = TemporalEngine.Worker.finalize_shutdown(worker_state(state, :worker))
+        end)
 
       config = worker_state(state, :config)
       client = worker_state(state, :client)
-      :telemetry.execute([:temporalio, :worker, :shutdown_finalized], %{
-        duration_microsecs: time_in_microseconds,
-      }, %{
-        id: worker_config(config, :id),
-        task_queue: worker_config(config, :task_queue),
-        identity: worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
-        namespace: worker_config(config, :namespace)
-      })
+
+      :telemetry.execute(
+        [:temporalio, :worker, :shutdown_finalized],
+        %{
+          duration_microsecs: time_in_microseconds
+        },
+        %{
+          id: worker_config(config, :id),
+          task_queue: worker_config(config, :task_queue),
+          identity:
+            worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+          namespace: worker_config(config, :namespace)
+        }
+      )
 
       {:stop, :normal, state}
     else

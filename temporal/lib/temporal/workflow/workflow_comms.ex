@@ -81,19 +81,15 @@ defmodule Temporal.Workflow.WorkflowComms do
         completion(run_id: run_id, status: success(commands: []))
       )
 
-    type = comms_state(state, :workflow_type)
-
-    Logger.debug(
-      "Workflow (#{inspect(type)}, Run ID: #{inspect(run_id)}) - removing from cache (#{inspect(reason)} - #{inspect(message)})."
-    )
-
     init = comms_state(state, :init)
 
     :telemetry.execute([:temporalio, :workflow, :removed_from_cache], %{}, %{
       workflow_type: comms_state(state, :workflow_type),
       namespace: comms_state(state, :namespace),
       run_id: comms_state(state, :run_id),
-      workflow_id: initialize_workflow(init, :workflow_id)
+      workflow_id: initialize_workflow(init, :workflow_id),
+      reason: reason,
+      message: message
     })
 
     {:stop, :normal, inc_activations(state)}

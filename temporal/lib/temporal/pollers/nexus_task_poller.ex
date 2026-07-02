@@ -48,7 +48,11 @@ defmodule Temporal.Pollers.NexusTaskPoller do
     {poll_pid, poll_ref} =
       spawn_monitor(fn ->
         worker = poll_state(state, :worker)
-        Logger.debug("Polling nexus tasks... (#{TemporalEngine.Worker.id(worker)})")
+
+        :telemetry.execute([:temporalio, :worker, :polling], %{}, %{
+          worker_id: TemporalEngine.Worker.id(worker),
+          poller: :nexus
+        })
 
         with {:ok, task} <- Worker.poll_nexus_task(worker) do
           send(poller, {self(), {:ok, task}})
@@ -78,7 +82,11 @@ defmodule Temporal.Pollers.NexusTaskPoller do
   end
 
   def handle_info(:shutdown_requested, state) do
-    Logger.debug("Shutdown requested for Nexus Task Poller... Exiting...")
+    :telemetry.execute([:temporalio, :worker, :poller_shutdown_requested], %{}, %{
+      worker_id: TemporalEngine.Worker.id(poll_state(state, :worker)),
+      poller: :nexus
+    })
+
     {:stop, :normal, state}
   end
 
@@ -86,7 +94,11 @@ defmodule Temporal.Pollers.NexusTaskPoller do
     if poll_state(state, :demand) > 0,
       do: GenStage.async_info(self(), :poll_if_not_already)
 
-    Logger.debug("Nexus Task poll finished! Starting over!")
+    :telemetry.execute([:temporalio, :worker, :polled], %{}, %{
+      worker_id: TemporalEngine.Worker.id(poll_state(state, :worker)),
+      poller: :nexus
+    })
+
     {:noreply, [], poll_state(state, poll_pid: nil, poll_ref: nil)}
   end
 end

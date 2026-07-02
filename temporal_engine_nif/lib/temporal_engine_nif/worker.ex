@@ -186,11 +186,13 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   @impl true
   def initiate_shutdown(worker) do
     with :ok <- Core._worker_initiate_shutdown(worker.core) do
-      Logger.debug("Worker (#{worker.id}) shutdown initiated.")
+      :telemetry.execute([:temporalio, :worker, :shutdown_initiated], %{}, %{
+        worker_id: worker.id
+      })
+
       :ok
     else
       {:error, err} ->
-        Logger.error("Worker (#{worker.id}) error initiating shutdown - #{inspect(err)}")
         {:error, err}
     end
   end
@@ -198,11 +200,13 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   @impl true
   def finalize_shutdown(worker) do
     with :ok <- Core._worker_finalize_shutdown(worker.core) do
-      Logger.debug("Worker (#{worker.id}) shutdown finalized.")
+      :telemetry.execute([:temporalio, :worker, :shutdown_finalized], %{}, %{
+        worker_id: worker.id
+      })
+
       :ok
     else
       {:error, err} ->
-        Logger.error("Worker (#{worker.id}) error finalizing shutdown - #{inspect(err)}")
         {:error, err}
     end
   end

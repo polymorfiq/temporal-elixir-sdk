@@ -860,16 +860,21 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
           init = workflow_state(state, :initialize_config)
           started_at = workflow_state(state, :started_at)
-          :telemetry.execute([:temporalio, :workflow, :completed], %{
-            duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
-          }, %{
-            workflow_type: workflow_state(state, :workflow_type),
-            namespace: workflow_state(state, :namespace),
-            run_id: workflow_state(state, :run_id),
-            workflow_id: initialize_workflow(init, :workflow_id),
-            arguments: workflow_state(state, :arguments),
-            result: result
-          })
+
+          :telemetry.execute(
+            [:temporalio, :workflow, :completed],
+            %{
+              duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
+            },
+            %{
+              workflow_type: workflow_state(state, :workflow_type),
+              namespace: workflow_state(state, :namespace),
+              run_id: workflow_state(state, :run_id),
+              workflow_id: initialize_workflow(init, :workflow_id),
+              arguments: workflow_state(state, :arguments),
+              result: result
+            }
+          )
 
           [
             command(
@@ -888,16 +893,21 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
           init = workflow_state(state, :initialize_config)
           started_at = workflow_state(state, :started_at)
-          :telemetry.execute([:temporalio, :workflow, :failed], %{
-            duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
-          }, %{
-            workflow_type: workflow_state(state, :workflow_type),
-            namespace: workflow_state(state, :namespace),
-            run_id: workflow_state(state, :run_id),
-            workflow_id: initialize_workflow(init, :workflow_id),
-            arguments: workflow_state(state, :arguments),
-            failure: failure
-          })
+
+          :telemetry.execute(
+            [:temporalio, :workflow, :failed],
+            %{
+              duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
+            },
+            %{
+              workflow_type: workflow_state(state, :workflow_type),
+              namespace: workflow_state(state, :namespace),
+              run_id: workflow_state(state, :run_id),
+              workflow_id: initialize_workflow(init, :workflow_id),
+              arguments: workflow_state(state, :arguments),
+              failure: failure
+            }
+          )
 
           GenStage.async_info(execution, :execution_complete)
           [command(variant: fail_workflow_execution(failure: failure))]
@@ -917,16 +927,21 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
           init = workflow_state(state, :initialize_config)
           started_at = workflow_state(state, :started_at)
-          :telemetry.execute([:temporalio, :workflow, :failed], %{
-            duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
-          }, %{
-            workflow_type: workflow_state(state, :workflow_type),
-            namespace: workflow_state(state, :namespace),
-            run_id: workflow_state(state, :run_id),
-            workflow_id: initialize_workflow(init, :workflow_id),
-            arguments: workflow_state(state, :arguments),
-            failure: failure
-          })
+
+          :telemetry.execute(
+            [:temporalio, :workflow, :failed],
+            %{
+              duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
+            },
+            %{
+              workflow_type: workflow_state(state, :workflow_type),
+              namespace: workflow_state(state, :namespace),
+              run_id: workflow_state(state, :run_id),
+              workflow_id: initialize_workflow(init, :workflow_id),
+              arguments: workflow_state(state, :arguments),
+              failure: failure
+            }
+          )
 
           GenStage.async_info(execution, :execution_complete)
           [command(variant: fail_workflow_execution(failure: failure))]
