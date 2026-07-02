@@ -46,6 +46,12 @@ defmodule Temporal.Client do
         Runtime.global(runtime_opts)
       end)
 
+    opts = if opts[:api_key] do
+      Keyword.put_new(opts, :tls_options, [])
+    else
+      opts
+    end
+
     with {:ok, validated} <- ClientOpts.connection_opts_from_opts(opts) do
       TemporalEngine.Runtime.create_client(runtime, validated)
     end
