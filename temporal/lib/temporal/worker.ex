@@ -88,6 +88,9 @@ defmodule Temporal.Worker do
     identity = opts[:client_identity_override] || TemporalEngine.Client.id(client)
     {_, config_opts} = Keyword.split(opts, [:workflows, :activities])
 
+    config_opts = Keyword.put_new_lazy(config_opts, :namespace, fn -> TemporalEngine.Client.namespace(client) end)
+
+
     with {:ok, config} <- worker_config_from_opts(config_opts),
          id <- "#{identity}_#{worker_config(config, :namespace)}" do
       server_opts = [name: {:via, Registry, {Temporal.TemporalRegistry, {:worker, id}}}]
@@ -114,6 +117,8 @@ defmodule Temporal.Worker do
     workflows = Keyword.get(extra_opts, :workflows, [])
     activities = Keyword.get(extra_opts, :activities, [])
     identity = opts[:client_identity_override] || TemporalEngine.Client.id(client)
+
+    opts = Keyword.put_new_lazy(opts, :namespace, fn -> TemporalEngine.Client.namespace(client) end)
 
     with {:ok, config} <- worker_config_from_opts(opts),
          id <- "#{identity}_#{worker_config(config, :namespace)}",
