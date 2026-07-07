@@ -97,6 +97,16 @@ defmodule TemporalEngineNif.Core do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
+  @spec _client_get_workflow_handle(
+          runtime :: term(),
+          client :: term(),
+          workflow_id :: String.t(),
+          resp_pid :: pid()
+        ) :: :ok | {:error, term()}
+  def _client_get_workflow_handle(_runtime, _client, _workflow_id, _resp_pid),
+      do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
   @spec _handle_query_workflow(
           runtime :: term(),
           handle :: WorkflowHandle.t(),

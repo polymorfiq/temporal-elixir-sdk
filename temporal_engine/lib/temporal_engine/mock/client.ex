@@ -38,4 +38,8 @@ defimpl TemporalEngine.Client, for: TemporalEngine.Mock.Client do
   def start_workflow(client, definition, args, opts) do
     TemporalEngine.Client.start_workflow(client.real_client, definition, args, opts)
   end
+
+  def get_workflow_handle(client, workflow_id) do
+    TemporalEngine.Client.get_workflow_handle(client.real_client, workflow_id)
+  end
 end

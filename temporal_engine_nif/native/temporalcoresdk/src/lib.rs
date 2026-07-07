@@ -661,7 +661,10 @@ fn _handle_query_workflow(
     let wf_info = wf_handle_ref.info();
     let exec = SdkWorkflowExecution {
         workflow_id: wf_info.workflow_id.clone(),
-        run_id: wf_info.run_id.clone().unwrap(),
+        run_id: match wf_info.run_id.clone() {
+            Some(run_id) => run_id,
+            None => String::from("")
+        },
     };
 
     let handle = runtime
@@ -770,7 +773,10 @@ fn _handle_signal_workflow(
 
     signal_req.workflow_execution = Some(SdkWorkflowExecution {
         workflow_id: wf_info.workflow_id.clone(),
-        run_id: wf_info.run_id.clone().unwrap(),
+        run_id: match wf_info.run_id.clone() {
+            Some(run_id) => run_id,
+            None => String::from("")
+        },
     });
 
     let handle = runtime
@@ -789,6 +795,32 @@ fn _handle_signal_workflow(
             Ok(resp) => Ok(resp.into_inner().into()),
             Err(error) => Err(format!("Error starting workflow - {}", error)),
         };
+
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+    });
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
+fn _client_get_workflow_handle(
+    runtime: ResourceArc<ElixirRuntime>,
+    client: ResourceArc<ElixirClient>,
+    workflow_id: String,
+    resp_pid: LocalPid
+) -> NifResult<Atom> {
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        let handle = client.client.get_workflow_handle(workflow_id);
+
+        let msg:  Result<ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>, String> = Ok(ResourceArc::new(ElixirWorkflowHandle {
+            handle: RwLock::new(handle),
+        }));
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
     });

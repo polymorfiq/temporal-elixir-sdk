@@ -17,6 +17,9 @@ defprotocol TemporalEngine.Client do
         ) :: {:ok, WorkflowHandle.t()} | {:error, reason :: term()}
   def start_workflow(client, definition, args, opts)
 
+  @spec get_workflow_handle(t(), workflow_id :: String.t()) :: {:ok, WorkflowHandle.t()} | {:error, reason :: term()}
+  def get_workflow_handle(client, workflow_id)
+
   @doc "A unique identifier for the client"
   @spec id(t()) :: String.t()
   def id(client)
