@@ -685,7 +685,7 @@ fn _handle_query_workflow(
 
         let msg: Result<SdkQueryWorkflowResponse, String> = match query_resp {
             Ok(resp) => Ok(resp.into_inner().into()),
-            Err(error) => Err(format!("Error starting workflow - {}", error)),
+            Err(error) => Err(format!("Error querying workflow - {}", error)),
         };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
@@ -743,7 +743,7 @@ fn _handle_update_workflow(
 
         let msg: Result<SdkWorkflowUpdateResponse, String> = match query_resp {
             Ok(resp) => Ok(resp.into_inner().into()),
-            Err(error) => Err(format!("Error starting workflow - {}", error)),
+            Err(error) => Err(format!("Error updating workflow - {}", error)),
         };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
@@ -793,7 +793,7 @@ fn _handle_signal_workflow(
 
         let msg: Result<SdkSignalWorkflowResponse, String> = match query_resp {
             Ok(resp) => Ok(resp.into_inner().into()),
-            Err(error) => Err(format!("Error starting workflow - {}", error)),
+            Err(error) => Err(format!("Error signaling workflow - {}", error)),
         };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
