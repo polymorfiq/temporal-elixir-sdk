@@ -18,9 +18,9 @@ defprotocol TemporalEngine.Client do
         ) :: {:ok, WorkflowHandle.t()} | {:error, reason :: term()}
   def start_workflow(client, definition, args, opts)
 
-  @spec get_workflow_handle(t(), workflow_id :: String.t()) ::
+  @spec get_workflow_handle(t(), workflow_id :: String.t(), run_id :: String.t() | nil) ::
           {:ok, WorkflowHandle.t()} | {:error, reason :: term()}
-  def get_workflow_handle(client, workflow_id)
+  def get_workflow_handle(client, workflow_id, run_id)
 
   @doc "List workflow runs matching a given query"
   @spec list_workflows(t(), query :: String.t(), limit :: pos_integer() | nil) ::

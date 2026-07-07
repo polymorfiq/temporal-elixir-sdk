@@ -20,7 +20,8 @@ use std::time::Duration;
 use temporalio_sdk_client::grpc::WorkflowService;
 use temporalio_sdk_client::tonic::Request;
 use temporalio_sdk_client::{
-    Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient, WorkflowListOptions,
+    Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient, WorkflowExecutionInfo,
+    WorkflowHandle, WorkflowListOptions,
 };
 use temporalio_sdk_common::protos::coresdk::ActivityHeartbeat;
 use temporalio_sdk_common::protos::temporal::api::update;
@@ -829,6 +830,7 @@ fn _client_get_workflow_handle(
     runtime: ResourceArc<ElixirRuntime>,
     client: ResourceArc<ElixirClient>,
     workflow_id: String,
+    run_id: Option<String>,
     resp_pid: LocalPid,
 ) -> NifResult<Atom> {
     let handle = runtime
@@ -838,7 +840,16 @@ fn _client_get_workflow_handle(
         .tokio_handle();
     handle.spawn(async move {
         let mut owned_env = OwnedEnv::new();
-        let handle = client.client.get_workflow_handle(workflow_id);
+
+        let handle: WorkflowHandle<Client, SdkWorkflowDefinition> = WorkflowHandle::new(
+            client.client.clone(),
+            WorkflowExecutionInfo {
+                namespace: client.client.namespace(),
+                workflow_id,
+                run_id,
+                first_execution_run_id: None,
+            },
+        );
 
         let msg: Result<ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>, String> =
             Ok(ResourceArc::new(ElixirWorkflowHandle {

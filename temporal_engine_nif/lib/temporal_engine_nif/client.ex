@@ -104,7 +104,7 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
   end
 
   @impl true
-  def get_workflow_handle(client, workflow_id) do
+  def get_workflow_handle(client, workflow_id, run_id) do
     parent = self()
 
     {pid, ref} =
@@ -113,6 +113,7 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
           client.runtime.core,
           client.core,
           workflow_id,
+          run_id,
           self()
         )
         |> case do
