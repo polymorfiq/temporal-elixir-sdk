@@ -11,6 +11,7 @@ defmodule Temporal.Activity.ActivityComms do
   alias Temporal.Activity.ActivityExecution
   alias TemporalEngine.Data.ActivityTask
   alias TemporalEngine.Data.ActivityTaskCompletion
+  alias TemporalEngine.Data.Payload
   alias TemporalEngine.Worker
 
   Record.defrecordp(:comms_state, [
@@ -71,20 +72,26 @@ defmodule Temporal.Activity.ActivityComms do
   end
 
   @spec handle_events(
-          [ActivityTaskCompletion.activity_execution_result()],
+          [ActivityTaskCompletion.activity_execution_result() | {:record_heartbeat, term()}],
           {pid(), reference()},
           comms_state()
         ) ::
           {:noreply, [], comms_state()} | {:stop, term(), comms_state()}
-  def handle_events([result], _, state) do
+  def handle_events(events, _, state) do
     worker = comms_state(state, :worker)
     task_token = comms_state(state, :task_token)
 
-    :ok =
-      Worker.complete_activity_task(
-        worker,
-        task_completion(task_token: task_token, result: result)
-      )
+    Enum.each(events, fn
+      {:record_heartbeat, details} ->
+        :ok = Worker.record_activity_heartbeat(worker, task_token, Enum.map(details, &Payload.record_from_value/1))
+
+      result ->
+        :ok =
+          Worker.complete_activity_task(
+            worker,
+            task_completion(task_token: task_token, result: result)
+          )
+    end)
 
     {:stop, :normal, state}
   end

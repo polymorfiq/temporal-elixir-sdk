@@ -10,7 +10,7 @@ use crate::core_workflows::{
     SdkWorkflowExecution, SdkWorkflowGetResultError, SdkWorkflowGetResultOptions, SdkWorkflowQuery,
     SdkWorkflowStartOptions, SdkWorkflowUpdate, SdkWorkflowUpdateResponse,
 };
-use crate::data::common::SdkWorkflowArguments;
+use crate::data::common::{SdkPayload, SdkWorkflowArguments};
 use rustler::{Atom, Error, LocalPid, NifResult, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
@@ -21,6 +21,7 @@ use temporalio_sdk_client::tonic::Request;
 use temporalio_sdk_client::{
     Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient,
 };
+use temporalio_sdk_common::protos::coresdk::ActivityHeartbeat;
 use temporalio_sdk_common::protos::temporal::api::update;
 use temporalio_sdk_common::protos::temporal::api::update::v1::Meta;
 use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
@@ -646,6 +647,26 @@ fn _worker_finalize_shutdown(worker: ResourceArc<ElixirWorker>) -> NifResult<Ato
 }
 
 #[rustler::nif]
+fn _worker_record_activity_heartbeat(
+    worker: ResourceArc<ElixirWorker>,
+    task_token: Vec<u8>,
+    payloads: Vec<SdkPayload>,
+) -> NifResult<Atom> {
+    match worker.worker.as_ref() {
+        Some(worker) => {
+            worker.record_activity_heartbeat(ActivityHeartbeat {
+                task_token: task_token,
+                details: payloads.iter().map(|p| p.into()).collect(),
+            });
+        }
+
+        None => (),
+    }
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
 fn _handle_query_workflow(
     runtime: ResourceArc<ElixirRuntime>,
     wf_handle: ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>,
@@ -663,7 +684,7 @@ fn _handle_query_workflow(
         workflow_id: wf_info.workflow_id.clone(),
         run_id: match wf_info.run_id.clone() {
             Some(run_id) => run_id,
-            None => String::from("")
+            None => String::from(""),
         },
     };
 
@@ -775,7 +796,7 @@ fn _handle_signal_workflow(
         workflow_id: wf_info.workflow_id.clone(),
         run_id: match wf_info.run_id.clone() {
             Some(run_id) => run_id,
-            None => String::from("")
+            None => String::from(""),
         },
     });
 
@@ -807,7 +828,7 @@ fn _client_get_workflow_handle(
     runtime: ResourceArc<ElixirRuntime>,
     client: ResourceArc<ElixirClient>,
     workflow_id: String,
-    resp_pid: LocalPid
+    resp_pid: LocalPid,
 ) -> NifResult<Atom> {
     let handle = runtime
         .core
@@ -818,9 +839,10 @@ fn _client_get_workflow_handle(
         let mut owned_env = OwnedEnv::new();
         let handle = client.client.get_workflow_handle(workflow_id);
 
-        let msg:  Result<ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>, String> = Ok(ResourceArc::new(ElixirWorkflowHandle {
-            handle: RwLock::new(handle),
-        }));
+        let msg: Result<ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>, String> =
+            Ok(ResourceArc::new(ElixirWorkflowHandle {
+                handle: RwLock::new(handle),
+            }));
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
     });

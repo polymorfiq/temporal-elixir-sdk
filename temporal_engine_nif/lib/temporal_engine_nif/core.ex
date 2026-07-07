@@ -104,7 +104,7 @@ defmodule TemporalEngineNif.Core do
           resp_pid :: pid()
         ) :: :ok | {:error, term()}
   def _client_get_workflow_handle(_runtime, _client, _workflow_id, _resp_pid),
-      do: :erlang.nif_error(:nif_not_loaded)
+    do: :erlang.nif_error(:nif_not_loaded)
 
   @doc false
   @spec _handle_query_workflow(
@@ -175,5 +175,12 @@ defmodule TemporalEngineNif.Core do
   @doc false
   @spec _worker_finalize_shutdown(worker :: term()) :: :ok | {:error, term()}
   def _worker_finalize_shutdown(_worker),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc false
+  @spec _worker_record_activity_heartbeat(worker :: term(), task_token :: String.t(),
+          payloads: [Payload.payload()]
+        ) :: :ok
+  def _worker_record_activity_heartbeat(_worker, _task_token, _payloads),
     do: :erlang.nif_error(:nif_not_loaded)
 end

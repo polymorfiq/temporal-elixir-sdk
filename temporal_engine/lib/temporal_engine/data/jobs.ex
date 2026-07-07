@@ -462,6 +462,12 @@ defmodule TemporalEngine.Data.Jobs do
     def validate_opts(opts, _path), do: {:ok, opts}
 
     @spec from_opts(opts()) :: {:ok, t()} | {:error, term()}
-    def from_opts(opts), do: {:ok, search_attribs(indexed_fields: Map.new(opts, fn {key, val} -> {key, Payload.record_from_value(val)} end))}
+    def from_opts(opts),
+      do:
+        {:ok,
+         search_attribs(
+           indexed_fields:
+             Map.new(opts, fn {key, val} -> {key, Payload.record_from_value(val)} end)
+         )}
   end
 end

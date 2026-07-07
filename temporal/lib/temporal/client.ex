@@ -64,7 +64,8 @@ defmodule Temporal.Client do
   def new!(target, opts \\ []),
     do: new(target, opts) |> then(fn {:ok, client} -> client end)
 
-  @spec get_workflow_handle(t(), workflow_id :: String.t()) :: {:ok, WorkflowHandle.t()} | {:error, term()}
+  @spec get_workflow_handle(t(), workflow_id :: String.t()) ::
+          {:ok, WorkflowHandle.t()} | {:error, term()}
   def get_workflow_handle(client, workflow_id) do
     TemporalEngine.Client.get_workflow_handle(client, workflow_id)
   end

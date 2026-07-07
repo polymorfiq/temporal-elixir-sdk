@@ -82,6 +82,10 @@ defmodule Temporal.Activity.ActivityExecution do
     {:noreply, [], state}
   end
 
+  def handle_info({:record_heartbeat, details}, state) do
+    {:noreply, [{:record_heartbeat, details}], state}
+  end
+
   def handle_info(:execute_if_not_already, state) do
     module = activity_state(state, :module)
     exec_fn = activity_state(state, :exec_fn)
@@ -99,6 +103,8 @@ defmodule Temporal.Activity.ActivityExecution do
           module: module,
           exec_fn: exec_fn
         })
+
+        Process.put(:_temporal_executor, parent)
 
         resp = apply(module, exec_fn, arguments)
         GenStage.cast(parent, {:activity_completed, resp})

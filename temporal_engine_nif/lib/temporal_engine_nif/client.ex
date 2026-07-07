@@ -116,21 +116,21 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
           self()
         )
         |> case do
-             :ok -> :ok
-             {:error, err} -> raise "Could not get workflow handle via Core SDK: #{inspect(err)}"
-           end
+          :ok -> :ok
+          {:error, err} -> raise "Could not get workflow handle via Core SDK: #{inspect(err)}"
+        end
 
         receive do
           {:ok, workflow_handle} ->
             send(
               parent,
               {self(),
-                {:ok,
-                  %WorkflowHandle{
-                    client: client,
-                    core: workflow_handle,
-                    workflow_id: workflow_id
-                  }}}
+               {:ok,
+                %WorkflowHandle{
+                  client: client,
+                  core: workflow_handle,
+                  workflow_id: workflow_id
+                }}}
             )
 
           {:error, err} ->

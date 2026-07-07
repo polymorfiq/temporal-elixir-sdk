@@ -184,6 +184,26 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   end
 
   @impl true
+  def record_activity_heartbeat(worker, task_token, payloads) do
+    alias TemporalEngine.Data.Payload
+
+    with :ok <-
+           Core._worker_record_activity_heartbeat(
+             worker.core,
+             task_token,
+             payloads
+           ) do
+      :telemetry.execute([:temporalio, :worker, :activity_heartbeat_recorded], %{}, %{
+        worker_id: worker.id,
+        task_token: task_token,
+        payloads: payloads |> Enum.map(&Payload.record_from_value/1)
+      })
+
+      :ok
+    end
+  end
+
+  @impl true
   def initiate_shutdown(worker) do
     with :ok <- Core._worker_initiate_shutdown(worker.core) do
       :telemetry.execute([:temporalio, :worker, :shutdown_initiated], %{}, %{
