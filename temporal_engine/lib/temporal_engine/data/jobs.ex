@@ -453,8 +453,15 @@ defmodule TemporalEngine.Data.Jobs do
 
     The payload is not serialized in a user-defined way.
     """
+    @opts_type :: term()
 
     @default %{}
     @type indexed_fields :: required :: %{String.t() => nested!(Payload.payload())}
+
+    @spec validate_opts(opts(), path :: String.t()) :: {:ok, t()} | {:error, term()}
+    def validate_opts(opts, _path), do: {:ok, opts}
+
+    @spec from_opts(opts()) :: {:ok, t()} | {:error, term()}
+    def from_opts(opts), do: {:ok, search_attribs(indexed_fields: Map.new(opts, fn {key, val} -> {key, Payload.record_from_value(val)} end))}
   end
 end
