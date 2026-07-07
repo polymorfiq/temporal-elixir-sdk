@@ -2,7 +2,7 @@ defmodule Temporal.Activity do
   require Record
 
   Record.defrecord(:activity_context, [:executor])
-  @type activity_context :: record(:activity_context, [executor: pid()])
+  @type activity_context :: record(:activity_context, executor: pid())
 
   @spec get_activity_context() :: activity_context()
   def get_activity_context() do

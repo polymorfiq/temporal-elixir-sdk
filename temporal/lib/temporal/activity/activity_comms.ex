@@ -83,7 +83,12 @@ defmodule Temporal.Activity.ActivityComms do
 
     Enum.each(events, fn
       {:record_heartbeat, details} ->
-        :ok = Worker.record_activity_heartbeat(worker, task_token, Enum.map(details, &Payload.record_from_value/1))
+        :ok =
+          Worker.record_activity_heartbeat(
+            worker,
+            task_token,
+            Enum.map(details, &Payload.record_from_value/1)
+          )
 
       result ->
         :ok =

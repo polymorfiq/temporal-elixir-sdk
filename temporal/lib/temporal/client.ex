@@ -9,6 +9,7 @@ defmodule Temporal.Client do
   import TemporalEngine.Data.Updates
   import TemporalEngine.Data.Signals
 
+  require TemporalEngine.Data.Common
   require TemporalEngine.Data.Queries
   require TemporalEngine.Data.Failure
   require TemporalEngine.Opts.ClientOpts
@@ -18,6 +19,7 @@ defmodule Temporal.Client do
   alias Temporal.Constants
   alias Temporal.Runtime
   alias Temporal.Workflows.WorkflowName
+  alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Queries
   alias TemporalEngine.Data.Payload
@@ -68,6 +70,20 @@ defmodule Temporal.Client do
           {:ok, WorkflowHandle.t()} | {:error, term()}
   def get_workflow_handle(client, workflow_id) do
     TemporalEngine.Client.get_workflow_handle(client, workflow_id)
+  end
+
+  @spec list_workflows(t(), query :: String.t(), limit :: pos_integer() | nil) ::
+          {:ok, [%{workflow_id: String.t(), run_id: String.t()}]} | {:error, term()}
+  def list_workflows(client, query \\ "", limit \\ nil) do
+    with {:ok, execs} <- TemporalEngine.Client.list_workflows(client, query, limit) do
+      {:ok,
+       Enum.map(execs, fn exec ->
+         %{
+           run_id: Common.workflow_execution(exec, :run_id),
+           workflow_id: Common.workflow_execution(exec, :workflow_id)
+         }
+       end)}
+    end
   end
 
   @spec execute_workflow(

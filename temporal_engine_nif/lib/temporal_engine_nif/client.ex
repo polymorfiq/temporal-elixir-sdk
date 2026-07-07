@@ -149,6 +149,43 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
   end
 
   @impl true
+  def list_workflows(client, query, limit) do
+    parent = self()
+
+    {pid, ref} =
+      spawn_monitor(fn ->
+        Core._client_list_workflows(
+          client.runtime.core,
+          client.core,
+          query,
+          limit,
+          self()
+        )
+        |> case do
+          :ok -> :ok
+          {:error, err} -> raise "Could not list workflows via Core SDK: #{inspect(err)}"
+        end
+
+        receive do
+          {:ok, execs} ->
+            send(parent, {self(), {:ok, execs}})
+
+          {:error, err} ->
+            send(parent, {self(), {:error, err}})
+        end
+      end)
+
+    receive do
+      {^pid, response} ->
+        Process.demonitor(ref, [:flush])
+        response
+
+      {:DOWN, ^ref, :process, ^pid, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @impl true
   def start_workflow(client, definition, args, opts) do
     parent = self()
 

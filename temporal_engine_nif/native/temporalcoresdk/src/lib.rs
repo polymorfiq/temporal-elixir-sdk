@@ -11,6 +11,7 @@ use crate::core_workflows::{
     SdkWorkflowStartOptions, SdkWorkflowUpdate, SdkWorkflowUpdateResponse,
 };
 use crate::data::common::{SdkPayload, SdkWorkflowArguments};
+use futures_util::StreamExt;
 use rustler::{Atom, Error, LocalPid, NifResult, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
@@ -19,7 +20,7 @@ use std::time::Duration;
 use temporalio_sdk_client::grpc::WorkflowService;
 use temporalio_sdk_client::tonic::Request;
 use temporalio_sdk_client::{
-    Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient,
+    Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient, WorkflowListOptions,
 };
 use temporalio_sdk_common::protos::coresdk::ActivityHeartbeat;
 use temporalio_sdk_common::protos::temporal::api::update;
@@ -843,6 +844,50 @@ fn _client_get_workflow_handle(
             Ok(ResourceArc::new(ElixirWorkflowHandle {
                 handle: RwLock::new(handle),
             }));
+
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+    });
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
+fn _client_list_workflows(
+    runtime: ResourceArc<ElixirRuntime>,
+    client: ResourceArc<ElixirClient>,
+    query: String,
+    limit: Option<usize>,
+    resp_pid: LocalPid,
+) -> NifResult<Atom> {
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        let mut wf_stream = client.client.list_workflows(
+            query,
+            WorkflowListOptions::builder().maybe_limit(limit).build(),
+        );
+        let mut execs: Vec<SdkWorkflowExecution> = vec![];
+        let mut list_error: Option<String> = None;
+
+        while let Some(exec) = wf_stream.next().await {
+            match exec {
+                Ok(exec) => execs.push(SdkWorkflowExecution {
+                    run_id: String::from(exec.run_id()),
+                    workflow_id: String::from(exec.id()),
+                }),
+
+                Err(err) => list_error = Some(format!("Error listing workflows: {}", err)),
+            }
+        }
+
+        let msg: Result<Vec<SdkWorkflowExecution>, String> = match list_error {
+            Some(err) => Err(err),
+            None => Ok(execs),
+        };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
     });
