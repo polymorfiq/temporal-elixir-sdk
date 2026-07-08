@@ -338,6 +338,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
     {:noreply, [], workflow_state(state, awaiting_checks: new_awaiting)}
   end
 
+  def handle_cast(job(variant: initialize_workflow()), state) do
+    {:noreply, [], state}
+  end
+
   def handle_cast(
         job(variant: resolve_activity(seq: seq, result: activity_resolution(status: status))),
         state
@@ -374,6 +378,11 @@ defmodule Temporal.Workflow.WorkflowExecution do
        activity_results: results,
        awaiting_activity: Map.delete(all_awaiting, seq)
      )}
+  end
+
+  def handle_cast(job(variant: update_random_seed()), state) do
+    Logger.warning("update_random_seed called when not yet implemented.")
+    {:noreply, [], state}
   end
 
   def handle_cast(job(variant: fire_timer(seq: seq)), state) do
@@ -881,6 +890,28 @@ defmodule Temporal.Workflow.WorkflowExecution do
               variant: complete_workflow_execution(result: Payload.record_from_value(result))
             )
           ]
+
+        {:error, Commands.continue_as_new_workflow_execution() = cmd} ->
+          init = workflow_state(state, :initialize_config)
+          started_at = workflow_state(state, :started_at)
+
+          :telemetry.execute(
+            [:temporalio, :workflow, :continue_as_new],
+            %{
+              duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
+            },
+            %{
+              workflow_type: workflow_state(state, :workflow_type),
+              namespace: workflow_state(state, :namespace),
+              run_id: workflow_state(state, :run_id),
+              workflow_id: initialize_workflow(init, :workflow_id),
+              arguments: workflow_state(state, :arguments),
+              continue_as_new_arguments: Commands.continue_as_new_workflow_execution(cmd, :arguments) |> Enum.map(&Payload.record_from_value/1)
+            }
+          )
+
+          GenStage.async_info(execution, :execution_complete)
+          [command(variant: cmd)]
 
         {:error, Failure.application() = app_failure} ->
           failure =

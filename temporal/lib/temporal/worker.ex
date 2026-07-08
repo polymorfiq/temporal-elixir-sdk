@@ -275,7 +275,7 @@ defmodule Temporal.Worker do
       ) do
     state =
       Enum.reduce(activations, state, fn
-        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init)]) =
+        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init) | _]) =
             activation,
         state ->
           worker_id = worker_state(state, :id)
@@ -303,6 +303,8 @@ defmodule Temporal.Worker do
                    {run_id, workflow_type, worker_state(state, :namespace),
                     worker_state(state, :worker), init, exec_args}
                  ) do
+
+            WorkflowComms.activate(comms, activation)
             :telemetry.execute([:temporalio, :workflow, :initialized], %{}, %{
               workflow_type: workflow_type,
               namespace: worker_state(state, :namespace),
@@ -336,7 +338,7 @@ defmodule Temporal.Worker do
           if workflow do
             WorkflowComms.activate(workflow, activate)
           else
-            Logger.error("Sent an activation for unknown workflow: (Run ID: #{inspect(run_id)})")
+            Logger.error("Sent an activation for unknown workflow: (Run ID: #{inspect(run_id)}) - #{inspect(activate)}")
           end
 
           state
