@@ -275,7 +275,7 @@ defmodule Temporal.Worker do
       ) do
     state =
       Enum.reduce(activations, state, fn
-        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init) | _]) =
+        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init) | other_jobs]) =
             activation,
         state ->
           worker_id = worker_state(state, :id)
@@ -304,7 +304,8 @@ defmodule Temporal.Worker do
                     worker_state(state, :worker), init, exec_args}
                  ) do
 
-            WorkflowComms.activate(comms, activation)
+            if Enum.count(other_jobs) > 0, do: WorkflowComms.activate(comms, activation)
+
             :telemetry.execute([:temporalio, :workflow, :initialized], %{}, %{
               workflow_type: workflow_type,
               namespace: worker_state(state, :namespace),
