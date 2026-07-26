@@ -9,15 +9,16 @@ defmodule Temporal.Activity.ActivityComms do
   import TemporalEngine.Data.ActivityTaskCompletion
 
   alias Temporal.Activity.ActivityExecution
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Data.ActivityTask
   alias TemporalEngine.Data.ActivityTaskCompletion
-  alias TemporalEngine.Data.Payload
   alias TemporalEngine.Worker
 
   Record.defrecordp(:comms_state, [
     :run_id,
     :activity_type,
     :activity_id,
+    :data_converter,
     :state,
     :task_token,
     :worker,
@@ -29,6 +30,7 @@ defmodule Temporal.Activity.ActivityComms do
              run_id: String.t(),
              activity_type: String.t(),
              activity_id: String.t(),
+             data_converter: DataConverter.t(),
              state: :started,
              task_token: String.t(),
              worker: Worker.t(),
@@ -39,11 +41,14 @@ defmodule Temporal.Activity.ActivityComms do
   def start_link(init_args), do: GenStage.start_link(__MODULE__, init_args)
 
   @doc false
-  @spec init(
-          {Worker.t(), ActivityTask.start_activity(), exec_args :: term(),
-           task_token :: String.t()}
-        ) :: {:consumer, comms_state(), keyword()}
-  def init({worker, start, exec_args, task_token}) do
+  @spec init({
+          Worker.t(),
+          ActivityTask.start_activity(),
+          data_converter :: DataConverter.t(),
+          exec_args :: term(),
+          task_token :: String.t()
+        }) :: {:consumer, comms_state(), keyword()}
+  def init({worker, start, data_converter, exec_args, task_token}) do
     activity_type = start_activity(start, :activity_type)
     activity_id = start_activity(start, :activity_id)
     workflow_exec = start_activity(start, :workflow_execution)
@@ -65,6 +70,7 @@ defmodule Temporal.Activity.ActivityComms do
        activity_type: activity_type,
        activity_id: activity_id,
        worker: worker,
+       data_converter: data_converter,
        state: :started,
        exec: exec,
        task_token: task_token
@@ -80,14 +86,17 @@ defmodule Temporal.Activity.ActivityComms do
   def handle_events(events, _, state) do
     worker = comms_state(state, :worker)
     task_token = comms_state(state, :task_token)
+    conv = comms_state(state, :data_converter)
 
     Enum.each(events, fn
       {:record_heartbeat, details} ->
+        {:ok, payloads} = DataConverter.to_payloads(conv, details)
+
         :ok =
           Worker.record_activity_heartbeat(
             worker,
             task_token,
-            Enum.map(details, &Payload.record_from_value/1)
+            payloads
           )
 
       result ->

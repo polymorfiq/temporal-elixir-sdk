@@ -35,6 +35,9 @@ defimpl TemporalEngine.Client, for: TemporalEngine.Mock.Client do
     end
   end
 
+  def data_converter(client),
+    do: TemporalEngine.Client.data_converter(client.real_client)
+
   def start_workflow(client, definition, args, opts) do
     TemporalEngine.Client.start_workflow(client.real_client, definition, args, opts)
   end

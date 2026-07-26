@@ -6,9 +6,9 @@ defmodule Temporal.Activity.ActivityExecution do
   import TemporalEngine.Data.Common, only: [workflow_execution: 2]
   import TemporalEngine.Data.ActivityTaskCompletion
 
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Data.ActivityTask
   alias TemporalEngine.Data.Failure
-  alias TemporalEngine.Data.Payload
 
   require Logger
   require Record
@@ -20,6 +20,7 @@ defmodule Temporal.Activity.ActivityExecution do
     :arguments,
     :module,
     :exec_fn,
+    :data_converter,
     exec_ref: nil,
     exec_pid: nil,
     demand: 0
@@ -33,6 +34,7 @@ defmodule Temporal.Activity.ActivityExecution do
              arguments: [term()],
              module: module(),
              exec_fn: atom(),
+             data_converter: DataConverter.t(),
              exec_ref: reference() | nil,
              exec_pid: pid() | nil,
              demand: integer()
@@ -40,16 +42,20 @@ defmodule Temporal.Activity.ActivityExecution do
 
   def start_link(init_args), do: GenStage.start_link(__MODULE__, init_args)
 
-  @spec init({module :: module(), exec_fn :: atom(), ActivityTask.start_activity()}) ::
-          {:producer, activity_state()}
-  def init({module, exec_fn, start}) do
+  @spec init({
+          module :: module(),
+          exec_fn :: atom(),
+          converter :: DataConverter.t(),
+          ActivityTask.start_activity()
+        }) :: {:producer, activity_state()}
+  def init({module, exec_fn, converter, start}) do
     workflow_exec = start_activity(start, :workflow_execution)
     run_id = workflow_execution(workflow_exec, :run_id)
     activity_type = start_activity(start, :activity_type)
     activity_id = start_activity(start, :activity_id)
     Process.set_label({:activity, run_id, activity_type, activity_id})
 
-    arguments = start_activity(start, :input) |> Enum.map(&Payload.value_from_record/1)
+    {:ok, arguments} = DataConverter.from_payloads(converter, start_activity(start, :input))
 
     {:producer,
      activity_state(
@@ -58,7 +64,8 @@ defmodule Temporal.Activity.ActivityExecution do
        activity_id: activity_id,
        arguments: arguments,
        module: module,
-       exec_fn: exec_fn
+       exec_fn: exec_fn,
+       data_converter: converter
      )}
   end
 
@@ -147,10 +154,14 @@ defmodule Temporal.Activity.ActivityExecution do
   end
 
   def handle_cast({:activity_completed, resp}, state) do
+    conv = activity_state(state, :data_converter)
+
     with {:ok, result} <- resp do
       {:noreply, [activity_execution_result_from_opts!(status: [result: result])], state}
     else
       {:error, err} ->
+        {:ok, details} = DataConverter.to_payload(conv, err)
+
         failure =
           Failure.failure(
             message: "{:error, #{inspect(err)}}",
@@ -159,7 +170,7 @@ defmodule Temporal.Activity.ActivityExecution do
             failure_info:
               Failure.application(
                 failure_type: "ReturnedError",
-                details: [Payload.record_from_value(err)]
+                details: [details]
               )
           )
 

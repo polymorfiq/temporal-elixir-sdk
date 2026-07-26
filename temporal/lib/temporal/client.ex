@@ -17,12 +17,13 @@ defmodule Temporal.Client do
   require TemporalEngine.WorkflowHandle
 
   alias Temporal.Constants
+  alias Temporal.Converter.DefaultDataConverter
   alias Temporal.Runtime
   alias Temporal.Workflows.WorkflowName
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Queries
-  alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Signals
   alias TemporalEngine.Data.Updates
   alias TemporalEngine.Opts.{ClientOpts, WorkflowOpts}
@@ -43,6 +44,13 @@ defmodule Temporal.Client do
     {extra_opts, opts} = Keyword.split(opts, [:runtime])
     {runtime_opts, opts} = Keyword.split(opts, [:engine])
 
+    {data_converter_opts, opts} = Keyword.split(opts, [:data_converter])
+
+    data_converter =
+      Keyword.get_lazy(data_converter_opts, :data_converter, fn ->
+        %DefaultDataConverter{}
+      end)
+
     runtime =
       Keyword.get_lazy(extra_opts, :runtime, fn ->
         Runtime.global(runtime_opts)
@@ -56,7 +64,10 @@ defmodule Temporal.Client do
       end
 
     with {:ok, validated} <- ClientOpts.connection_opts_from_opts(opts) do
-      TemporalEngine.Runtime.create_client(runtime, validated)
+      TemporalEngine.Runtime.create_client(runtime,
+        connection: validated,
+        data_converter: data_converter
+      )
     end
   end
 
@@ -94,7 +105,9 @@ defmodule Temporal.Client do
         ) :: {:ok, WorkflowHandle.t()} | {:error, term()}
   def execute_workflow(client, name, inputs, opts) do
     {:ok, name} = WorkflowName.server_recognized_name(name)
-    args = Enum.map(inputs, &Payload.record_from_value/1)
+
+    conv = TemporalEngine.Client.data_converter(client)
+    {:ok, args} = DataConverter.to_payloads(conv, inputs)
     definition = WorkflowOpts.workflow_definition(name: name)
 
     with {:ok, opts} <- WorkflowOpts.workflow_start_opts_from_opts(opts) do
@@ -109,7 +122,9 @@ defmodule Temporal.Client do
           query_opts :: [Queries.query_options_opt()]
         ) :: {:ok, term()} | {:error, term()}
   def query_workflow(handle, query_name, query_args \\ [], query_opts \\ []) do
-    args = Enum.map(query_args, &Payload.record_from_value/1)
+    client = WorkflowHandle.client(handle)
+    conv = TemporalEngine.Client.data_converter(client)
+    {:ok, args} = DataConverter.to_payloads(conv, query_args)
 
     with {:ok, opts} <- Queries.query_options_from_opts(query_opts) do
       resp = TemporalEngine.WorkflowHandle.query(handle, "#{query_name}", args, opts)
@@ -119,11 +134,17 @@ defmodule Temporal.Client do
           {:error, status}
 
         {:ok, query_workflow_response(query_result: [result])} ->
-          val = if(result, do: Payload.value_from_record(result), else: nil)
+          val =
+            if result do
+              {:ok, decoded} = DataConverter.from_payload(conv, result)
+              decoded
+            else
+              nil
+            end
 
           case val do
             {:error, Failure.failure() = failure} ->
-              {:error, Failure.to_map(failure) |> Map.put(:error_code, :query_failed)}
+              {:error, Failure.to_map(conv, failure) |> Map.put(:error_code, :query_failed)}
 
             {:error, err} ->
               {:error, err}
@@ -145,7 +166,10 @@ defmodule Temporal.Client do
           update_opts :: [Updates.update_options_opt()]
         ) :: {:ok, term()} | {:error, term()}
   def update_workflow(handle, update_name, update_args \\ [], update_opts \\ []) do
-    args = Enum.map(update_args, &Payload.record_from_value/1)
+    client = WorkflowHandle.client(handle)
+    conv = TemporalEngine.Client.data_converter(client)
+    {:ok, args} = DataConverter.to_payloads(conv, update_args)
+
     update_opts = Keyword.put_new_lazy(update_opts, :id, fn -> random_string(10) end)
 
     with {:ok, opts} <- Updates.update_options_from_opts(update_opts) do
@@ -164,11 +188,11 @@ defmodule Temporal.Client do
 
         {:ok,
          workflow_update_response(outcome: update_outcome(value: [result]), stage: :completed)} ->
-          val = Payload.value_from_record(result)
+          {:ok, val} = DataConverter.from_payload(conv, result)
 
           case val do
             {:error, Failure.failure() = failure} ->
-              {:error, Failure.to_map(failure) |> Map.put(:error_code, :query_failed)}
+              {:error, Failure.to_map(conv, failure) |> Map.put(:error_code, :query_failed)}
 
             {:error, err} ->
               {:error, err}
@@ -190,7 +214,9 @@ defmodule Temporal.Client do
           signal_opts :: [Signals.signal_workflow_request_opt()]
         ) :: {:ok, term()} | {:error, term()}
   def signal_workflow(handle, signal_name, signal_args \\ [], signal_opts \\ []) do
-    args = Enum.map(signal_args, &Payload.record_from_value/1)
+    client = WorkflowHandle.client(handle)
+    conv = TemporalEngine.Client.data_converter(client)
+    {:ok, args} = DataConverter.to_payloads(conv, signal_args)
 
     signal_opts = Keyword.merge(signal_opts, signal_name: "#{signal_name}", input: signal_args)
     signal_opts = Keyword.put_new_lazy(signal_opts, :request_id, fn -> random_string(10) end)

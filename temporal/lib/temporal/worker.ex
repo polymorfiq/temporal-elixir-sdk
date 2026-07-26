@@ -24,7 +24,8 @@ defmodule Temporal.Worker do
   alias Temporal.Workflow.WorkflowComms
   alias Temporal.Workflows.{ActivityName, WorkflowName}
   alias TemporalEngine.Config
-  alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Client
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Worker, as: EngineWorker
 
   @global_store Temporal.Storage.global_store()
@@ -273,9 +274,15 @@ defmodule Temporal.Worker do
         {activation_p, _},
         worker_state(activation_poller: activation_p) = state
       ) do
+    client = worker_state(state, :client)
+    converter = Client.data_converter(client)
+
     state =
       Enum.reduce(activations, state, fn
-        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init) | other_jobs]) =
+        activation(
+          run_id: run_id,
+          jobs: [job(variant: initialize_workflow() = init) | other_jobs]
+        ) =
             activation,
         state ->
           worker_id = worker_state(state, :id)
@@ -296,15 +303,17 @@ defmodule Temporal.Worker do
 
           with {:ok, {wf_module, wf_exec_fn}} <- found,
                exec_args <-
-                 {run_id, task_queue, worker_state(state, :namespace), wf_module, wf_exec_fn,
-                  init, activation},
+                 {run_id, task_queue, worker_state(state, :namespace), converter, wf_module,
+                  wf_exec_fn, init, activation},
                {:ok, comms} <-
                  WorkflowComms.start_link(
                    {run_id, workflow_type, worker_state(state, :namespace),
                     worker_state(state, :worker), init, exec_args}
                  ) do
-
             if Enum.count(other_jobs) > 0, do: WorkflowComms.activate(comms, activation)
+
+            {:ok, arguments} =
+              DataConverter.from_payloads(converter, initialize_workflow(init, :arguments))
 
             :telemetry.execute([:temporalio, :workflow, :initialized], %{}, %{
               workflow_type: workflow_type,
@@ -315,8 +324,7 @@ defmodule Temporal.Worker do
               module: wf_module,
               exec_fn: wf_exec_fn,
               worker_id: worker_id,
-              arguments:
-                initialize_workflow(init, :arguments) |> Enum.map(&Payload.value_from_record/1)
+              arguments: arguments
             })
 
             workflows = worker_state(state, :workflows) |> Map.put(comms, run_id)
@@ -339,7 +347,9 @@ defmodule Temporal.Worker do
           if workflow do
             WorkflowComms.activate(workflow, activate)
           else
-            Logger.error("Sent an activation for unknown workflow: (Run ID: #{inspect(run_id)}) - #{inspect(activate)}")
+            Logger.error(
+              "Sent an activation for unknown workflow: (Run ID: #{inspect(run_id)}) - #{inspect(activate)}"
+            )
           end
 
           state
@@ -349,6 +359,9 @@ defmodule Temporal.Worker do
   end
 
   def handle_events(events, {activity_p, _}, worker_state(activity_poller: activity_p) = state) do
+    client = worker_state(state, :client)
+    converter = Client.data_converter(client)
+
     state =
       Enum.reduce(events, state, fn
         activity_task(variant: start_activity() = start, task_token: task_token), state ->
@@ -367,10 +380,10 @@ defmodule Temporal.Worker do
             end
 
           with {:ok, {activity_module, activity_exec_fn}} <- found,
-               exec_args <- {activity_module, activity_exec_fn, start},
+               exec_args <- {activity_module, activity_exec_fn, converter, start},
                {:ok, comms} <-
                  ActivityComms.start_link(
-                   {worker_state(state, :worker), start, exec_args, task_token}
+                   {worker_state(state, :worker), start, converter, exec_args, task_token}
                  ) do
             workflow_exec = start_activity(start, :workflow_execution)
             run_id = workflow_execution(workflow_exec, :run_id)

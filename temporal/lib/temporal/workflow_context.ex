@@ -4,6 +4,7 @@ defmodule Temporal.WorkflowContext do
   require Record
   require TemporalEngine.Data.Jobs
 
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Data.Commands
   alias TemporalEngine.Data.Jobs
   alias TemporalEngine.Data.Timestamp
@@ -19,6 +20,7 @@ defmodule Temporal.WorkflowContext do
     :context,
     :execution,
     :runtime,
+    :data_converter,
     activity_options: [],
     child_workflow_options: []
   ])
@@ -32,6 +34,7 @@ defmodule Temporal.WorkflowContext do
             context: pid(),
             execution: pid(),
             runtime: pid(),
+            data_converter: DataConverter.t(),
             initialize_config: Jobs.initialize_workflow(),
             activity_options: Commands.schedule_activity_opts(),
             child_workflow_options: Commands.start_child_workflow_execution_opts()

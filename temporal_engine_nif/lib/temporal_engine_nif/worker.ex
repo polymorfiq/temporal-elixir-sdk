@@ -11,10 +11,14 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   import TemporalEngine.Data.ActivationCompletion
   import TemporalEngine.Data.ActivityTaskCompletion
 
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngineNif.Core
 
   @impl true
   def id(worker), do: worker.id
+
+  @impl true
+  def client(worker), do: worker.client
 
   @impl true
   def poll_workflow_activation(worker) do
@@ -185,7 +189,7 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
 
   @impl true
   def record_activity_heartbeat(worker, task_token, payloads) do
-    alias TemporalEngine.Data.Payload
+    conv = TemporalEngine.Client.data_converter(worker.client)
 
     with :ok <-
            Core._worker_record_activity_heartbeat(
@@ -193,10 +197,12 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
              task_token,
              payloads
            ) do
+      {:ok, details} = DataConverter.from_payloads(conv, payloads)
+
       :telemetry.execute([:temporalio, :worker, :activity_heartbeat_recorded], %{}, %{
         worker_id: worker.id,
         task_token: task_token,
-        payloads: payloads |> Enum.map(&Payload.record_from_value/1)
+        payloads: details
       })
 
       :ok

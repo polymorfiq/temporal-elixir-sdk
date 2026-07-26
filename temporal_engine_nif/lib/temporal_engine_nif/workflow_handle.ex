@@ -25,6 +25,9 @@ defimpl TemporalEngine.WorkflowHandle, for: TemporalEngineNif.WorkflowHandle do
   alias TemporalEngine.Data.Failure
 
   @impl true
+  def client(handle), do: handle.client
+
+  @impl true
   def get_result(handle, opts) do
     parent = self()
 

@@ -6,11 +6,15 @@ defprotocol TemporalEngine.WorkflowHandle do
   require TemporalEngine.Data.Updates
   require TemporalEngine.Data.Signals
 
+  alias TemporalEngine.Client
   alias TemporalEngine.Data.Queries
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Signals
   alias TemporalEngine.Data.Updates
   alias TemporalEngine.Opts.HandleOpts
+
+  @spec client(t()) :: Client.t()
+  def client(handle)
 
   @spec get_result(t(), HandleOpts.get_workflow_result()) ::
           {:ok, Payload.payload()} | {:error, reason :: term()}

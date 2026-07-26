@@ -6,6 +6,9 @@ defprotocol TemporalEngine.Worker do
   alias TemporalEngine.Data.NexusTask
   alias TemporalEngine.Data.Payload
 
+  @spec client(t()) :: TemporalEngine.Client.t()
+  def client(worker)
+
   @spec poll_workflow_activation(t()) ::
           {:ok, Activation.activation() | nil} | {:error, reason :: term()}
   def poll_workflow_activation(worker)
@@ -28,7 +31,7 @@ defprotocol TemporalEngine.Worker do
           :ok | {:error, reason :: term()}
   def complete_activity_task(worker, completion)
 
-  @spec record_activity_heartbeat(t(), task_token :: [number()], details :: [Payload.payload()]) ::
+  @spec record_activity_heartbeat(t(), task_token :: binary(), details :: [Payload.payload()]) ::
           :ok | {:error, reason :: term()}
   def record_activity_heartbeat(worker, task_token, details)
 
