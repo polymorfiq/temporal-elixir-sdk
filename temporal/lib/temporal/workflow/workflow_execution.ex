@@ -10,11 +10,11 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
   alias Temporal.WorkflowContext
   alias Temporal.Workflow.WorkflowRuntime
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Data.Activation
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Commands
   alias TemporalEngine.Data.Jobs
-  alias TemporalEngine.Data.Payload
 
   require Logger
   require Record
@@ -28,6 +28,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
     :workflow_id,
     :task_queue,
     :namespace,
+    :data_converter,
     :module,
     :exec_fn,
     :initialize_config,
@@ -61,6 +62,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
              workflow_id: String.t(),
              task_queue: String.t(),
              namespace: String.t(),
+             data_converter: DataConverter.t(),
              module: module(),
              exec_fn: atom(),
              context: WorkflowContext.workflow_context(),
@@ -86,12 +88,17 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
   def start_link(init_args), do: GenStage.start_link(__MODULE__, init_args)
 
-  @spec init(
-          {run_id :: String.t(), task_queue :: String.t(), namespace :: String.t(),
-           module :: module(), exec_fn :: atom(), config :: Jobs.initialize_workflow(),
-           Activation.activation()}
-        ) :: {:producer_consumer, workflow_state(), keyword()}
-  def init({run_id, task_queue, namespace, module, exec_fn, config, activate}) do
+  @spec init({
+          run_id :: String.t(),
+          task_queue :: String.t(),
+          namespace :: String.t(),
+          data_converter :: DataConverter.t(),
+          module :: module(),
+          exec_fn :: atom(),
+          config :: Jobs.initialize_workflow(),
+          Activation.activation()
+        }) :: {:producer_consumer, workflow_state(), keyword()}
+  def init({run_id, task_queue, namespace, data_converter, module, exec_fn, config, activate}) do
     Process.set_label({:workflow, run_id})
 
     {:ok, ctx_pid} = GenServer.start_link(WorkflowContext, activate)
@@ -109,17 +116,20 @@ defmodule Temporal.Workflow.WorkflowExecution do
         initialize_config: config
       )
 
+    {:ok, arguments} =
+      DataConverter.from_payloads(data_converter, initialize_workflow(config, :arguments))
+
     {:producer_consumer,
      workflow_state(
        workflow_type: initialize_workflow(config, :workflow_type),
-       arguments:
-         initialize_workflow(config, :arguments) |> Enum.map(&Payload.value_from_record/1),
+       arguments: arguments,
        run_id: run_id,
        context: context,
        runtime: runtime,
        workflow_id: initialize_workflow(config, :workflow_id),
        task_queue: task_queue,
        namespace: namespace,
+       data_converter: data_converter,
        module: module,
        exec_fn: exec_fn,
        initialize_config: config
@@ -340,12 +350,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
         state
       ) do
     all_awaiting = workflow_state(state, :awaiting_activity)
+    conv = workflow_state(state, :data_converter)
     awaiting_this = Map.get(all_awaiting, seq, [])
 
     result =
       case status do
         activity_completed(result: result) ->
-          {:ok, Payload.value_from_record(result)}
+          {:ok, DataConverter.from_payload(conv, result)}
 
         activity_failed(failure: failure) ->
           {:error, Failure.failure(failure, :message)}
@@ -435,12 +446,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
   def handle_cast(job(variant: resolve_child_workflow_execution(seq: seq, status: status)), state) do
     all_awaiting = workflow_state(state, :awaiting_child_workflows)
+    conv = workflow_state(state, :data_converter)
     awaiting_this = Map.get(all_awaiting, seq, [])
 
     resp =
       case status do
         child_workflow_result(status: child_workflow_completed(result: result)) ->
-          {:ok, Payload.value_from_record(result)}
+          {:ok, DataConverter.from_payload(conv, result)}
 
         child_workflow_result(status: child_workflow_failed(failure: failure)) ->
           {:error, Failure.to_map(failure)}
@@ -471,7 +483,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
         job(variant: query_workflow(query_id: query_id, query_type: query_type, arguments: args)),
         state
       ) do
-    args = Enum.map(args, &Payload.value_from_record/1)
+    conv = workflow_state(state, :data_converter)
+    {:ok, args} = DataConverter.from_payloads(conv, args)
     handlers = workflow_state(state, :query_handlers)
     runtime = workflow_state(state, :runtime)
 
@@ -487,47 +500,51 @@ defmodule Temporal.Workflow.WorkflowExecution do
       end,
       on_crash: fn
         %ex_type{} = exception, stacktrace ->
+          {:ok, response} =
+            DataConverter.to_payload(
+              conv,
+              {:error,
+               Failure.failure(
+                 message: inspect(exception),
+                 source: "elixir-sdk",
+                 stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                 failure_info: Failure.application(failure_type: "#{ex_type}")
+               )}
+            )
+
           [
             command(
               variant:
                 respond_to_query(
                   query_id: query_id,
-                  variant:
-                    query_success(
-                      response:
-                        Payload.record_from_value(
-                          {:error,
-                           Failure.failure(
-                             message: inspect(exception),
-                             source: "elixir-sdk",
-                             stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
-                             failure_info: Failure.application(failure_type: "#{ex_type}")
-                           )}
-                        )
-                    )
+                  variant: query_success(response: response)
                 )
             )
           ]
       end,
       on_complete: fn
         {:ok, result} ->
+          {:ok, response} = DataConverter.to_payload(conv, result)
+
           [
             command(
               variant:
                 respond_to_query(
                   query_id: query_id,
-                  variant: query_success(response: Payload.record_from_value(result))
+                  variant: query_success(response: response)
                 )
             )
           ]
 
         {:error, err} ->
+          {:ok, response} = DataConverter.to_payload(conv, {:error, err})
+
           [
             command(
               variant:
                 respond_to_query(
                   query_id: query_id,
-                  variant: query_success(response: Payload.record_from_value({:error, err}))
+                  variant: query_success(response: response)
                 )
             )
           ]
@@ -538,7 +555,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
   end
 
   def handle_cast(job(variant: signal_workflow(signal_name: signal_name, input: args)), state) do
-    args = Enum.map(args, &Payload.value_from_record/1)
+    conv = workflow_state(state, :data_converter)
+    {:ok, args} = DataConverter.from_payloads(conv, args)
     handlers = workflow_state(state, :signal_handlers)
     ctx = workflow_state(state, :context)
     runtime = workflow_state(state, :runtime)
@@ -579,7 +597,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
         ),
         state
       ) do
-    args = Enum.map(args, &Payload.value_from_record/1)
+    conv = workflow_state(state, :data_converter)
+    {:ok, args} = DataConverter.from_payloads(conv, args)
     handlers = workflow_state(state, :update_handlers)
     ctx = workflow_state(state, :context)
 
@@ -639,6 +658,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
       end,
       on_complete: fn
         {:ok, result} ->
+          {:ok, payload} = DataConverter.to_payload(conv, result)
+
           [
             command(
               variant:
@@ -648,7 +669,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
               variant:
                 update_response(
                   protocol_instance_id: protocol_id,
-                  response: update_completed(payload: Payload.record_from_value(result))
+                  response: update_completed(payload: payload)
                 )
             )
           ]
@@ -678,6 +699,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
           ]
 
         {:error, {:validation_error, err}} ->
+          {:ok, details} = DataConverter.to_payload(conv, {:error, err})
+
           [
             command(
               variant:
@@ -693,7 +716,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
                           failure_info:
                             Failure.application(
                               failure_type: "ValidationReturnedError",
-                              details: [Payload.record_from_value({:error, err})],
+                              details: [details],
                               non_retryable: true
                             )
                         )
@@ -703,6 +726,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
           ]
 
         {:error, err} ->
+          {:ok, details} = DataConverter.to_payload(conv, {:error, err})
+
           [
             command(
               variant:
@@ -722,7 +747,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
                           failure_info:
                             Failure.application(
                               failure_type: "UpdateReturnedError",
-                              details: [Payload.record_from_value({:error, err})]
+                              details: [details]
                             )
                         )
                     )
@@ -825,6 +850,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
     ctx = workflow_state(state, :context)
     runtime = workflow_state(state, :runtime)
+    conv = workflow_state(state, :data_converter)
 
     execution = self()
 
@@ -836,6 +862,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
       end,
       on_crash: fn
         %ex_type{} = exception, stacktrace ->
+          {:ok, exc} = DataConverter.to_payload(conv, exception)
+
           failure =
             Failure.failure(
               message: Exception.message(exception),
@@ -844,7 +872,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
               failure_info:
                 Failure.application(
                   failure_type: "#{ex_type}",
-                  details: [Payload.record_from_value(exception)]
+                  details: [exc]
                 )
             )
 
@@ -854,11 +882,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
       on_complete: fn
         {:ok, result} ->
           GenStage.async_info(execution, :execution_complete)
+          {:ok, exec_result} = DataConverter.to_payload(conv, result)
 
           [
-            command(
-              variant: complete_workflow_execution(result: Payload.record_from_value(result))
-            )
+            command(variant: complete_workflow_execution(result: exec_result))
           ]
 
         {:error, Failure.application() = app_failure} ->
@@ -874,6 +901,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
           [command(variant: fail_workflow_execution(failure: failure))]
 
         {:error, err} ->
+          {:ok, details} = DataConverter.to_payload(conv, err)
+
           failure =
             Failure.failure(
               message: "{:error, #{inspect(err)}}",
@@ -882,7 +911,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
               failure_info:
                 Failure.application(
                   failure_type: "ReturnedError",
-                  details: [Payload.record_from_value(err)]
+                  details: [details]
                 )
             )
 

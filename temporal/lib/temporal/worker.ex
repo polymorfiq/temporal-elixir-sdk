@@ -22,6 +22,7 @@ defmodule Temporal.Worker do
   alias Temporal.Workflow.WorkflowComms
   alias Temporal.Workflows.{ActivityName, WorkflowName}
   alias TemporalEngine.Config
+  alias TemporalEngine.Client
   alias TemporalEngine.Worker, as: EngineWorker
 
   @global_store Temporal.Storage.global_store()
@@ -235,6 +236,9 @@ defmodule Temporal.Worker do
         {activation_p, _},
         worker_state(activation_poller: activation_p) = state
       ) do
+    client = worker_state(state, :client)
+    converter = Client.data_converter(client)
+
     state =
       Enum.reduce(activations, state, fn
         activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init)]) =
@@ -258,8 +262,8 @@ defmodule Temporal.Worker do
 
           with {:ok, {wf_module, wf_exec_fn}} <- found,
                exec_args <-
-                 {run_id, task_queue, worker_state(state, :namespace), wf_module, wf_exec_fn,
-                  init, activation},
+                 {run_id, task_queue, worker_state(state, :namespace), converter, wf_module,
+                  wf_exec_fn, init, activation},
                {:ok, comms} <-
                  WorkflowComms.start_link(
                    {run_id, workflow_type, worker_state(state, :namespace),
@@ -275,10 +279,12 @@ defmodule Temporal.Worker do
 
         activation(run_id: run_id) = activate, state ->
           workflows = worker_state(state, :workflows)
-          workflow = case Enum.find(workflows, fn {_, wf_run_id} -> wf_run_id == run_id end) do
-            {workflow, _} -> workflow
-            nil -> nil
-          end
+
+          workflow =
+            case Enum.find(workflows, fn {_, wf_run_id} -> wf_run_id == run_id end) do
+              {workflow, _} -> workflow
+              nil -> nil
+            end
 
           if workflow do
             WorkflowComms.activate(workflow, activate)
@@ -293,6 +299,9 @@ defmodule Temporal.Worker do
   end
 
   def handle_events(events, {activity_p, _}, worker_state(activity_poller: activity_p) = state) do
+    client = worker_state(state, :client)
+    converter = Client.data_converter(client)
+
     state =
       Enum.reduce(events, state, fn
         activity_task(variant: start_activity() = start, task_token: task_token), state ->
@@ -311,7 +320,7 @@ defmodule Temporal.Worker do
             end
 
           with {:ok, {activity_module, activity_exec_fn}} <- found,
-               exec_args <- {activity_module, activity_exec_fn, start},
+               exec_args <- {activity_module, activity_exec_fn, converter, start},
                {:ok, comms} <-
                  ActivityComms.start_link(
                    {worker_state(state, :worker), start, exec_args, task_token}

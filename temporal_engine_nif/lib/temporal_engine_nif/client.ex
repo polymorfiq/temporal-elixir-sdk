@@ -1,7 +1,13 @@
 defmodule TemporalEngineNif.Client do
-  defstruct [:id, :namespace, :core, :runtime]
+  defstruct [:id, :namespace, :core, :runtime, :data_converter]
+  alias TemporalEngine.Converter.DataConverter
 
-  @type t :: %{core: term()}
+  @type t :: %__MODULE__{
+          id: term(),
+          namespace: String.t() | atom(),
+          core: term(),
+          data_converter: DataConverter.t()
+        }
 end
 
 defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
@@ -19,6 +25,9 @@ defimpl TemporalEngine.Client, for: TemporalEngineNif.Client do
 
   @impl true
   def namespace(client), do: client.namespace
+
+  @impl true
+  def data_converter(client), do: client.data_converter
 
   @impl true
   def create_worker(client, config) do

@@ -24,4 +24,8 @@ defprotocol TemporalEngine.Client do
   @doc "The namespace the client is listening to"
   @spec namespace(t()) :: String.t()
   def namespace(client)
+
+  @doc "The DataConverter for encoding/decoding payloads to/from the Temporal Server"
+  @spec data_converter(t()) :: TemporalEngine.Converter.DataConverter.t()
+  def data_converter(client)
 end

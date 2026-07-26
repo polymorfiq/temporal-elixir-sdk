@@ -1,7 +1,7 @@
 defmodule TemporalEngineNif.Runtime do
   defstruct [:id, :core]
 
-  @type t :: %{core: term()}
+  @type t :: %__MODULE__{id: term(), core: term()}
 end
 
 defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
@@ -17,9 +17,12 @@ defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
   def create_client(runtime, client_opts) do
     parent = self()
 
+    conn_opts = Keyword.fetch!(client_opts, :connection)
+    converter = Keyword.fetch!(client_opts, :data_converter)
+
     {pid, ref} =
       spawn_monitor(fn ->
-        Core._create_client(runtime.core, client_opts, self())
+        Core._create_client(runtime.core, conn_opts, self())
         |> case do
           :ok -> :ok
           {:error, err} -> raise "Could initialize client from Core SDK: #{inspect(err)}"
@@ -32,10 +35,11 @@ defimpl TemporalEngine.Runtime, for: TemporalEngineNif.Runtime do
               {self(),
                {:ok,
                 %Client{
-                  id: connection_opts(client_opts, :identity),
+                  id: connection_opts(conn_opts, :identity),
                   core: client,
                   runtime: runtime,
-                  namespace: connection_opts(client_opts, :namespace)
+                  namespace: connection_opts(conn_opts, :namespace),
+                  data_converter: converter
                 }}}
             )
 
