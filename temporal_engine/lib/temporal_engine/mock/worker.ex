@@ -273,6 +273,10 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
     end
   end
 
+  def record_activity_heartbeat(worker, task_token, details) do
+    TemporalEngine.Worker.record_activity_heartbeat(worker.real_worker, task_token, details)
+  end
+
   def initiate_shutdown(worker) do
     TemporalEngine.Worker.initiate_shutdown(worker.real_worker)
   end

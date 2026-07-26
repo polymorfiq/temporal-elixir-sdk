@@ -245,7 +245,7 @@ pub struct SdkActivationInitializeWorkflow {
     pub continued_from_execution_run_id: String,
     pub continued_initiator: SdkContinuedAsNewInitiator,
     pub continued_failure: Option<SdkWorkflowFailure>,
-    pub last_completion_result: Option<SdkPayloads>,
+    pub last_completion_result: Option<Vec<SdkPayload>>,
     pub first_execution_run_id: String,
     pub retry_policy: Option<SdkRetryPolicy>,
     pub attempt: i32,
@@ -279,7 +279,10 @@ impl From<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWo
             continued_from_execution_run_id: external.continued_from_execution_run_id,
             continued_initiator: external.continued_initiator.into(),
             continued_failure: external.continued_failure.try_into_or_none(),
-            last_completion_result: external.last_completion_result.try_into_or_none(),
+            last_completion_result: match external.last_completion_result {
+                Some(Payloads { payloads }) => Some(payloads.iter().map(|p| p.into()).collect()),
+                None => None,
+            },
             first_execution_run_id: external.first_execution_run_id,
             retry_policy: external.retry_policy.try_into_or_none(),
             attempt: external.attempt,
@@ -319,7 +322,12 @@ impl Into<workflow_activation::InitializeWorkflow> for SdkActivationInitializeWo
             continued_from_execution_run_id: self.continued_from_execution_run_id,
             continued_initiator: self.continued_initiator.into(),
             continued_failure: self.continued_failure.try_into_or_none(),
-            last_completion_result: self.last_completion_result.try_into_or_none(),
+            last_completion_result: match self.last_completion_result {
+                Some(payloads) => Some(Payloads {
+                    payloads: payloads.iter().map(|p| p.into()).collect(),
+                }),
+                None => None,
+            },
             first_execution_run_id: self.first_execution_run_id,
             retry_policy: self.retry_policy.try_into_or_none(),
             attempt: self.attempt,
@@ -2920,6 +2928,7 @@ pub struct SdkWorkflowCommandContinueAsNewWorkflowExecution {
     pub retry_policy: Option<SdkRetryPolicy>,
     pub versioning_intent: SdkVersioningIntent,
     pub initial_versioning_behavior: SdkContinueAsNewVersioningBehavior,
+    pub backoff_start_interval: Option<SdkDuration>,
 }
 
 #[repr(i32)]
@@ -2979,6 +2988,7 @@ impl From<workflow_commands::ContinueAsNewWorkflowExecution>
             retry_policy: external.retry_policy.try_into_or_none(),
             versioning_intent: external.versioning_intent.into(),
             initial_versioning_behavior: external.initial_versioning_behavior.into(),
+            backoff_start_interval: external.backoff_start_interval.try_into_or_none(),
         }
     }
 }
@@ -3011,6 +3021,7 @@ impl Into<workflow_commands::ContinueAsNewWorkflowExecution>
             retry_policy: self.retry_policy.try_into_or_none(),
             versioning_intent: self.versioning_intent.into(),
             initial_versioning_behavior: self.initial_versioning_behavior.into(),
+            backoff_start_interval: self.backoff_start_interval.try_into_or_none(),
         }
     }
 }
@@ -4303,6 +4314,7 @@ pub struct SdkWorkflowUpdateResponse {
     pub update_ref: Option<SdkUpdateRef>,
     pub outcome: Option<SdkUpdateOutcome>,
     pub stage: SdkUpdateLifecycleStage,
+    pub link: Option<SdkLink>,
 }
 
 impl From<UpdateWorkflowExecutionResponse> for SdkWorkflowUpdateResponse {
@@ -4311,6 +4323,7 @@ impl From<UpdateWorkflowExecutionResponse> for SdkWorkflowUpdateResponse {
             update_ref: external.update_ref.try_into_or_none(),
             outcome: external.outcome.try_into_or_none(),
             stage: external.stage.into(),
+            link: external.link.try_into_or_none(),
         }
     }
 }
@@ -4321,6 +4334,7 @@ impl Into<UpdateWorkflowExecutionResponse> for SdkWorkflowUpdateResponse {
             update_ref: self.update_ref.try_into_or_none(),
             outcome: self.outcome.try_into_or_none(),
             stage: self.stage.into(),
+            link: self.link.try_into_or_none(),
         }
     }
 }

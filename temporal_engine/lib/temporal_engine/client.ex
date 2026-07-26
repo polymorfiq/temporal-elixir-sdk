@@ -1,5 +1,6 @@
 defprotocol TemporalEngine.Client do
   alias TemporalEngine.Config
+  alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Payload
   alias TemporalEngine.Opts.WorkflowOpts
   alias TemporalEngine.Worker
@@ -16,6 +17,15 @@ defprotocol TemporalEngine.Client do
           WorkflowOpts.workflow_start_opts()
         ) :: {:ok, WorkflowHandle.t()} | {:error, reason :: term()}
   def start_workflow(client, definition, args, opts)
+
+  @spec get_workflow_handle(t(), workflow_id :: String.t(), run_id :: String.t() | nil) ::
+          {:ok, WorkflowHandle.t()} | {:error, reason :: term()}
+  def get_workflow_handle(client, workflow_id, run_id)
+
+  @doc "List workflow runs matching a given query"
+  @spec list_workflows(t(), query :: String.t(), limit :: pos_integer() | nil) ::
+          {:ok, [Common.workflow_execution()]} | {:error, term()}
+  def list_workflows(client, query, limit)
 
   @doc "A unique identifier for the client"
   @spec id(t()) :: String.t()

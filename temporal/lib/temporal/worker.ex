@@ -7,6 +7,8 @@ defmodule Temporal.Worker do
   When new work is received, the worker performs the work while informing the Temporal Server of progress and needed resources.
   """
 
+  require TemporalEngine.Config
+
   import TemporalEngine.Config
   import TemporalEngine.Data.Activation
   import TemporalEngine.Data.ActivityTask
@@ -23,6 +25,7 @@ defmodule Temporal.Worker do
   alias Temporal.Workflows.{ActivityName, WorkflowName}
   alias TemporalEngine.Config
   alias TemporalEngine.Client
+  alias TemporalEngine.Data.Payload
   alias TemporalEngine.Worker, as: EngineWorker
 
   @global_store Temporal.Storage.global_store()
@@ -41,6 +44,7 @@ defmodule Temporal.Worker do
     :activation_poller,
     :activity_poller,
     :nexus_poller,
+    :config,
     workflows: %{},
     activities: %{},
     pollers_shutdown: []
@@ -58,7 +62,8 @@ defmodule Temporal.Worker do
              nexus_poller: pid(),
              workflows: %{pid() => String.t()},
              activities: %{pid() => {String.t(), String.t()}},
-             pollers_shutdown: [atom()]
+             pollers_shutdown: [atom()],
+             config: Config.worker_config()
            )
 
   @opaque t() :: record(:worker, id: String.t(), pid: pid() | nil)
@@ -83,6 +88,11 @@ defmodule Temporal.Worker do
   def new(client, opts \\ []) do
     identity = opts[:client_identity_override] || TemporalEngine.Client.id(client)
     {_, config_opts} = Keyword.split(opts, [:workflows, :activities])
+
+    config_opts =
+      Keyword.put_new_lazy(config_opts, :namespace, fn ->
+        TemporalEngine.Client.namespace(client)
+      end)
 
     with {:ok, config} <- worker_config_from_opts(config_opts),
          id <- "#{identity}_#{worker_config(config, :namespace)}" do
@@ -110,6 +120,9 @@ defmodule Temporal.Worker do
     workflows = Keyword.get(extra_opts, :workflows, [])
     activities = Keyword.get(extra_opts, :activities, [])
     identity = opts[:client_identity_override] || TemporalEngine.Client.id(client)
+
+    opts =
+      Keyword.put_new_lazy(opts, :namespace, fn -> TemporalEngine.Client.namespace(client) end)
 
     with {:ok, config} <- worker_config_from_opts(opts),
          id <- "#{identity}_#{worker_config(config, :namespace)}",
@@ -156,6 +169,14 @@ defmodule Temporal.Worker do
           workflow_id = {:workflow, worker_id, name, arity}
           workflow_def = {module, execute_fn}
           :ets.insert(@global_store, {workflow_id, workflow_def})
+
+          :telemetry.execute([:temporalio, :worker, :register_workflow], %{}, %{
+            worker_id: worker_id,
+            type: name,
+            arity: arity,
+            module: module,
+            func: execute_fn
+          })
         end)
       end)
 
@@ -182,6 +203,14 @@ defmodule Temporal.Worker do
           activity_id = {:activity, worker_id, name, arity}
           activity_def = {activity_module, activity_fn}
           :ets.insert(@global_store, {activity_id, activity_def})
+
+          :telemetry.execute([:temporalio, :worker, :register_activity], %{}, %{
+            worker_id: worker_id,
+            type: name,
+            arity: arity,
+            module: activity_module,
+            func: activity_fn
+          })
         end)
       end)
 
@@ -204,6 +233,14 @@ defmodule Temporal.Worker do
       {:ok, activity_poller} = ActivityTaskPoller.start_link(worker)
       {:ok, nexus_poller} = NexusTaskPoller.start_link(worker)
 
+      :telemetry.execute([:temporalio, :worker, :started], %{}, %{
+        id: worker_config(config, :id),
+        task_queue: worker_config(config, :task_queue),
+        identity:
+          worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+        namespace: worker_config(config, :namespace)
+      })
+
       state =
         worker_state(
           id: worker_config(config, :id),
@@ -213,7 +250,8 @@ defmodule Temporal.Worker do
           namespace: worker_config(config, :namespace),
           activation_poller: activation_poller,
           activity_poller: activity_poller,
-          nexus_poller: nexus_poller
+          nexus_poller: nexus_poller,
+          config: config
         )
 
       {:consumer, state,
@@ -241,7 +279,7 @@ defmodule Temporal.Worker do
 
     state =
       Enum.reduce(activations, state, fn
-        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init)]) =
+        activation(run_id: run_id, jobs: [job(variant: initialize_workflow() = init) | other_jobs]) =
             activation,
         state ->
           worker_id = worker_state(state, :id)
@@ -267,8 +305,24 @@ defmodule Temporal.Worker do
                {:ok, comms} <-
                  WorkflowComms.start_link(
                    {run_id, workflow_type, worker_state(state, :namespace),
-                    worker_state(state, :worker), exec_args}
+                    worker_state(state, :worker), init, exec_args}
                  ) do
+
+            if Enum.count(other_jobs) > 0, do: WorkflowComms.activate(comms, activation)
+
+            :telemetry.execute([:temporalio, :workflow, :initialized], %{}, %{
+              workflow_type: workflow_type,
+              namespace: worker_state(state, :namespace),
+              run_id: run_id,
+              workflow_id: initialize_workflow(init, :workflow_id),
+              task_queue: task_queue,
+              module: wf_module,
+              exec_fn: wf_exec_fn,
+              worker_id: worker_id,
+              arguments:
+                initialize_workflow(init, :arguments) |> Enum.map(&Payload.value_from_record/1)
+            })
+
             workflows = worker_state(state, :workflows) |> Map.put(comms, run_id)
             worker_state(state, workflows: workflows)
           else
@@ -289,7 +343,7 @@ defmodule Temporal.Worker do
           if workflow do
             WorkflowComms.activate(workflow, activate)
           else
-            Logger.error("Sent an activation for unknown workflow: (Run ID: #{inspect(run_id)})")
+            Logger.error("Sent an activation for unknown workflow: (Run ID: #{inspect(run_id)}) - #{inspect(activate)}")
           end
 
           state
@@ -360,7 +414,28 @@ defmodule Temporal.Worker do
 
   def handle_cast(:shutdown, state) do
     worker = worker_state(state, :worker)
-    TemporalEngine.Worker.initiate_shutdown(worker)
+
+    {time_in_microseconds, _ret_val} =
+      :timer.tc(fn ->
+        :ok = TemporalEngine.Worker.initiate_shutdown(worker)
+      end)
+
+    config = worker_state(state, :config)
+    client = worker_state(state, :client)
+
+    :telemetry.execute(
+      [:temporalio, :worker, :shutdown_initiated],
+      %{
+        duration_microsecs: time_in_microseconds
+      },
+      %{
+        id: worker_config(config, :id),
+        task_queue: worker_config(config, :task_queue),
+        identity:
+          worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+        namespace: worker_config(config, :namespace)
+      }
+    )
 
     {:noreply, [], state}
   end
@@ -436,12 +511,31 @@ defmodule Temporal.Worker do
 
     if Enum.member?(pollers_shutdown, :activity) && Enum.member?(pollers_shutdown, :activation) &&
          Enum.member?(pollers_shutdown, :nexus) do
-      Logger.debug(
-        "All pollers shutdown for Worker (#{inspect(worker_state(state, :id))}). Shutting down..."
-      )
+      :telemetry.execute([:temporalio, :worker, :all_pollers_shutdown], %{}, %{
+        worker_id: worker_state(state, :id)
+      })
 
-      worker_state(state, :worker)
-      |> TemporalEngine.Worker.finalize_shutdown()
+      {time_in_microseconds, _ret_val} =
+        :timer.tc(fn ->
+          :ok = TemporalEngine.Worker.finalize_shutdown(worker_state(state, :worker))
+        end)
+
+      config = worker_state(state, :config)
+      client = worker_state(state, :client)
+
+      :telemetry.execute(
+        [:temporalio, :worker, :shutdown_finalized],
+        %{
+          duration_microsecs: time_in_microseconds
+        },
+        %{
+          id: worker_config(config, :id),
+          task_queue: worker_config(config, :task_queue),
+          identity:
+            worker_config(config, :client_identity_override) || TemporalEngine.Client.id(client),
+          namespace: worker_config(config, :namespace)
+        }
+      )
 
       {:stop, :normal, state}
     else

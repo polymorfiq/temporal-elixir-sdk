@@ -59,6 +59,9 @@ defmodule TemporalEngine.Data.Updates do
     The most advanced lifecycle stage that the Update is known to have reached, where lifecycle stages are ordered UPDATE_WORKFLOW_EXECUTION_LIFECYCLE_STAGE_UNSPECIFIED < UPDATE_WORKFLOW_EXECUTION_LIFECYCLE_STAGE_ADMITTED < UPDATE_WORKFLOW_EXECUTION_LIFECYCLE_STAGE_ACCEPTED < UPDATE_WORKFLOW_EXECUTION_LIFECYCLE_STAGE_COMPLETED. UNSPECIFIED will be returned if and only if the server’s maximum wait time was reached before the Update reached the stage specified in the request WaitPolicy, and before the context deadline expired; clients may may then retry the call as needed.
     """
     @type stage :: required :: :unspecified | :admitted | :accepted | :completed
+
+    @doc "Link to the update event. May be null if the update has not yet been accepted."
+    @type link :: nested!(Common.link())
   end
 
   deftype :update_ref do

@@ -89,6 +89,10 @@ defmodule Temporal.Activity.ActivityExecution do
     {:noreply, [], state}
   end
 
+  def handle_info({:record_heartbeat, details}, state) do
+    {:noreply, [{:record_heartbeat, details}], state}
+  end
+
   def handle_info(:execute_if_not_already, state) do
     module = activity_state(state, :module)
     exec_fn = activity_state(state, :exec_fn)
@@ -98,6 +102,17 @@ defmodule Temporal.Activity.ActivityExecution do
 
     {exec_pid, exec_ref} =
       spawn_monitor(fn ->
+        :telemetry.execute([:temporalio, :activity, :started], %{}, %{
+          type: activity_state(state, :activity_type),
+          run_id: activity_state(state, :run_id),
+          activity_id: activity_state(state, :activity_id),
+          arguments: arguments,
+          module: module,
+          exec_fn: exec_fn
+        })
+
+        Process.put(:_temporal_executor, parent)
+
         resp = apply(module, exec_fn, arguments)
         GenStage.cast(parent, {:activity_completed, resp})
       end)
@@ -113,9 +128,11 @@ defmodule Temporal.Activity.ActivityExecution do
     activity_id = activity_state(state, :activity_id)
     run_id = activity_state(state, :run_id)
 
-    Logger.debug(
-      "Activity execution halted: (#{inspect(type)}, Run: #{inspect(run_id)}, ID: #{inspect(activity_id)})"
-    )
+    :telemetry.execute([:temporalio, :activity, :halted], %{}, %{
+      type: type,
+      run_id: run_id,
+      activity_id: activity_id
+    })
 
     {:noreply, [], activity_state(state, exec_pid: nil, exec_ref: nil)}
   end

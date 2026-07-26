@@ -29,7 +29,7 @@ defmodule Temporal.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :runtime_tools, :os_mon],
+      extra_applications: [:logger, :runtime_tools, :os_mon, :telemetry],
       mod: {Temporal.Application, []}
     ]
   end
@@ -41,6 +41,7 @@ defmodule Temporal.MixProject do
       {:temporal_engine_nif, "~> 0.1.0", only: [:dev, :test], path: "../temporal_engine_nif"},
       {:nimble_options, "~> 1.1"},
       {:gen_stage, "~> 1.3"},
+      {:telemetry, "~> 1.0"},
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
       # {:dep_from_hexpm, "~> 0.3.0"},

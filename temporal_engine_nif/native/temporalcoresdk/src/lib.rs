@@ -10,7 +10,8 @@ use crate::core_workflows::{
     SdkWorkflowExecution, SdkWorkflowGetResultError, SdkWorkflowGetResultOptions, SdkWorkflowQuery,
     SdkWorkflowStartOptions, SdkWorkflowUpdate, SdkWorkflowUpdateResponse,
 };
-use crate::data::common::SdkWorkflowArguments;
+use crate::data::common::{SdkPayload, SdkWorkflowArguments};
+use futures_util::StreamExt;
 use rustler::{Atom, Error, LocalPid, NifResult, OwnedEnv, ResourceArc};
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
@@ -19,8 +20,10 @@ use std::time::Duration;
 use temporalio_sdk_client::grpc::WorkflowService;
 use temporalio_sdk_client::tonic::Request;
 use temporalio_sdk_client::{
-    Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient,
+    Client, ClientOptions, Connection, ConnectionOptions, NamespacedClient, WorkflowExecutionInfo,
+    WorkflowHandle, WorkflowListOptions,
 };
+use temporalio_sdk_common::protos::coresdk::ActivityHeartbeat;
 use temporalio_sdk_common::protos::temporal::api::update;
 use temporalio_sdk_common::protos::temporal::api::update::v1::Meta;
 use temporalio_sdk_common::protos::temporal::api::worker::v1::PluginInfo;
@@ -39,6 +42,7 @@ use temporalio_sdk_core::{
 use tokio::runtime::Runtime;
 use tracing::{error, warn};
 use url::Url;
+use uuid::Uuid;
 
 mod common;
 mod core_activities;
@@ -645,6 +649,26 @@ fn _worker_finalize_shutdown(worker: ResourceArc<ElixirWorker>) -> NifResult<Ato
 }
 
 #[rustler::nif]
+fn _worker_record_activity_heartbeat(
+    worker: ResourceArc<ElixirWorker>,
+    task_token: Vec<u8>,
+    payloads: Vec<SdkPayload>,
+) -> NifResult<Atom> {
+    match worker.worker.as_ref() {
+        Some(worker) => {
+            worker.record_activity_heartbeat(ActivityHeartbeat {
+                task_token: task_token,
+                details: payloads.iter().map(|p| p.into()).collect(),
+            });
+        }
+
+        None => (),
+    }
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
 fn _handle_query_workflow(
     runtime: ResourceArc<ElixirRuntime>,
     wf_handle: ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>,
@@ -660,7 +684,10 @@ fn _handle_query_workflow(
     let wf_info = wf_handle_ref.info();
     let exec = SdkWorkflowExecution {
         workflow_id: wf_info.workflow_id.clone(),
-        run_id: wf_info.run_id.clone().unwrap(),
+        run_id: match wf_info.run_id.clone() {
+            Some(run_id) => run_id,
+            None => String::from(""),
+        },
     };
 
     let handle = runtime
@@ -681,7 +708,7 @@ fn _handle_query_workflow(
 
         let msg: Result<SdkQueryWorkflowResponse, String> = match query_resp {
             Ok(resp) => Ok(resp.into_inner().into()),
-            Err(error) => Err(format!("Error starting workflow - {}", error)),
+            Err(error) => Err(format!("Error querying workflow - {}", error)),
         };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
@@ -725,6 +752,9 @@ fn _handle_update_workflow(
                 first_execution_run_id: exec.run_id,
                 wait_policy: wait_policy.try_into_or_none(),
                 request: Some(update::v1::Request {
+                    request_id: Uuid::new_v4().to_string(),
+                    completion_callbacks: vec![],
+                    links: vec![],
                     meta: Some(Meta {
                         update_id: update_id,
                         identity: client.identity(),
@@ -736,7 +766,7 @@ fn _handle_update_workflow(
 
         let msg: Result<SdkWorkflowUpdateResponse, String> = match query_resp {
             Ok(resp) => Ok(resp.into_inner().into()),
-            Err(error) => Err(format!("Error starting workflow - {}", error)),
+            Err(error) => Err(format!("Error updating workflow - {}", error)),
         };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
@@ -766,7 +796,10 @@ fn _handle_signal_workflow(
 
     signal_req.workflow_execution = Some(SdkWorkflowExecution {
         workflow_id: wf_info.workflow_id.clone(),
-        run_id: wf_info.run_id.clone().unwrap(),
+        run_id: match wf_info.run_id.clone() {
+            Some(run_id) => run_id,
+            None => String::from(""),
+        },
     });
 
     let handle = runtime
@@ -783,7 +816,88 @@ fn _handle_signal_workflow(
 
         let msg: Result<SdkSignalWorkflowResponse, String> = match query_resp {
             Ok(resp) => Ok(resp.into_inner().into()),
-            Err(error) => Err(format!("Error starting workflow - {}", error)),
+            Err(error) => Err(format!("Error signaling workflow - {}", error)),
+        };
+
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+    });
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
+fn _client_get_workflow_handle(
+    runtime: ResourceArc<ElixirRuntime>,
+    client: ResourceArc<ElixirClient>,
+    workflow_id: String,
+    run_id: Option<String>,
+    resp_pid: LocalPid,
+) -> NifResult<Atom> {
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+
+        let handle: WorkflowHandle<Client, SdkWorkflowDefinition> = WorkflowHandle::new(
+            client.client.clone(),
+            WorkflowExecutionInfo {
+                namespace: client.client.namespace(),
+                workflow_id,
+                run_id,
+                first_execution_run_id: None,
+            },
+        );
+
+        let msg: Result<ResourceArc<ElixirWorkflowHandle<SdkWorkflowDefinition>>, String> =
+            Ok(ResourceArc::new(ElixirWorkflowHandle {
+                handle: RwLock::new(handle),
+            }));
+
+        let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);
+    });
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
+fn _client_list_workflows(
+    runtime: ResourceArc<ElixirRuntime>,
+    client: ResourceArc<ElixirClient>,
+    query: String,
+    limit: Option<usize>,
+    resp_pid: LocalPid,
+) -> NifResult<Atom> {
+    let handle = runtime
+        .core
+        .read()
+        .expect("Invalid runtime handle")
+        .tokio_handle();
+    handle.spawn(async move {
+        let mut owned_env = OwnedEnv::new();
+        let mut wf_stream = client.client.list_workflows(
+            query,
+            WorkflowListOptions::builder().maybe_limit(limit).build(),
+        );
+        let mut execs: Vec<SdkWorkflowExecution> = vec![];
+        let mut list_error: Option<String> = None;
+
+        while let Some(exec) = wf_stream.next().await {
+            match exec {
+                Ok(exec) => execs.push(SdkWorkflowExecution {
+                    run_id: String::from(exec.run_id()),
+                    workflow_id: String::from(exec.id()),
+                }),
+
+                Err(err) => list_error = Some(format!("Error listing workflows: {}", err)),
+            }
+        }
+
+        let msg: Result<Vec<SdkWorkflowExecution>, String> = match list_error {
+            Some(err) => Err(err),
+            None => Ok(execs),
         };
 
         let _ = owned_env.send_and_clear(&resp_pid, |_env| msg);

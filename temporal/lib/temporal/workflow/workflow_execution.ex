@@ -34,6 +34,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
     :initialize_config,
     :context,
     :runtime,
+    :started_at,
     runtime_sub: nil,
     current_task_metadata: nil,
     unlocked_in_activation: 0,
@@ -67,6 +68,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
              exec_fn: atom(),
              context: WorkflowContext.workflow_context(),
              runtime: pid(),
+             started_at: DateTime.t(),
              runtime_sub: {pid(), reference()} | nil,
              initialize_config: Jobs.initialize_workflow(),
              unlocked_in_activation: non_neg_integer(),
@@ -132,7 +134,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
        data_converter: data_converter,
        module: module,
        exec_fn: exec_fn,
-       initialize_config: config
+       initialize_config: config,
+       started_at: DateTime.utc_now()
      ), [subscribe_to: [runtime]]}
   end
 
@@ -345,6 +348,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
     {:noreply, [], workflow_state(state, awaiting_checks: new_awaiting)}
   end
 
+  def handle_cast(job(variant: initialize_workflow()), state) do
+    {:noreply, [], state}
+  end
+
   def handle_cast(
         job(variant: resolve_activity(seq: seq, result: activity_resolution(status: status))),
         state
@@ -382,6 +389,11 @@ defmodule Temporal.Workflow.WorkflowExecution do
        activity_results: results,
        awaiting_activity: Map.delete(all_awaiting, seq)
      )}
+  end
+
+  def handle_cast(job(variant: update_random_seed()), state) do
+    Logger.warning("update_random_seed called when not yet implemented.")
+    {:noreply, [], state}
   end
 
   def handle_cast(job(variant: fire_timer(seq: seq)), state) do
@@ -884,9 +896,49 @@ defmodule Temporal.Workflow.WorkflowExecution do
           GenStage.async_info(execution, :execution_complete)
           {:ok, exec_result} = DataConverter.to_payload(conv, result)
 
+          init = workflow_state(state, :initialize_config)
+          started_at = workflow_state(state, :started_at)
+
+          :telemetry.execute(
+            [:temporalio, :workflow, :completed],
+            %{
+              duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
+            },
+            %{
+              workflow_type: workflow_state(state, :workflow_type),
+              namespace: workflow_state(state, :namespace),
+              run_id: workflow_state(state, :run_id),
+              workflow_id: initialize_workflow(init, :workflow_id),
+              arguments: workflow_state(state, :arguments),
+              result: result
+            }
+          )
+
           [
             command(variant: complete_workflow_execution(result: exec_result))
           ]
+
+        {:error, Commands.continue_as_new_workflow_execution() = cmd} ->
+          init = workflow_state(state, :initialize_config)
+          started_at = workflow_state(state, :started_at)
+
+          :telemetry.execute(
+            [:temporalio, :workflow, :continue_as_new],
+            %{
+              duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
+            },
+            %{
+              workflow_type: workflow_state(state, :workflow_type),
+              namespace: workflow_state(state, :namespace),
+              run_id: workflow_state(state, :run_id),
+              workflow_id: initialize_workflow(init, :workflow_id),
+              arguments: workflow_state(state, :arguments),
+              continue_as_new_arguments: Commands.continue_as_new_workflow_execution(cmd, :arguments) |> Enum.map(&Payload.record_from_value/1)
+            }
+          )
+
+          GenStage.async_info(execution, :execution_complete)
+          [command(variant: cmd)]
 
         {:error, Failure.application() = app_failure} ->
           failure =
@@ -896,6 +948,24 @@ defmodule Temporal.Workflow.WorkflowExecution do
               stack_trace: "",
               failure_info: app_failure
             )
+
+          init = workflow_state(state, :initialize_config)
+          started_at = workflow_state(state, :started_at)
+
+          :telemetry.execute(
+            [:temporalio, :workflow, :failed],
+            %{
+              duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
+            },
+            %{
+              workflow_type: workflow_state(state, :workflow_type),
+              namespace: workflow_state(state, :namespace),
+              run_id: workflow_state(state, :run_id),
+              workflow_id: initialize_workflow(init, :workflow_id),
+              arguments: workflow_state(state, :arguments),
+              failure: failure
+            }
+          )
 
           GenStage.async_info(execution, :execution_complete)
           [command(variant: fail_workflow_execution(failure: failure))]
@@ -914,6 +984,24 @@ defmodule Temporal.Workflow.WorkflowExecution do
                   details: [details]
                 )
             )
+
+          init = workflow_state(state, :initialize_config)
+          started_at = workflow_state(state, :started_at)
+
+          :telemetry.execute(
+            [:temporalio, :workflow, :failed],
+            %{
+              duration_microsecs: DateTime.diff(started_at, DateTime.utc_now(), :microsecond)
+            },
+            %{
+              workflow_type: workflow_state(state, :workflow_type),
+              namespace: workflow_state(state, :namespace),
+              run_id: workflow_state(state, :run_id),
+              workflow_id: initialize_workflow(init, :workflow_id),
+              arguments: workflow_state(state, :arguments),
+              failure: failure
+            }
+          )
 
           GenStage.async_info(execution, :execution_complete)
           [command(variant: fail_workflow_execution(failure: failure))]

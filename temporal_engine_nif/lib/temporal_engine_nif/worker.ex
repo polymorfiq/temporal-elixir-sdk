@@ -184,13 +184,35 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   end
 
   @impl true
+  def record_activity_heartbeat(worker, task_token, payloads) do
+    alias TemporalEngine.Data.Payload
+
+    with :ok <-
+           Core._worker_record_activity_heartbeat(
+             worker.core,
+             task_token,
+             payloads
+           ) do
+      :telemetry.execute([:temporalio, :worker, :activity_heartbeat_recorded], %{}, %{
+        worker_id: worker.id,
+        task_token: task_token,
+        payloads: payloads |> Enum.map(&Payload.record_from_value/1)
+      })
+
+      :ok
+    end
+  end
+
+  @impl true
   def initiate_shutdown(worker) do
     with :ok <- Core._worker_initiate_shutdown(worker.core) do
-      Logger.debug("Worker (#{worker.id}) shutdown initiated.")
+      :telemetry.execute([:temporalio, :worker, :shutdown_initiated], %{}, %{
+        worker_id: worker.id
+      })
+
       :ok
     else
       {:error, err} ->
-        Logger.error("Worker (#{worker.id}) error initiating shutdown - #{inspect(err)}")
         {:error, err}
     end
   end
@@ -198,11 +220,13 @@ defimpl TemporalEngine.Worker, for: TemporalEngineNif.Worker do
   @impl true
   def finalize_shutdown(worker) do
     with :ok <- Core._worker_finalize_shutdown(worker.core) do
-      Logger.debug("Worker (#{worker.id}) shutdown finalized.")
+      :telemetry.execute([:temporalio, :worker, :shutdown_finalized], %{}, %{
+        worker_id: worker.id
+      })
+
       :ok
     else
       {:error, err} ->
-        Logger.error("Worker (#{worker.id}) error finalizing shutdown - #{inspect(err)}")
         {:error, err}
     end
   end

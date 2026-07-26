@@ -9,6 +9,7 @@ defmodule Temporal.Client do
   import TemporalEngine.Data.Updates
   import TemporalEngine.Data.Signals
 
+  require TemporalEngine.Data.Common
   require TemporalEngine.Data.Queries
   require TemporalEngine.Data.Failure
   require TemporalEngine.Opts.ClientOpts
@@ -20,6 +21,7 @@ defmodule Temporal.Client do
   alias Temporal.Runtime
   alias Temporal.Workflows.WorkflowName
   alias TemporalEngine.Converter.DataConverter
+  alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Failure
   alias TemporalEngine.Data.Queries
   alias TemporalEngine.Data.Signals
@@ -54,6 +56,13 @@ defmodule Temporal.Client do
         Runtime.global(runtime_opts)
       end)
 
+    opts =
+      if opts[:api_key] do
+        Keyword.put_new(opts, :tls_options, [])
+      else
+        opts
+      end
+
     with {:ok, validated} <- ClientOpts.connection_opts_from_opts(opts) do
       TemporalEngine.Runtime.create_client(runtime,
         connection: validated,
@@ -67,6 +76,26 @@ defmodule Temporal.Client do
           t()
   def new!(target, opts \\ []),
     do: new(target, opts) |> then(fn {:ok, client} -> client end)
+
+  @spec get_workflow_handle(t(), workflow_id :: String.t(), run_id :: String.t() | nil) ::
+          {:ok, WorkflowHandle.t()} | {:error, term()}
+  def get_workflow_handle(client, workflow_id, run_id \\ nil) do
+    TemporalEngine.Client.get_workflow_handle(client, workflow_id, run_id)
+  end
+
+  @spec list_workflows(t(), query :: String.t(), limit :: pos_integer() | nil) ::
+          {:ok, [%{workflow_id: String.t(), run_id: String.t()}]} | {:error, term()}
+  def list_workflows(client, query \\ "", limit \\ nil) do
+    with {:ok, execs} <- TemporalEngine.Client.list_workflows(client, query, limit) do
+      {:ok,
+       Enum.map(execs, fn exec ->
+         %{
+           run_id: Common.workflow_execution(exec, :run_id),
+           workflow_id: Common.workflow_execution(exec, :workflow_id)
+         }
+       end)}
+    end
+  end
 
   @spec execute_workflow(
           t(),

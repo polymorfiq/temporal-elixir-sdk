@@ -14,13 +14,14 @@ defmodule TemporalEngineNif.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger, :telemetry]
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:telemetry, "~> 1.0"},
       {:rustler, "~> 0.38.0", runtime: false},
       {:temporal_engine, "~> 0.1.0", path: "../temporal_engine"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}

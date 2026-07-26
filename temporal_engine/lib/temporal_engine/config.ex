@@ -14,7 +14,6 @@ defmodule TemporalEngine.Config do
     @type id :: required :: String.t()
 
     @doc "The Temporal service namespace this worker is bound to"
-    @default "default"
     @type namespace :: required :: String.t()
 
     @doc "What task queue will this worker poll from? This task queue name will be used for both workflow and activity polling."
