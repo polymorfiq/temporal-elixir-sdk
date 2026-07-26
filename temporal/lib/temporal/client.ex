@@ -144,7 +144,7 @@ defmodule Temporal.Client do
 
           case val do
             {:error, Failure.failure() = failure} ->
-              {:error, Failure.to_map(failure) |> Map.put(:error_code, :query_failed)}
+              {:error, Failure.to_map(conv, failure) |> Map.put(:error_code, :query_failed)}
 
             {:error, err} ->
               {:error, err}
@@ -192,7 +192,7 @@ defmodule Temporal.Client do
 
           case val do
             {:error, Failure.failure() = failure} ->
-              {:error, Failure.to_map(failure) |> Map.put(:error_code, :query_failed)}
+              {:error, Failure.to_map(conv, failure) |> Map.put(:error_code, :query_failed)}
 
             {:error, err} ->
               {:error, err}

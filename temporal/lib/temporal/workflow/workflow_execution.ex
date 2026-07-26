@@ -114,6 +114,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
         task_queue: task_queue,
         namespace: namespace,
         run_id: run_id,
+        data_converter: data_converter,
         workflow_id: initialize_workflow(config, :workflow_id),
         initialize_config: config
       )
@@ -425,6 +426,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
       ) do
     all_awaiting = workflow_state(state, :awaiting_child_workflow_starts)
     awaiting_this = Map.get(all_awaiting, seq, [])
+    conv = workflow_state(state, :data_converter)
 
     resp =
       case status do
@@ -435,7 +437,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
           {:error, cause}
 
         child_workflow_start_cancelled(failure: failure) ->
-          {:error, Failure.to_map(failure)}
+          {:error, Failure.to_map(conv, failure)}
       end
 
     runtime = workflow_state(state, :runtime)
@@ -467,10 +469,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
           {:ok, DataConverter.from_payload(conv, result)}
 
         child_workflow_result(status: child_workflow_failed(failure: failure)) ->
-          {:error, Failure.to_map(failure)}
+          {:error, Failure.to_map(conv, failure)}
 
         child_workflow_result(status: child_workflow_cancelled(failure: failure)) ->
-          {:error, Failure.to_map(failure)}
+          {:error, Failure.to_map(conv, failure)}
       end
 
     runtime = workflow_state(state, :runtime)
@@ -922,6 +924,12 @@ defmodule Temporal.Workflow.WorkflowExecution do
           init = workflow_state(state, :initialize_config)
           started_at = workflow_state(state, :started_at)
 
+          {:ok, new_args} =
+            DataConverter.from_payloads(
+              conv,
+              Commands.continue_as_new_workflow_execution(cmd, :arguments)
+            )
+
           :telemetry.execute(
             [:temporalio, :workflow, :continue_as_new],
             %{
@@ -933,7 +941,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
               run_id: workflow_state(state, :run_id),
               workflow_id: initialize_workflow(init, :workflow_id),
               arguments: workflow_state(state, :arguments),
-              continue_as_new_arguments: Commands.continue_as_new_workflow_execution(cmd, :arguments) |> Enum.map(&Payload.record_from_value/1)
+              continue_as_new_arguments: new_args
             }
           )
 

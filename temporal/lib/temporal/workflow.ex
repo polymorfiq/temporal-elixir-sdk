@@ -15,11 +15,11 @@ defmodule Temporal.Workflow do
   alias Temporal.Workflow.MessagePassingActions
   alias Temporal.Workflow.TimerActions
   alias Temporal.WorkflowContext
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Data.Commands
   alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Failure
-  alias TemporalEngine.Data.Payload
   alias TemporalEngine.Data.Timestamp
 
   defdelegate execute_activity(ctx, name, inputs, opts \\ []), to: ActivityActions
@@ -138,6 +138,7 @@ defmodule Temporal.Workflow do
     import TemporalEngine.Data.Jobs
     import TemporalEngine.Data.Priority
 
+    conv = WorkflowContext.workflow_context(ctx, :data_converter)
     init = WorkflowContext.workflow_context(ctx, :initialize_config)
     parent_info = initialize_workflow(init, :parent_workflow_info)
 
@@ -150,6 +151,12 @@ defmodule Temporal.Workflow do
       end
 
     metadata = WorkflowContext.get_task_metadata(ctx)
+
+    last_results =
+      if results = initialize_workflow(init, :last_completion_result) do
+        {:ok, results} = DataConverter.from_payloads(conv, results)
+        results
+      end
 
     info(
       workflow_execution:
@@ -168,11 +175,9 @@ defmodule Temporal.Workflow do
       namespace: workflow_context(ctx, :namespace),
       attempt: initialize_workflow(init, :attempt),
       workflow_start_time: initialize_workflow(init, :start_time) |> Timestamp.to_native(),
-      last_completion_result:
-        if(results = initialize_workflow(init, :last_completion_result),
-          do: Enum.map(results, &Payload.value_from_record/1)
-        ),
-      last_failure: if(f = initialize_workflow(init, :continued_failure), do: Failure.to_map(f)),
+      last_completion_result: last_results,
+      last_failure:
+        if(f = initialize_workflow(init, :continued_failure), do: Failure.to_map(conv, f)),
       cron_schedule: initialize_workflow(init, :cron_schedule),
       continued_execution_run_id: initialize_workflow(init, :continued_from_execution_run_id),
       parent_workflow_execution: parent_exec,

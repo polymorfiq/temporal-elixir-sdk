@@ -96,16 +96,20 @@ defmodule TemporalEngine.Mock.Worker do
 end
 
 defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
-  alias TemporalEngine.Data.Payload
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Mock
 
   def id(worker) do
     "mocked(#{worker.real_id})"
   end
 
+  def client(worker), do: TemporalEngine.Worker.client(worker.real_worker)
+
   def poll_workflow_activation(worker) do
     import TemporalEngine.Data.Jobs
     import TemporalEngine.Data.Activation
+    client = TemporalEngine.Worker.client(worker)
+    conv = TemporalEngine.Client.data_converter(client)
 
     resp =
       with {:ok, activation} <- TemporalEngine.Worker.poll_workflow_activation(worker.real_worker) do
@@ -136,10 +140,11 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
           |> Enum.map(fn j -> job(j, :variant) end)
           |> Enum.each(fn
             initialize_workflow(arguments: args) = job ->
+              {:ok, arguments} = DataConverter.from_payloads(conv, args)
+
               send(
                 forward_to,
-                {:job,
-                 initialize_workflow(job, arguments: Enum.map(args, &Payload.value_from_record/1))}
+                {:job, initialize_workflow(job, arguments: arguments)}
               )
 
             resolve_activity(result: activity_resolution(status: activity_completed() = result)) =
@@ -148,7 +153,8 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
 
               result =
                 if payload do
-                  activity_completed(result, result: Payload.value_from_record(payload))
+                  {:ok, result} = DataConverter.from_payload(conv, payload)
+                  activity_completed(result, result: result)
                 else
                   result
                 end
@@ -222,6 +228,8 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
   def complete_workflow_activation(worker, completion) do
     import TemporalEngine.Data.ActivationCompletion
     import TemporalEngine.Data.Commands
+    client = TemporalEngine.Worker.client(worker)
+    conv = TemporalEngine.Client.data_converter(client)
 
     case completion do
       completion(status: success(commands: commands)) ->
@@ -230,19 +238,13 @@ defimpl TemporalEngine.Worker, for: TemporalEngine.Mock.Worker do
           commands
           |> Enum.each(fn
             command(variant: schedule_activity(arguments: args) = cmd) ->
-              send(
-                forward_to,
-                {:command,
-                 schedule_activity(cmd, arguments: Enum.map(args, &Payload.value_from_record/1))}
-              )
+              {:ok, arguments} = DataConverter.from_payloads(conv, args)
+              send(forward_to, {:command, schedule_activity(cmd, arguments: arguments)})
 
             command(variant: complete_workflow_execution(result: payload) = cmd)
             when is_tuple(payload) ->
-              send(
-                forward_to,
-                {:command,
-                 complete_workflow_execution(cmd, result: Payload.value_from_record(payload))}
-              )
+              {:ok, result} = DataConverter.from_payload(conv, payload)
+              send(forward_to, {:command, complete_workflow_execution(cmd, result: result)})
 
             command(variant: cmd) ->
               send(forward_to, {:command, cmd})

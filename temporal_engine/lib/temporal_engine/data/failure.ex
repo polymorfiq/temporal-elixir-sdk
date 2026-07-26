@@ -3,6 +3,7 @@ defmodule TemporalEngine.Data.Failure do
 
   require Record
 
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Data.Common
   alias TemporalEngine.Data.Duration
   alias TemporalEngine.Data.Payload
@@ -204,7 +205,7 @@ defmodule TemporalEngine.Data.Failure do
     @type message :: required :: String.t()
   end
 
-  def to_map(failure() = f) do
+  def to_map(conv, failure() = f) do
     %{
       error_code: :workflow_failed,
       message: failure(f, :message),
@@ -214,10 +215,12 @@ defmodule TemporalEngine.Data.Failure do
       failure:
         case failure(f, :failure_info) do
           application() = info ->
+            {:ok, details} = DataConverter.from_payloads(conv, application(info, :details))
+
             %{
               type: :application,
               info: %{
-                details: Enum.map(application(info, :details), &Payload.value_from_record/1),
+                details: details,
                 non_retryable: application(info, :non_retryable),
                 next_retry_delay:
                   if(d = application(info, :next_retry_delay),
@@ -227,21 +230,22 @@ defmodule TemporalEngine.Data.Failure do
             }
 
           timeout_reached() = info ->
+            {:ok, details} =
+              DataConverter.from_payloads(conv, timeout_reached(info, :last_heartbeat_details))
+
             %{
               type: :timeout_reached,
               timeout_type: timeout_reached(info, :timeout_type),
-              last_heartbeat_details:
-                Enum.map(
-                  timeout_reached(info, :last_heartbeat_details) || [],
-                  &Payload.value_from_record/1
-                )
+              last_heartbeat_details: details
             }
 
           cancelled() = info ->
+            {:ok, details} = DataConverter.from_payloads(conv, cancelled(info, :details) || [])
+
             %{
               type: :cancelled,
               identity: cancelled(info, :identity),
-              details: Enum.map(cancelled(info, :details) || [], &Payload.value_from_record/1)
+              details: details
             }
 
           terminated() = info ->
@@ -257,13 +261,15 @@ defmodule TemporalEngine.Data.Failure do
             }
 
           reset_workflow() = info ->
+            {:ok, details} =
+              DataConverter.from_payloads(
+                conv,
+                reset_workflow(info, :last_heartbeat_details) || []
+              )
+
             %{
               type: :reset_workflow,
-              last_hearbeat_details:
-                Enum.map(
-                  reset_workflow(info, :last_heartbeat_details) || [],
-                  &Payload.value_from_record/1
-                )
+              last_hearbeat_details: details
             }
 
           activity() = info ->

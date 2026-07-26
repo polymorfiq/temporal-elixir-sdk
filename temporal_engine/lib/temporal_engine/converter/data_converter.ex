@@ -20,3 +20,18 @@ defprotocol TemporalEngine.Converter.DataConverter do
   @spec to_strings(t(), payloads :: [Payload.payload()]) :: [String.t()]
   def to_strings(converter, payloads)
 end
+
+defimpl TemporalEngine.Converter.DataConverter, for: TemporalEngine.Converter.NoopConverter do
+  # This is simply a do-nothing implementation to keep typechecker happy
+  def to_payload(_, _), do: {:error, "Not implemented"}
+
+  def from_payload(_, _), do: {:error, "Not implemented"}
+
+  def to_payloads(_, _), do: {:error, "Not implemented"}
+
+  def from_payloads(_, _), do: {:error, "Not implemented"}
+
+  def to_string(_, _), do: "noop"
+
+  def to_strings(_, payloads), do: Enum.map(payloads, fn _ -> "noop" end)
+end
