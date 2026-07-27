@@ -364,7 +364,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
     result =
       case status do
         activity_completed(result: result) ->
-          {:ok, DataConverter.from_payload(conv, result)}
+          {:ok, val} = DataConverter.from_payload(conv, result)
+          {:ok, val}
 
         activity_failed(failure: failure) ->
           {:error, Failure.failure(failure, :message)}
@@ -466,7 +467,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
     resp =
       case status do
         child_workflow_result(status: child_workflow_completed(result: result)) ->
-          {:ok, DataConverter.from_payload(conv, result)}
+          {:ok, val} = DataConverter.from_payload(conv, result)
+          {:ok, val}
 
         child_workflow_result(status: child_workflow_failed(failure: failure)) ->
           {:error, Failure.to_map(conv, failure)}
@@ -515,6 +517,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
       on_crash: fn
         exception, stacktrace ->
           {:ok, exc} = DataConverter.to_payload(conv, exception)
+
           {:ok, response} =
             DataConverter.to_payload(
               conv,
@@ -649,10 +652,12 @@ defmodule Temporal.Workflow.WorkflowExecution do
       on_crash: fn
         exception, stacktrace ->
           {:ok, exc} = DataConverter.to_payload(conv, exception)
-          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
-            message: inspect(exception),
-            stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
-          })
+
+          {:ok, encoded_attributes} =
+            DataConverter.to_payload(conv, %{
+              message: inspect(exception),
+              stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
+            })
 
           [
             command(
@@ -697,10 +702,11 @@ defmodule Temporal.Workflow.WorkflowExecution do
         {:error, {:validation_error, {:exception, exception, stacktrace}}} ->
           {:ok, exc} = DataConverter.to_payload(conv, exception)
 
-          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
-            message: inspect(exception),
-            stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
-          })
+          {:ok, encoded_attributes} =
+            DataConverter.to_payload(conv, %{
+              message: inspect(exception),
+              stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
+            })
 
           [
             command(
@@ -727,10 +733,12 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
         {:error, {:validation_error, err}} ->
           {:ok, details} = DataConverter.to_payload(conv, {:error, err})
-          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
-            message: inspect(err),
-            stack_trace: ""
-          })
+
+          {:ok, encoded_attributes} =
+            DataConverter.to_payload(conv, %{
+              message: inspect(err),
+              stack_trace: ""
+            })
 
           [
             command(
@@ -757,10 +765,12 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
         {:error, err} ->
           {:ok, details} = DataConverter.to_payload(conv, {:error, err})
-          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
-            message: inspect(err),
-            stack_trace: ""
-          })
+
+          {:ok, encoded_attributes} =
+            DataConverter.to_payload(conv, %{
+              message: inspect(err),
+              stack_trace: ""
+            })
 
           [
             command(
@@ -896,10 +906,12 @@ defmodule Temporal.Workflow.WorkflowExecution do
       on_crash: fn
         exception, stacktrace ->
           {:ok, exc} = DataConverter.to_payload(conv, exception)
-          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
-            message: inspect(exception),
-            stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
-          })
+
+          {:ok, encoded_attributes} =
+            DataConverter.to_payload(conv, %{
+              message: inspect(exception),
+              stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
+            })
 
           failure =
             Failure.failure(
@@ -971,10 +983,11 @@ defmodule Temporal.Workflow.WorkflowExecution do
           [command(variant: cmd)]
 
         {:error, Failure.application() = app_failure} ->
-          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
-            message: "{:error, #{inspect(app_failure)}}",
-            stack_trace: ""
-          })
+          {:ok, encoded_attributes} =
+            DataConverter.to_payload(conv, %{
+              message: "{:error, #{inspect(app_failure)}}",
+              stack_trace: ""
+            })
 
           failure =
             Failure.failure(
@@ -1006,10 +1019,12 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
         {:error, err} ->
           {:ok, details} = DataConverter.to_payload(conv, err)
-          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
-            message: "{:error, #{inspect(err)}}",
-            stack_trace: ""
-          })
+
+          {:ok, encoded_attributes} =
+            DataConverter.to_payload(conv, %{
+              message: "{:error, #{inspect(err)}}",
+              stack_trace: ""
+            })
 
           failure =
             Failure.failure(

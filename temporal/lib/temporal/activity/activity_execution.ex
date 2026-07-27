@@ -157,7 +157,9 @@ defmodule Temporal.Activity.ActivityExecution do
     conv = activity_state(state, :data_converter)
 
     with {:ok, result} <- resp do
-      {:noreply, [activity_execution_result_from_opts!(status: [result: result])], state}
+      {:ok, payload} = DataConverter.to_payload(conv, result)
+
+      {:noreply, [activity_execution_result_from_opts!(status: [result: payload])], state}
     else
       {:error, err} ->
         {:ok, details} = DataConverter.to_payload(conv, err)

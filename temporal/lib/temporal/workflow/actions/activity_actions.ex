@@ -6,6 +6,7 @@ defmodule Temporal.Workflow.ActivityActions do
   alias Temporal.Workflow.WorkflowExecution
   alias Temporal.WorkflowContext
   alias Temporal.Workflows.ActivityName
+  alias TemporalEngine.Converter.DataConverter
   alias TemporalEngine.Data.Commands
 
   Record.defrecord(:activity_handle, [:seq, :execution])
@@ -40,13 +41,14 @@ defmodule Temporal.Workflow.ActivityActions do
       )
     end
 
-    workflow_context(execution: exec, task_queue: task_queue) = ctx
+    workflow_context(execution: exec, task_queue: task_queue, data_converter: conv) = ctx
 
     with {:ok, activity_type} <- ActivityName.server_recognized_name(name),
+         {:ok, arguments} <- DataConverter.to_payloads(conv, inputs),
          {:ok, cmd} <-
            schedule_activity_from_opts(
              Keyword.merge(
-               [activity_type: activity_type, task_queue: task_queue, arguments: inputs],
+               [activity_type: activity_type, task_queue: task_queue, arguments: arguments],
                opts
              )
            ) do
@@ -82,12 +84,13 @@ defmodule Temporal.Workflow.ActivityActions do
       )
     end
 
-    workflow_context(execution: exec) = ctx
+    workflow_context(execution: exec, data_converter: conv) = ctx
 
     with {:ok, activity_type} <- ActivityName.server_recognized_name(name),
+         {:ok, arguments} <- DataConverter.to_payloads(conv, inputs),
          {:ok, cmd} <-
            schedule_local_activity_from_opts(
-             Keyword.merge([activity_type: activity_type, arguments: inputs], opts)
+             Keyword.merge([activity_type: activity_type, arguments: arguments], opts)
            ),
          {:ok, schedule_local_activity(seq: seq)} <- WorkflowExecution.queue_command(exec, cmd) do
       {:ok, activity_handle(seq: seq, execution: exec)}
