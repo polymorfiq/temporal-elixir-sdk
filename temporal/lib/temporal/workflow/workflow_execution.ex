@@ -513,7 +513,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
         end
       end,
       on_crash: fn
-        %ex_type{} = exception, stacktrace ->
+        exception, stacktrace ->
+          {:ok, exc} = DataConverter.to_payload(conv, exception)
           {:ok, response} =
             DataConverter.to_payload(
               conv,
@@ -522,7 +523,7 @@ defmodule Temporal.Workflow.WorkflowExecution do
                  message: inspect(exception),
                  source: "elixir-sdk",
                  stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
-                 failure_info: Failure.application(failure_type: "#{ex_type}")
+                 failure_info: Failure.application(failure_type: "QueryCrashed", details: [exc])
                )}
             )
 
@@ -646,7 +647,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
         end
       end,
       on_crash: fn
-        %ex_type{} = exception, stacktrace ->
+        exception, stacktrace ->
+          {:ok, exc} = DataConverter.to_payload(conv, exception)
+          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
+            message: inspect(exception),
+            stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
+          })
+
           [
             command(
               variant:
@@ -660,10 +667,9 @@ defmodule Temporal.Workflow.WorkflowExecution do
                     update_rejected(
                       failure:
                         Failure.failure(
-                          message: inspect(exception),
                           source: "elixir-sdk",
-                          stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
-                          failure_info: Failure.application(failure_type: "#{ex_type}")
+                          encoded_attributes: encoded_attributes,
+                          failure_info: Failure.application(details: [exc])
                         )
                     )
                 )
@@ -689,6 +695,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
           ]
 
         {:error, {:validation_error, {:exception, exception, stacktrace}}} ->
+          {:ok, exc} = DataConverter.to_payload(conv, exception)
+
+          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
+            message: inspect(exception),
+            stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
+          })
+
           [
             command(
               variant:
@@ -698,13 +711,13 @@ defmodule Temporal.Workflow.WorkflowExecution do
                     update_rejected(
                       failure:
                         Failure.failure(
-                          message: Exception.message(exception),
                           source: "elixir-sdk",
-                          stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+                          encoded_attributes: encoded_attributes,
                           failure_info:
                             Failure.application(
                               failure_type: "ValidationException",
-                              non_retryable: true
+                              non_retryable: true,
+                              details: [exc]
                             )
                         )
                     )
@@ -714,6 +727,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
         {:error, {:validation_error, err}} ->
           {:ok, details} = DataConverter.to_payload(conv, {:error, err})
+          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
+            message: inspect(err),
+            stack_trace: ""
+          })
 
           [
             command(
@@ -724,9 +741,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
                     update_rejected(
                       failure:
                         Failure.failure(
-                          message: "{:validation_error, #{inspect(err)}}",
                           source: "elixir-sdk",
-                          stack_trace: "",
+                          encoded_attributes: encoded_attributes,
                           failure_info:
                             Failure.application(
                               failure_type: "ValidationReturnedError",
@@ -741,6 +757,10 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
         {:error, err} ->
           {:ok, details} = DataConverter.to_payload(conv, {:error, err})
+          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
+            message: inspect(err),
+            stack_trace: ""
+          })
 
           [
             command(
@@ -755,9 +775,8 @@ defmodule Temporal.Workflow.WorkflowExecution do
                     update_rejected(
                       failure:
                         Failure.failure(
-                          message: "{:error, #{inspect(err)}}",
                           source: "elixir-sdk",
-                          stack_trace: "",
+                          encoded_attributes: encoded_attributes,
                           failure_info:
                             Failure.application(
                               failure_type: "UpdateReturnedError",
@@ -875,17 +894,20 @@ defmodule Temporal.Workflow.WorkflowExecution do
         apply(module, exec_fn, [ctx | arguments])
       end,
       on_crash: fn
-        %ex_type{} = exception, stacktrace ->
+        exception, stacktrace ->
           {:ok, exc} = DataConverter.to_payload(conv, exception)
+          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
+            message: inspect(exception),
+            stack_trace: "#{Exception.format_stacktrace(stacktrace)}"
+          })
 
           failure =
             Failure.failure(
-              message: Exception.message(exception),
               source: "elixir-sdk",
-              stack_trace: "#{Exception.format_stacktrace(stacktrace)}",
+              encoded_attributes: encoded_attributes,
               failure_info:
                 Failure.application(
-                  failure_type: "#{ex_type}",
+                  failure_type: "WorkflowCrashed",
                   details: [exc]
                 )
             )
@@ -949,11 +971,15 @@ defmodule Temporal.Workflow.WorkflowExecution do
           [command(variant: cmd)]
 
         {:error, Failure.application() = app_failure} ->
+          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
+            message: "{:error, #{inspect(app_failure)}}",
+            stack_trace: ""
+          })
+
           failure =
             Failure.failure(
-              message: "{:error, #{inspect(app_failure)}}",
               source: "elixir-sdk",
-              stack_trace: "",
+              encoded_attributes: encoded_attributes,
               failure_info: app_failure
             )
 
@@ -980,12 +1006,15 @@ defmodule Temporal.Workflow.WorkflowExecution do
 
         {:error, err} ->
           {:ok, details} = DataConverter.to_payload(conv, err)
+          {:ok, encoded_attributes} = DataConverter.to_payload(conv, %{
+            message: "{:error, #{inspect(err)}}",
+            stack_trace: ""
+          })
 
           failure =
             Failure.failure(
-              message: "{:error, #{inspect(err)}}",
               source: "elixir-sdk",
-              stack_trace: "",
+              encoded_attributes: encoded_attributes,
               failure_info:
                 Failure.application(
                   failure_type: "ReturnedError",

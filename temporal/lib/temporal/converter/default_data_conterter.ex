@@ -96,5 +96,5 @@ defimpl TemporalEngine.Converter.DataConverter, for: Temporal.Converter.DefaultD
   end
 
   @impl true
-  def to_strings(_, payloads), do: Enum.map(payloads, &to_string/1)
+  def to_strings(conv, payloads), do: Enum.map(payloads, &to_string(conv, &1))
 end

@@ -10,6 +10,7 @@ defmodule TemporalEngine.Data.Failure do
   alias TemporalEngine.Data.Failure
 
   deftype :failure do
+    @default ""
     @type message :: required :: String.t()
 
     @doc "The source this Failure originated in, e.g. TypeScriptSDK / JavaSDK In some SDKs this is used to rehydrate the stack trace into an exception object."
